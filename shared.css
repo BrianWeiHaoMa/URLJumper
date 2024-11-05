@@ -9,7 +9,7 @@ textarea {
     outline: none; /* Remove the outline when focused */
     margin-top: 10px;
     margin-bottom: 10px;
-  }
+}
   
 textarea:focus {
     border-color: #666; /* Change border color on focus */

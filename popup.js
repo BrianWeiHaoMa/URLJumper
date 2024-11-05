@@ -1,6 +1,5 @@
 const storage = chrome.storage.local;
 
-
 const message = document.querySelector('#message');
 const jump = document.querySelector('#jump');
 const jumpNewTab = document.querySelector('#jump-new-tab');
@@ -19,7 +18,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ status: "nothing chosen" });
   }
 });
-
 
 
 jump.addEventListener('click', () => {
@@ -71,7 +69,7 @@ async function handleJump (newTab) {
 
     textarea.value = '';
   } else {
-    message.innerText = 'No matching URL found.';
+    message.innerText = 'No matching name found.';
     textarea.value = textarea.value.replace(/\s+/g, '');
   }
 }

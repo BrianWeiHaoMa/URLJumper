@@ -6,3 +6,8 @@ textarea {
     color: inherit;
     text-decoration: none;
 }
+
+#message {
+    color: red;
+    margin-bottom: 10px;
+}

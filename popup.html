@@ -11,23 +11,21 @@
   </head>
 
   <body>
-    <div id="message"></div>
-
+    
     <div style="text-align: right;">
-      <button><a id="settings" href="settings.html">Settings</a></button>
+      <div id="message"></div>
+      <div><button><a id="settings" href="settings.html">Settings</a></button></div>
     </div>
 
     <textarea
     placeholder="Enter URL name here."
   ></textarea>
 
+    <div style="text-align: right;">
+      <button id="jump">Jump</button>   
+      <button id="jump-new-tab">Jump to new tab</button>
+    </div>
     
-      <div style="text-align: right;">
-        <button id="jump">Jump</button>   
-        <button id="jump-new-tab">Jump to new tab</button>
-      </div>
-    
-
     <script src="popup.js"></script>
   </body>
 </html>
