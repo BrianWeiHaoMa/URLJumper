@@ -5,16 +5,16 @@ chrome.commands.onCommand.addListener((command) => {
     if (command === jump) {
         chrome.action.openPopup();
         setTimeout(() => {
-            chrome.runtime.sendMessage({ command: jump }, (response) => {
-                console.log(response.status);
-            });
+            chrome.runtime.sendMessage({ command: jump }, logResponseStatus);
         }, 1000);
     } else if (command === jumpNewTab) {
         chrome.action.openPopup();
         setTimeout(() => {
-            chrome.runtime.sendMessage({ command: jumpNewTab }, (response) => {
-                console.log(response.status);
-            });
+            chrome.runtime.sendMessage({ command: jumpNewTab }, logResponseStatus);
         }, 1000);
     }
 });
+
+function logResponseStatus(response) {
+    console.log(response.status);
+}

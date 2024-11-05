@@ -1,35 +1,52 @@
 const storage = chrome.storage.local;
 
-const submitButton = document.querySelector('button.submit');
+const message = document.querySelector('#message');
 const textarea = document.querySelector('textarea');
+const submitButton = document.querySelector('#submit');
 
 loadChanges();
 
 submitButton.addEventListener('click', saveChanges);
 
 async function saveChanges() {
-  const textareaContent = textarea.value;
+  if (textarea.value !== '') {
+    const lines = textarea.value.split('\n');
+    let res = '';
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine === '') {
+        res += '\n';
+      } else {
+        const words = trimmedLine.split(/\s+/);
+        if (words.length !== 2) {
+          message.style.color = "red";
+          message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
+          return;
+        }
 
-  await storage.set({ 'mappings': textareaContent });
+        res += trimmedLine + '\n';
+      }
+    }
+
+    const lastChar = textarea.value.slice(-1);
+    if (lastChar === '\n' || lastChar === ' ') {
+      res = res.slice(0, -1);
+    }
+    
+    textarea.value = res;
+  }
+
+  await storage.set({ 'mappings': textarea.value });
+
+  message.style.color = "green";
+  message.textContent = 'Changes saved.';
 }
 
 function loadChanges() {
   storage.get('mappings', function (items) {
     if ('mappings' in items) {
       textarea.value = items.mappings;
-    } else {
-      textarea.value = '';
-      saveChanges();
     }
   });
 }
 
-let messageClearTimer;
-function message(msg) {
-  clearTimeout(messageClearTimer);
-  const message = document.querySelector('.message');
-  message.innerText = msg;
-  messageClearTimer = setTimeout(function () {
-    message.innerText = '';
-  }, 3000);
-}
