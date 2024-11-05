@@ -12,17 +12,25 @@ async function saveChanges() {
   if (textarea.value !== '') {
     const lines = textarea.value.split('\n');
     let res = '';
+    const alreadyUsed = new Set();
     for (const line of lines) {
       const trimmedLine = line.trim();
       if (trimmedLine === '') {
         res += '\n';
       } else {
-        const words = trimmedLine.split(/\s+/);
+        const words = trimmedLine.split(/\s+/);        
         if (words.length !== 2) {
           message.style.color = "red";
           message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
           return;
         }
+
+        if (alreadyUsed.has(words[0])) {
+          message.style.color = "red";
+          message.textContent = `Error: Each name must be unique. Already found: "${words[0]}".`;
+          return;
+        }
+        alreadyUsed.add(words[0]);
 
         res += trimmedLine + '\n';
       }
