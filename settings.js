@@ -9,24 +9,20 @@ submitButton.addEventListener('click', saveChanges);
 
 async function saveChanges() {
   const textareaContent = textarea.value;
-  
-  // Save it using the Chrome extension storage API.
+
   await storage.set({ 'mappings': textareaContent });
-  message('Mappings saved');
 }
 
 function loadChanges() {
   storage.get('mappings', function (items) {
-    // To avoid checking items.css we could specify storage.get({css: ''}) to
-    // return a default value of '' if there is no css value yet.
-    if (items.mappings) {
+    if ('mappings' in items) {
       textarea.value = items.mappings;
-      message('Loaded saved mappings.');
+    } else {
+      textarea.value = '';
+      saveChanges();
     }
   });
 }
-
-
 
 let messageClearTimer;
 function message(msg) {

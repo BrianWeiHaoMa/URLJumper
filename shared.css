@@ -1,0 +1,16 @@
+textarea {
+    white-space: pre; /* Preserve spaces and line breaks */ 
+    overflow-wrap: normal;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    resize: vertical; /* Allow vertical resize but not horizontal */
+    box-shadow: none; /* Remove any default browser shadow */
+    outline: none; /* Remove the outline when focused */
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+  
+textarea:focus {
+    border-color: #666; /* Change border color on focus */
+}

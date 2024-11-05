@@ -1,15 +1,32 @@
 {
   "manifest_version": 3,
-  "name": "url-jumper",
-  "description": "Allows jumping to URLs using keywords.",
+  "name": "URL-jumper",
+  "description": "Allows jumping to URLs using names.",
   "version": "1.0",
-  "permissions": ["activeTab", "storage", "scripting"],
-  "options_page": "options.html",
+
+  "permissions": ["storage", "commands"],
+  "options_page": "settings.html",
   "action": {
     "default_icon": "icon.png",
-    "default_title": "Stylize!",
+    "default_title": "URL-jumper",
     "default_popup": "popup.html"
   },
+  
+  "commands": {
+    "toggle-popup-jump": {
+      "suggested_key": {
+        "default": "Alt+M"
+      },
+      "description": "Open the popup in jump mode"
+    },
+    "toggle-popup-jump-new-tab": {
+      "suggested_key": {
+        "default": "Alt+N"
+      },
+      "description": "Open the popup in jump-new-tab mode"
+    }
+  },
+
   "background": {
     "service_worker": "background.js"
   }

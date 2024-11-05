@@ -1,17 +1,33 @@
 <!doctype html>
 <html>
   <head>
-    <title>Stylizr</title>
-    <style>
-      body {
-        font-family: sans-serif;
-        width: 200px;
-      }
-    </style>
+    <title>URL jumper</title>
+    
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="shared.css">
+    <link rel="stylesheet" href="popup.css">
   </head>
 
   <body>
     <div id="message"></div>
+
+    <div style="text-align: right;">
+      <button><a id="settings" href="settings.html">Settings</a></button>
+    </div>
+
+    <textarea
+    placeholder="Enter URL name here."
+  ></textarea>
+
+    
+      <div style="text-align: right;">
+        <button id="jump">Jump</button>   
+        <button id="jump-new-tab">Jump to new tab</button>
+      </div>
+    
+
     <script src="popup.js"></script>
   </body>
 </html>

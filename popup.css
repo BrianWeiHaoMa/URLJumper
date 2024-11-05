@@ -1,0 +1,8 @@
+textarea {
+    resize: none;
+}
+
+#settings {
+    color: inherit;
+    text-decoration: none;
+}
