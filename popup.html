@@ -13,17 +13,17 @@
   <body>
     
     <div style="text-align: right;">
-      <div id="message"></div>
-      <div><button><a id="settings" href="settings.html">Settings</a></button></div>
+      <div style="text-align: right;"></div>
+        <button id="jump">Jump</button>   
+        <button id="jump-new-tab">Jump to new tab</button>
+        <div><button><a id="settings" href="settings.html">Settings</a></button></div>
+      </div>
     </div>
 
-    <textarea
-    placeholder="Enter URL name here."
-  ></textarea>
-
-    <div style="text-align: right;">
-      <button id="jump">Jump</button>   
-      <button id="jump-new-tab">Jump to new tab</button>
+    <div id="message" style="text-align: right;"></div>
+    
+    <div class="autocomplete">
+      <textarea id="input" type="text" placeholder="Enter URL name here."></textarea>
     </div>
     
     <script src="popup.js"></script>

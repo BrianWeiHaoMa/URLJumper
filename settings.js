@@ -39,7 +39,7 @@ async function saveChanges() {
   await storage.set({ 'mappings': textarea.value });
 
   message.style.color = "green";
-  message.textContent = 'Changes saved.';
+  message.textContent = 'Changes have been saved.';
 }
 
 function loadChanges() {
