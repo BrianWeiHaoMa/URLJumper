@@ -54,7 +54,7 @@ async function handleJump (newTab) {
   });
 
   if (input.value.trimStart().trimEnd().split(/\s+/g).length !== 1) {
-    message.style.color = 'red';
+    message.style.color = 'var(--failure)';
     message.innerText = 'Enter exactly 1 word.';
     input.value = input.value.replace(/\s+/g, '');
     return;
@@ -77,7 +77,7 @@ async function handleJump (newTab) {
 
     input.value = '';
   } else {
-    message.style.color = 'red';
+    message.style.color = 'var(--failure)';
     message.innerText = 'No matching name found.';
     input.value = input.value.replace(/\s+/g, '');
     return;

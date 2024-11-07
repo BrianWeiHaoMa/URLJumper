@@ -1,18 +1,19 @@
 :root {
-    /* Dark Mode Colour Scheme: */
-    --dark-mode-1: #1c1f1f;
-    --dark-mode-2: #2b3432;
-    --dark-mode-3: #4c5351; 
-    --dark-mode-4: #a9a9a9; 
-    --dark-mode-5: #d0d0d0; 
-
-    
     /* Light Mode Colour Scheme: */
     --light-mode-1: #8a829bff;
     --light-mode-2: #bfbbc9ff;
     --light-mode-3: #d5d1dbff;
     --light-mode-4: #e0dde3ff;
     --light-mode-5: #f5f5f5ff;
+    --failure: #f51925;
+    --success: #13952d;
+    
+    /* Dark Mode Colour Scheme: */
+    --dark-mode-1: #1c1f1f;
+    --dark-mode-2: #2b3432;
+    --dark-mode-3: #4c5351; 
+    --dark-mode-4: #a9a9a9; 
+    --dark-mode-5: #d0d0d0; 
 }
 
 textarea {
@@ -45,6 +46,11 @@ textarea:focus {
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
+    :root {
+        --failure: #ff6169;
+        --success: #31be5e;
+    }
+
     body {
         background-color: var(--dark-mode-1);
         color: var(--dark-mode-5);

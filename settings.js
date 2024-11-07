@@ -20,13 +20,13 @@ async function saveChanges() {
       } else {
         const words = trimmedLine.split(/\s+/);        
         if (words.length !== 2) {
-          message.style.color = "red";
+          message.style.color = 'var(--failure)';
           message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
           return;
         }
 
         if (alreadyUsed.has(words[0])) {
-          message.style.color = "red";
+          message.style.color = 'var(--failure)';
           message.textContent = `Error: Each name must be unique. Already found: "${words[0]}".`;
           return;
         }
@@ -46,7 +46,7 @@ async function saveChanges() {
 
   await storage.set({ 'mappings': textarea.value });
 
-  message.style.color = "green";
+  message.style.color = 'var(--success)';
   message.textContent = 'Changes have been saved.';
 }
 
