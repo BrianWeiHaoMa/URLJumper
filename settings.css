@@ -2,3 +2,12 @@
     margin-left: 20px;
     margin-right: 20px;
 }
+
+/* Instruction Formatting */
+code {
+    font-size: large;
+}
+
+#last-instruction {
+    margin-bottom: 2%;
+}
