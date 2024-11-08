@@ -3,7 +3,7 @@ const textarea = document.querySelector('textarea');
 const submitButton = document.querySelector('#submit');
 const toggleColorSchemeButton = document.querySelector('#toggle-color-scheme');
 
-loadChanges();
+loadMappings();
 
 submitButton.addEventListener('click', saveChanges);
 toggleColorSchemeButton.addEventListener('click', toggleColorScheme);
@@ -11,14 +11,17 @@ toggleColorSchemeButton.addEventListener('click', toggleColorScheme);
 async function saveChanges() {
   if (textarea.value !== '') {
     const lines = textarea.value.split('\n');
+    
     let res = '';
     const alreadyUsed = new Set();
     for (const line of lines) {
       const trimmedLine = line.trim();
+      
       if (trimmedLine === '') {
         res += '\n';
       } else {
         const words = trimmedLine.split(/\s+/);        
+        
         if (words.length !== 2) {
           message.style.color = 'var(--failure)';
           message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
@@ -30,8 +33,8 @@ async function saveChanges() {
           message.textContent = `Error: Each name must be unique. Already found: "${words[0]}".`;
           return;
         }
-        alreadyUsed.add(words[0]);
 
+        alreadyUsed.add(words[0]);
         res += trimmedLine + '\n';
       }
     }
@@ -50,24 +53,19 @@ async function saveChanges() {
   message.textContent = 'Changes have been saved.';
 }
 
-async function loadChanges() {
-  await storage.get('mappings', function (items) {
-    if ('mappings' in items) {
-      textarea.value = items.mappings;
-    }
-  });
+async function loadMappings() {
+  const mappings = await storage.get('mappings')
+  textarea.value = mappings.mappings || '';
 }
 
 async function toggleColorScheme() {
   const items = await storage.get(['darkmode']);
 
-  if (items.darkmode === '1') {
-    await storage.set({ 'darkmode': '0' });
+  if (items.darkmode === true) {
+    await storage.set({ 'darkmode': false });
     document.body.classList.remove('dark-mode');
-    console.log("removing dark mode");
   } else {
-    await storage.set({ 'darkmode': '1' });
+    await storage.set({ 'darkmode': true });
     document.body.classList.add('dark-mode');
-    console.log("adding dark mode");
   }
 }

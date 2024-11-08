@@ -1,14 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "URL-jumper",
-  "description": "Allows jumping to URLs using names.",
+  "name": "URLJumper",
+  "description": "Allows jumping to URLs using names mapped to URLs.",
   "version": "1.0",
 
   "permissions": ["storage", "commands"],
   "options_page": "settings.html",
   "action": {
     "default_icon": "icon.png",
-    "default_title": "URL-jumper",
+    "default_title": "URLJumper",
     "default_popup": "popup.html"
   },
   

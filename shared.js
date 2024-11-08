@@ -5,22 +5,19 @@ async function applyDefaultColorSchemeBasedOnSystem() {
 
     if (items.darkmode === undefined) {
         if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-            await storage.set({ 'darkmode': '1' });
-            items.darkmode = '1';
+            await storage.set({ 'darkmode': true });
+            items.darkmode = true;
         } else {
-            await storage.set({ 'darkmode': '0' });
-            items.darkmode = '0';
+            await storage.set({ 'darkmode': false });
+            items.darkmode = false;
         }
     }
 
     const res = await storage.get(['darkmode']);
-    console.log("res " + res.darkmode);
 
-    if (items.darkmode === '1') {
+    if (items.darkmode === true) {
         document.body.classList.add("dark-mode");
     } else {
-
-        document.body.child
         document.body.classList.remove("dark-mode");
     }
 }
