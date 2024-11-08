@@ -1,5 +1,6 @@
 :root {
     /* Light Mode Colour Scheme: */
+    --light-mode-0: #3700b3;
     --light-mode-1: #8a829bff;
     --light-mode-2: #bfbbc9ff;
     --light-mode-3: #d5d1dbff;
@@ -14,6 +15,36 @@
     --dark-mode-3: #4c5351; 
     --dark-mode-4: #a9a9a9; 
     --dark-mode-5: #d0d0d0; 
+}
+
+button {
+    /* padding: 10px 20px; */
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: var(--light-mode-1); /* For light mode */
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Hover effect */
+button:hover {
+    background-color: var(--light-mode-0);
+    transform: scale(1.05);
+}
+
+/* Active state */
+button:active {
+    background-color: var(--light-mode-3);
+    transform: scale(0.98);
+}
+
+/* Focus and Hover Shadow Effect */
+button:hover, button:focus {
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.2);
 }
 
 textarea {
@@ -64,5 +95,17 @@ textarea:focus {
 
     textarea:focus {
         border-color: var(--dark-mode-4); /* Change border color on focus */
+    }
+
+    button {
+        background-color: var(--dark-mode-2);
+    }
+
+    button:hover {
+        background-color: var(--dark-mode-3);
+    }
+
+    button:active {
+        background-color: var(--dark-mode-4);
     }
 }

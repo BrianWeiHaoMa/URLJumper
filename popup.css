@@ -7,6 +7,10 @@ textarea {
     text-decoration: none;
 }
 
+#settings-div {
+    margin-top: 3%;
+}
+
 #message {
     color: var(--dark-mode-1); /* Default for light mode */
     margin-bottom: 10px;
