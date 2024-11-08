@@ -1,12 +1,12 @@
-const storage = chrome.storage.local;
-
 const message = document.querySelector('#message');
 const textarea = document.querySelector('textarea');
 const submitButton = document.querySelector('#submit');
+const toggleColorSchemeButton = document.querySelector('#toggle-color-scheme');
 
 loadChanges();
 
 submitButton.addEventListener('click', saveChanges);
+toggleColorSchemeButton.addEventListener('click', toggleColorScheme);
 
 async function saveChanges() {
   if (textarea.value !== '') {
@@ -50,11 +50,24 @@ async function saveChanges() {
   message.textContent = 'Changes have been saved.';
 }
 
-function loadChanges() {
-  storage.get('mappings', function (items) {
+async function loadChanges() {
+  await storage.get('mappings', function (items) {
     if ('mappings' in items) {
       textarea.value = items.mappings;
     }
   });
 }
 
+async function toggleColorScheme() {
+  const items = await storage.get(['darkmode']);
+
+  if (items.darkmode === '1') {
+    await storage.set({ 'darkmode': '0' });
+    document.body.classList.remove('dark-mode');
+    console.log("removing dark mode");
+  } else {
+    await storage.set({ 'darkmode': '1' });
+    document.body.classList.add('dark-mode');
+    console.log("adding dark mode");
+  }
+}

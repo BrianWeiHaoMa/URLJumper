@@ -1,5 +1,3 @@
-const storage = chrome.storage.local;
-
 const message = document.querySelector('#message');
 const jump = document.querySelector('#jump');
 const jumpNewTab = document.querySelector('#jump-new-tab');

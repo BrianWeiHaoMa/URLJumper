@@ -76,29 +76,27 @@ input[type=submit] {
     background-color: var(--light-mode-1);
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-    #message {
-        color: var(--dark-mode-5);
-    }
 
-    input {
-        background-color: var(--dark-mode-2);
-        color: var(--dark-mode-5);
-        border: 1px solid var(--dark-mode-3);
-    }
+#message.dark-mode {
+    color: var(--dark-mode-5);
+}
 
-    input[type=submit] {
-        background-color: var(--dark-mode-4);
-    }
+input.dark-mode {
+    background-color: var(--dark-mode-2);
+    color: var(--dark-mode-5);
+    border: 1px solid var(--dark-mode-3);
+}
 
-    .autocomplete-items div {
-        background-color: var(--dark-mode-2);
-        color: var(--dark-mode-5);
-        border-bottom: 1px solid var(--dark-mode-3);
-    }
+input[type=submit].dark-mode {
+    background-color: var(--dark-mode-4);
+}
 
-    .autocomplete-items div:hover {
-        background-color: var(--dark-mode-3);
-    }
+.autocomplete-items div.dark-mode {
+    background-color: var(--dark-mode-2);
+    color: var(--dark-mode-5);
+    border-bottom: 1px solid var(--dark-mode-3);
+}
+
+.autocomplete-items div:hover.dark-mode {
+    background-color: var(--dark-mode-3);
 }

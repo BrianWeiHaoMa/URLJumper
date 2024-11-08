@@ -75,37 +75,36 @@ textarea:focus {
 }
 
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --failure: #ff6169;
-        --success: #31be5e;
-    }
 
-    body {
-        background-color: var(--dark-mode-1);
-        color: var(--dark-mode-5);
-    }
-
-    textarea {
-        background-color: var(--dark-mode-2);
-        color: var(--dark-mode-5);
-        border: 1px solid var(--dark-mode-3);
-    }
-
-    textarea:focus {
-        border-color: var(--dark-mode-4); /* Change border color on focus */
-    }
-
-    button {
-        background-color: var(--dark-mode-2);
-    }
-
-    button:hover {
-        background-color: var(--dark-mode-3);
-    }
-
-    button:active {
-        background-color: var(--dark-mode-4);
-    }
+:root.dark-mode {
+    --failure: #ff6169;
+    --success: #31be5e;
 }
+
+body.dark-mode {
+    background-color: var(--dark-mode-1);
+    color: var(--dark-mode-5);
+}
+
+body.dark-mode textarea {
+    background-color: var(--dark-mode-2);
+    color: var(--dark-mode-5);
+    border: 1px solid var(--dark-mode-3);
+}
+
+body.dark-mode textarea:focus {
+    border-color: var(--dark-mode-4); /* Change border color on focus */
+}
+
+body.dark-mode button {
+    background-color: var(--dark-mode-2);
+}
+
+body.dark-mode button:hover {
+    background-color: var(--dark-mode-3);
+}
+
+body.dark-mode button:active {
+    background-color: var(--dark-mode-4);
+}
+
