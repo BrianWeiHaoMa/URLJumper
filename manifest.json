@@ -7,7 +7,7 @@
   "permissions": ["storage", "commands"],
   "options_page": "settings.html",
   "action": {
-    "default_icon": "icon.png",
+    "default_icon": "img/icon.png",
     "default_title": "URLJumper",
     "default_popup": "popup.html"
   },

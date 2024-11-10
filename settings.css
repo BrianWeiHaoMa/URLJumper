@@ -11,3 +11,27 @@ code {
 #last-instruction {
     margin-bottom: 2%;
 }
+
+/* Back-Arrow link */
+.arrow-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 0;
+}
+
+/* Back-Arrow Icon Image */
+.icon {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
+    filter: invert(31%) sepia(11%) saturate(236%) hue-rotate(112deg) brightness(92%) contrast(89%);
+}
+
+.arrow-button:hover .icon {
+    transform: scale(1.1); 
+}
+
+body.darkmode .icon {
+    filter: invert(95%) sepia(0%) saturate(33%) hue-rotate(196deg) brightness(88%) contrast(94%);
+}
