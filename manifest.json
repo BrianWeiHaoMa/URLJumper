@@ -5,7 +5,6 @@
   "version": "1.0",
 
   "permissions": ["storage", "commands"],
-  "options_page": "settings.html",
   "action": {
     "default_icon": "imgs/icon.png",
     "default_title": "URL Jumper",
