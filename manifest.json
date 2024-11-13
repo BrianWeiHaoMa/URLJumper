@@ -6,9 +6,14 @@
 
   "permissions": ["storage", "commands"],
   "action": {
-    "default_icon": "imgs/icon.png",
+    "default_icon": "imgs/icon128.png",
     "default_title": "URL Jumper",
     "default_popup": "popup.html"
+  },
+
+  "icons": {
+    "48": "imgs/icon48.png",
+    "128": "imgs/icon128.png"
   },
   
   "commands": {
