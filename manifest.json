@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "URL Jumper",
   "description": "Allows jumping to URLs using names mapped to URLs.",
-  "version": "1.0",
+  "version": "1.0.1",
 
   "permissions": ["storage", "commands", "activeTab"],
   "action": {
