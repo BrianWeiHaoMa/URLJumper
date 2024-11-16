@@ -4,7 +4,7 @@
   "description": "Allows jumping to URLs using names mapped to URLs.",
   "version": "1.0",
 
-  "permissions": ["storage", "commands"],
+  "permissions": ["storage", "commands", "activeTab"],
   "action": {
     "default_icon": "imgs/icon128.png",
     "default_title": "URL Jumper",

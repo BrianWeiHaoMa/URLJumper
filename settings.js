@@ -2,6 +2,12 @@ const message = document.querySelector('#message');
 const textarea = document.querySelector('textarea');
 const submitButton = document.querySelector('#submit');
 const toggleColorSchemeButton = document.querySelector('#toggle-color-scheme');
+const currentUrl = document.querySelector('#current-url');
+
+(async () => {
+  const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
+  currentUrl.textContent = tab.url;
+})();
 
 loadMappings();
 
