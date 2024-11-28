@@ -193,11 +193,14 @@ function autocomplete(inp, arr) {
       } else if (e.keyCode == 13) {
         /*If the ENTER key is pressed, prevent the form from being submitted,*/
         e.preventDefault();
-        if (currentFocus > -1) {
-          /*and simulate a click on the "active" item:*/
-          if (x) x[currentFocus].click();
+        if (x && x.length > 0) { /*and simulate a click on the "active" item:*/
+          if (currentFocus > -1) {
+            x[currentFocus].click();
+          } else { /*trigger the jump action on the first item*/
+            x[0].click();
+          }
         } else {
-          /* trigger the jump action */
+          /*trigger the jump action*/
           handleJump(inp.jumpNewTabPopup);
         }
       }
