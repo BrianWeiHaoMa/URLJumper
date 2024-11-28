@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else {
     sendResponse({ status: "nothing chosen" });
   }
-  
+
   console.log("made it to popup.js");
 });
 
@@ -119,7 +119,7 @@ async function getMappingNames() {
       lineToCheck = line.substring(0, firstBackslashIndex);
     }
 
-    const words = line.split(/\s+/);
+    const words = lineToCheck.split(/\s+/);
     if (words.length === 2) {
       const name = words[0];
       res.push(name);

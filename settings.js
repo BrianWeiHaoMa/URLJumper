@@ -31,7 +31,7 @@ async function saveChanges() {
         lineToCheck = line.substring(0, firstBackslashIndex);
       }
 
-      const words = lineToCheck.split(/\s+/);
+      const words = lineToCheck.trimStart().trimEnd().split(/\s+/);
       if (words.length === 1 && words[0] === '') {
         continue;
       }
