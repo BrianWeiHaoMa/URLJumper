@@ -4,53 +4,52 @@ const submitButton = document.querySelector('#submit');
 const toggleColorSchemeButton = document.querySelector('#toggle-color-scheme');
 const currentUrl = document.querySelector('#current-url');
 
+
 (async () => {
   const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
   currentUrl.textContent = tab.url;
 })();
+
 
 loadMappings();
 
 submitButton.addEventListener('click', saveChanges);
 toggleColorSchemeButton.addEventListener('click', toggleColorScheme);
 
+
 async function saveChanges() {
   if (textarea.value !== '') {
     const lines = textarea.value.split('\n');
     
-    let res = '';
-    const alreadyUsed = new Set();
+    const alreadyUsedNames = new Set();
     for (const line of lines) {
-      const trimmedLine = line.trim();
-      
-      if (trimmedLine === '') {
-        res += '\n';
-      } else {
-        const words = trimmedLine.split(/\s+/);        
-        
-        if (words.length !== 2) {
-          message.style.color = 'var(--failure)';
-          message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
-          return;
-        }
+      const firstBackslashIndex = line.indexOf('\\');
 
-        if (alreadyUsed.has(words[0])) {
-          message.style.color = 'var(--failure)';
-          message.textContent = `Error: Each name must be unique. Already found: "${words[0]}".`;
-          return;
-        }
-
-        alreadyUsed.add(words[0]);
-        res += trimmedLine + '\n';
+      let lineToCheck = line;
+      if (firstBackslashIndex !== -1) {
+        // Remove comments from the check.
+        lineToCheck = line.substring(0, firstBackslashIndex);
       }
-    }
 
-    const lastChar = textarea.value.slice(-1);
-    if (lastChar === '\n' || lastChar === ' ') {
-      res = res.slice(0, -1);
+      const words = lineToCheck.split(/\s+/);
+      if (words.length === 1 && words[0] === '') {
+        continue;
+      }
+
+      if (words.length !== 2) {
+        message.style.color = 'var(--failure)';
+        message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
+        return;
+      }
+
+      if (alreadyUsedNames.has(words[0])) {
+        message.style.color = 'var(--failure)';
+        message.textContent = `Error: Each name must be unique. Already found: "${words[0]}".`;
+        return;
+      }
+
+        alreadyUsedNames.add(words[0]);
     }
-    
-    textarea.value = res;
   }
 
   await storage.set({ 'mappings': textarea.value });
@@ -59,10 +58,12 @@ async function saveChanges() {
   message.textContent = 'Changes have been saved.';
 }
 
+
 async function loadMappings() {
   const mappings = await storage.get('mappings')
   textarea.value = mappings.mappings || '';
 }
+
 
 async function toggleColorScheme() {
   const items = await storage.get(['darkmode']);

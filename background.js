@@ -13,6 +13,8 @@ chrome.commands.onCommand.addListener((command) => {
             chrome.runtime.sendMessage({ command: jumpNewTab }, logResponseStatus);
         }, 1000);
     }
+
+    console.log("made it to background.js");
 });
 
 function logResponseStatus(response) {

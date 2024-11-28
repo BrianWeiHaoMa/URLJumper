@@ -15,6 +15,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else {
     sendResponse({ status: "nothing chosen" });
   }
+  
+  console.log("made it to popup.js");
 });
 
 getMappingNames().then(mappingNames => {
@@ -39,46 +41,60 @@ input.addEventListener('input', (event) => {
 input.focus();
 
 
-async function handleJump (newTab) {
+async function handleJump(newTab) {
   let items = await storage.get(['mappings']);
 
   if (!items.mappings) {
     items.mappings = '';
   }
 
-  const mappings = items.mappings.split('\n').map(line => {
-    const [name, url] = line.split(/\s+/);
-    return { name, url };
-  });
+  const mappings = [];
+  const lines = items.mappings.split('\n');
+  for (line of lines) {
+    const firstBackslashIndex = line.indexOf('\\');
 
-  if (input.value.trimStart().trimEnd().split(/\s+/g).length !== 1) {
+    let lineToCheck = line;
+    if (firstBackslashIndex !== -1) {
+      // Remove comments from the check.
+      lineToCheck = line.substring(0, firstBackslashIndex);
+    }
+
+    const words = lineToCheck.split(/\s+/);
+    if (words.length === 2) {
+      const name = words[0];
+      const url = words[1];
+      mappings.push({ name, url });
+    }
+  }
+
+  const inputToCheck = input.value.trimStart().trimEnd();
+
+  if (inputToCheck.split(/\s+/g).length !== 1) {
     message.style.color = 'var(--failure)';
     message.innerText = 'Enter exactly 1 word.';
     input.value = input.value.replace(/\s+/g, '');
-    return;
-  }
-
-  const firstWord = input.value.replace(/\s+/g, '');
-  const mapping = mappings.find(mapping => mapping.name === firstWord);
-
-  if (mapping && mapping.name.trim() !== '') {
-    let url = mapping.url
-    if (!/^https?:\/\//i.test(url)) {
-      url = 'http://' + url;
-    }
-
-    if (newTab) {
-      chrome.tabs.create({ 'url': url });
-    } else {
-      chrome.tabs.update({ 'url': url });
-    }
-
-    input.value = '';
   } else {
-    message.style.color = 'var(--failure)';
-    message.innerText = 'No matching name found.';
-    input.value = input.value.replace(/\s+/g, '');
-    return;
+    const mapping = mappings.find(mapping => mapping.name === inputToCheck);
+
+    if (mapping) {
+      let url = mapping.url
+
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'http://' + url;
+      }
+
+      if (newTab) {
+        chrome.tabs.create({ 'url': url });
+      } else {
+        chrome.tabs.update({ 'url': url });
+      }
+
+      input.value = '';
+    } else {
+      message.style.color = 'var(--failure)';
+      message.innerText = 'No matching name found.';
+      input.value = input.value.replace(/\s+/g, '');
+    }
   }
 }
 
@@ -92,10 +108,21 @@ async function getMappingNames() {
 
   const res = [];
 
-  for ([urlName, url] of items.mappings.split('\n').map(line => line.split(/\s+/))) {
-    if (urlName.trim() !== '') {
-      res.push(urlName);
-      console.log("urlName: " + urlName);
+  const lines = items.mappings.split('\n');
+
+  for (line of lines) {
+    const firstBackslashIndex = line.indexOf('\\');
+
+    let lineToCheck = line;
+    if (firstBackslashIndex !== -1) {
+      // Remove comments from the check.
+      lineToCheck = line.substring(0, firstBackslashIndex);
+    }
+
+    const words = line.split(/\s+/);
+    if (words.length === 2) {
+      const name = words[0];
+      res.push(name);
     }
   }
 
