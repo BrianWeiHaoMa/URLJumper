@@ -2,7 +2,8 @@
 A chrome extension that allows mapping `name URL` pairs as search shortcuts.
 By default, `Alt+M` opens the extension for redirecting the current window and `Alt+N` opens the
 extension for URL jumping onto a new tab. Typing `name` in the popup text box and entering will take
-you to `URL`. `name URL` pairs can be set in the settings page.
+you to `URL`. `name URL` pairs can be set in the settings page. You can also write comments along 
+with your `name URL` pairs by using \\ (a backslash).
 
 [![image](https://github.com/user-attachments/assets/a363098f-4993-4157-b9a4-79f5714c443c)](https://chromewebstore.google.com/detail/url-jumper/dbhbcgodajbjmemahnaigmlgjdkgghik)
 
@@ -12,7 +13,7 @@ you to `URL`. `name URL` pairs can be set in the settings page.
 
 The mappings will look like:
 ```
-movies http://192.168.1.136:8083
+movies http://192.168.1.136:8083 \ I can write comments like this
 benefits https://www.manulife.ca/personal.html
 ```
 
