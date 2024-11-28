@@ -36,9 +36,8 @@ body.darkmode .icon {
     filter: invert(95%) sepia(0%) saturate(33%) hue-rotate(196deg) brightness(88%) contrast(94%);
 }
 
-#current-url {
-    width: 50%;
-    white-space: pre-wrap;
-    word-break: break-word;
-    resize: none;
+#button-footer {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
 }

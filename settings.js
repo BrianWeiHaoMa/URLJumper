@@ -2,14 +2,7 @@ const message = document.querySelector('#message');
 const textarea = document.querySelector('textarea');
 const submitButton = document.querySelector('#submit');
 const toggleColorSchemeButton = document.querySelector('#toggle-color-scheme');
-const currentUrl = document.querySelector('#current-url');
-
-
-(async () => {
-  const [tab] = await chrome.tabs.query({active: true, lastFocusedWindow: true});
-  currentUrl.textContent = tab.url;
-})();
-
+const copyButton = document.querySelector('#copy-url');
 
 loadMappings();
 
@@ -76,3 +69,61 @@ async function toggleColorScheme() {
     document.body.classList.add('dark-mode');
   }
 }
+
+copyButton.style.width = `${copyButton.offsetWidth}px`; // Set the width dynamically
+let pendingTimeout;
+let activeTabId;
+
+// Listen for tab activation changes and store the active tab ID
+chrome.tabs.onActivated.addListener(function(activeInfo) {
+    activeTabId = activeInfo.tabId;
+});
+
+
+// Get the active tab, or last active tab if there is no active tab
+function getActiveTab(callback) {
+    // Adapted from workaround discussed here: https://stackoverflow.com/a/34214430
+    chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
+        let tab = tabs[0];
+
+        // If tab not available, fall back to using the stored activeTabId
+        if (tab) {
+            callback(tab);
+        } else {
+            chrome.tabs.get(activeTabId, function (tab) {
+                if (tab) {
+                    callback(tab);
+                } else {
+                    console.log('No active tab identified.');
+                }
+            });
+        }
+    });
+}
+
+
+// Save the active tab to clipboard
+async function copyCurrentUrl() {
+    getActiveTab(async (tab) => {
+        if (tab && tab.url) {
+            await navigator.clipboard.writeText(tab.url); // Copy URL to clipboard
+
+            copyButton.textContent = "Copied!";
+            textarea.focus();
+
+            // Timeout configuration
+            if (pendingTimeout) {
+                clearTimeout(pendingTimeout);
+            }
+
+            pendingTimeout = setTimeout(() => {
+                copyButton.textContent = "Copy Current URL";
+            }, 600);
+        } else {
+            console.error("No valid URL available in the active tab.");
+        }
+    });
+}
+
+// Attach the click event to the button
+copyButton.addEventListener('click', copyCurrentUrl);
