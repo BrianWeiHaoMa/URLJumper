@@ -13,8 +13,6 @@ async function applyDefaultColorSchemeBasedOnSystem() {
         }
     }
 
-    const res = await storage.get(['darkmode']);
-
     if (items.darkmode === true) {
         document.body.classList.add("dark-mode");
     } else {

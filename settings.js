@@ -38,7 +38,7 @@ async function saveChanges() {
 
       if (words.length !== 2) {
         message.style.color = 'var(--failure)';
-        message.textContent = `Error: Each line must contain exactly two items. Found: "${line}".`;
+        message.textContent = `Error: Each line must contain exactly two items. Found: "${lineToCheck}".`;
         return;
       }
 

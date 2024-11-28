@@ -59,7 +59,7 @@ async function handleJump(newTab) {
       lineToCheck = line.substring(0, firstBackslashIndex);
     }
 
-    const words = lineToCheck.split(/\s+/);
+    const words = lineToCheck.trimStart().trimEnd().split(/\s+/);
     if (words.length === 2) {
       const name = words[0];
       const url = words[1];
@@ -119,7 +119,7 @@ async function getMappingNames() {
       lineToCheck = line.substring(0, firstBackslashIndex);
     }
 
-    const words = lineToCheck.split(/\s+/);
+    const words = lineToCheck.trimStart().trimEnd().split(/\s+/);
     if (words.length === 2) {
       const name = words[0];
       res.push(name);
