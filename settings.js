@@ -54,7 +54,13 @@ async function saveChanges() {
 
 async function loadMappings() {
   const mappings = await storage.get('mappings')
-  textarea.value = mappings.mappings || '';
+
+  let config = mappings.mappings || '';
+  if (config && !config.endsWith('\n')) {
+      config += '\n';
+  }
+
+  textarea.value = config;
 }
 
 
