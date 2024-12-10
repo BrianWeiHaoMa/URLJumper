@@ -41,3 +41,7 @@ body.darkmode .icon {
     justify-content: space-between; 
     align-items: center;
 }
+
+button {
+    padding: 3% 4%;
+}

@@ -18,7 +18,7 @@
 }
 
 button {
-    padding: 3% 4%;
+    padding: 3.5% 3.25%;
     font-size: 14px;
     font-weight: 600;
     color: #ffffff;
@@ -57,6 +57,28 @@ textarea {
     outline: none; /* Remove the outline when focused */
     margin-top: 2px;
     margin-bottom: 2px;
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: var(--light-mode-1) var(--light-mode-5); /* Thumb and track colors */
+    scroll-margin-block-end: 20%;
+}
+
+textarea::-webkit-scrollbar {
+    height: 8px;
+}
+
+textarea::-webkit-scrollbar-track {
+    background: var(--light-mode-5);
+    border-radius: 5px;
+}
+
+textarea::-webkit-scrollbar-thumb {
+    background-color: var(--light-mode-1);
+    border-radius: 5px;
+    border: 2px solid var(--light-mode-5);
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+    background-color: var(--light-mode-0); /* Thumb color on hover */
 }
 
 /* Light mode (default) */
@@ -90,10 +112,24 @@ body.dark-mode textarea {
     background-color: var(--dark-mode-2);
     color: var(--dark-mode-5);
     border: 1px solid var(--dark-mode-3);
+    scrollbar-color: var(--dark-mode-3) var(--dark-mode-2);
 }
 
 body.dark-mode textarea:focus {
     border-color: var(--dark-mode-4); /* Change border color on focus */
+}
+
+body.dark-mode textarea::-webkit-scrollbar-track {
+    background: var(--dark-mode-2);
+}
+
+body.dark-mode textarea::-webkit-scrollbar-thumb {
+    background-color: var(--dark-mode-3);
+    border: 2px solid var(--dark-mode-2);
+}
+
+body.dark-mode textarea::-webkit-scrollbar-thumb:hover {
+    background-color: var(--dark-mode-4);
 }
 
 body.dark-mode button {
@@ -107,4 +143,3 @@ body.dark-mode button:hover {
 body.dark-mode button:active {
     background-color: var(--dark-mode-4);
 }
-
