@@ -9,16 +9,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.command === "toggle-popup-jump") 
     {
         input.jumpNewTabPopup = false;
-        sendResponse({ status: "toggle-popup-jump" });
     }
     else if (message.command === "toggle-popup-jump-new-tab") 
     {
         input.jumpNewTabPopup = true;
-        sendResponse({ status: "toggle-popup-jump-new-tab" });
-    }
-    else 
-    {
-        sendResponse({ status: "nothing chosen" });
     }
 });
 

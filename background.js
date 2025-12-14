@@ -1,19 +1,15 @@
-chrome.commands.onCommand.addListener((command) => {
+chrome.commands.onCommand.addListener(async (command) => {
     const jump = "toggle-popup-jump";
     const jumpNewTab = "toggle-popup-jump-new-tab";
 
     if (command === jump) 
     {
-        chrome.action.openPopup();
-        setTimeout(() => {
-            chrome.runtime.sendMessage({ command: jump });
-        }, 1000);
+        await chrome.action.openPopup();
+        chrome.runtime.sendMessage({ command: jump });
     }
     else if (command === jumpNewTab) 
     {
-        chrome.action.openPopup();
-        setTimeout(() => {
-            chrome.runtime.sendMessage({ command: jumpNewTab });
-        }, 1000);
+        await chrome.action.openPopup();
+        chrome.runtime.sendMessage({ command: jumpNewTab });
     }
 });
