@@ -29,7 +29,6 @@ export function PopupView({ mode, onOpenSettings }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const allMatchesRef = useRef<Mapping[]>([]);
-  const wheelAccRef = useRef(0);
   const allowPointerHighlightRef = useRef(true);
 
   useEffect(() => {
@@ -63,12 +62,9 @@ export function PopupView({ mode, onOpenSettings }: Props) {
 
   allMatchesRef.current = allMatches;
 
-  const WHEEL_STEP = 50;
-
   useEffect(() => {
     const el = suggestionsRef.current;
     if (!el || visible.length === 0) {
-      wheelAccRef.current = 0;
       return;
     }
 
@@ -78,13 +74,9 @@ export function PopupView({ mode, onOpenSettings }: Props) {
       e.preventDefault();
       e.stopPropagation();
       allowPointerHighlightRef.current = false;
-      wheelAccRef.current += e.deltaY;
-      while (wheelAccRef.current >= WHEEL_STEP) {
-        wheelAccRef.current -= WHEEL_STEP;
+      if (e.deltaY > 0) {
         setWindowState((s) => moveDown(s, N));
-      }
-      while (wheelAccRef.current <= -WHEEL_STEP) {
-        wheelAccRef.current += WHEEL_STEP;
+      } else if (e.deltaY < 0) {
         setWindowState((s) => moveUp(s, N));
       }
     };
@@ -93,7 +85,6 @@ export function PopupView({ mode, onOpenSettings }: Props) {
     el.addEventListener('wheel', onWheel, wheelOpts);
     return () => {
       el.removeEventListener('wheel', onWheel, wheelOpts);
-      wheelAccRef.current = 0;
     };
   }, [visible.length, allMatches.length]);
 
