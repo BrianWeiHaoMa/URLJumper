@@ -3,12 +3,10 @@ import {
   initialSuggestionWindow,
   moveDown,
   moveUp,
+  stateForLogicalIndex,
   visibleIndices,
   selectedMatchIndex,
-  VISIBLE_COUNT,
 } from './suggestionWindow';
-
-const VC = VISIBLE_COUNT;
 
 describe('suggestionWindow', () => {
   describe('moveDown', () => {
@@ -31,7 +29,7 @@ describe('suggestionWindow', () => {
       });
     });
 
-    it('walks slots 0..N-1 for a list smaller than the visible window', () => {
+    it('walks slots 0..N-1 then wraps to 0 for a short list', () => {
       let state = initialSuggestionWindow;
       const N = 5;
       const path = [state.slotIndex];
@@ -39,40 +37,45 @@ describe('suggestionWindow', () => {
         state = moveDown(state, N);
         path.push(state.slotIndex);
       }
-      expect(path).toEqual([0, 1, 2, 3, 4, 4, 4]);
+      expect(path).toEqual([0, 1, 2, 3, 4, 0, 1]);
       expect(state.offset).toBe(0);
     });
 
-    it('walks slots 0..7 for an 8-match list with no scrolling', () => {
+    it('at the last match of an 8-item list, moveDown wraps to the first', () => {
       let state = initialSuggestionWindow;
       const N = 8;
       for (let i = 0; i < 7; i++) state = moveDown(state, N);
       expect(state).toEqual({ slotIndex: 7, offset: 0 });
-      expect(moveDown(state, N)).toEqual({ slotIndex: 7, offset: 0 });
+      state = moveDown(state, N);
+      expect(state).toEqual({ slotIndex: 0, offset: 0 });
+      expect(moveDown(state, N)).toEqual({ slotIndex: 1, offset: 0 });
     });
 
-    it('scrolls window when stepping past slot 7 with 9 matches', () => {
+    it('scrolls then wraps from the last match with 9 items', () => {
       let state = initialSuggestionWindow;
       const N = 9;
       for (let i = 0; i < 7; i++) state = moveDown(state, N);
       expect(state).toEqual({ slotIndex: 7, offset: 0 });
       state = moveDown(state, N);
       expect(state).toEqual({ slotIndex: 7, offset: 1 });
-      expect(moveDown(state, N)).toEqual({ slotIndex: 7, offset: 1 });
+      expect(selectedMatchIndex(state, N)).toBe(8);
+      state = moveDown(state, N);
+      expect(state).toEqual({ slotIndex: 0, offset: 0 });
     });
 
-    it('keeps scrolling until offset = N - VISIBLE_COUNT then stops', () => {
+    it('cycles when stepping past the end of a long list', () => {
       let state = initialSuggestionWindow;
       const N = 12;
       for (let i = 0; i < 20; i++) state = moveDown(state, N);
-      expect(state).toEqual({ slotIndex: VC - 1, offset: N - VC });
+      expect(selectedMatchIndex(state, N)).toBe(8);
+      expect(state).toEqual({ slotIndex: 7, offset: 1 });
     });
   });
 
   describe('moveUp', () => {
-    it('does nothing at the very top', () => {
+    it('from the first match, moveUp wraps to the last match', () => {
       expect(moveUp(initialSuggestionWindow, 5)).toEqual(
-        initialSuggestionWindow,
+        stateForLogicalIndex(4, 5),
       );
     });
 
@@ -121,6 +124,17 @@ describe('suggestionWindow', () => {
         visitedUp.push(selectedMatchIndex(state, N)!);
       }
       expect(visitedUp).toEqual([10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
+    });
+  });
+
+  describe('stateForLogicalIndex', () => {
+    it('selects the first match with offset reset', () => {
+      expect(stateForLogicalIndex(0, 12)).toEqual({ slotIndex: 0, offset: 0 });
+    });
+
+    it('selects the last match with a scrolled window when N is large', () => {
+      const s = stateForLogicalIndex(11, 12);
+      expect(selectedMatchIndex(s, 12)).toBe(11);
     });
   });
 

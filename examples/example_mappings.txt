@@ -1,0 +1,13 @@
+\ This is an example.
+\ Use \ to write comments.
+\ Here are some example mappings:
+search               https://www.google.com/ \ This is a comment and will be ignored.
+stocks               https://seekingalpha.com/account/portfolio/summary
+stocks-news          https://seekingalpha.com/market-news
+benefits             https://www.manulife.ca/personal.html
+proxmox              https://192.168.1.250:8006
+
+chrome-extensions    https://chromewebstore.google.com/
+chinese-language     https://www.reddit.com/r/ChineseLanguage/
+canada               https://natural-resources.canada.ca/
+cotton-candy         https://en.wikipedia.org/wiki/Cotton_candy

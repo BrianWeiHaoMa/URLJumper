@@ -3,7 +3,7 @@ import { defineManifest } from '@crxjs/vite-plugin';
 export default defineManifest({
   manifest_version: 3,
   name: 'URL Jumper',
-  version: '1.1.0',
+  version: '1.1.1',
   description:
     'Navigate the web with your own aliases instead of URLs. Type a name, press Enter, jump.',
   action: {

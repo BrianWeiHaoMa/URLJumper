@@ -10,11 +10,31 @@ export const initialSuggestionWindow: SuggestionWindowState = {
   offset: 0,
 };
 
+/** Build window state so `selectedMatchIndex` is `target` (0 … N−1). */
+export function stateForLogicalIndex(
+  target: number,
+  totalMatches: number,
+): SuggestionWindowState {
+  if (totalMatches <= 0) return initialSuggestionWindow;
+  const t = Math.max(0, Math.min(target, totalMatches - 1));
+  if (t === 0) {
+    return { slotIndex: 0, offset: 0 };
+  }
+  const lastSlot = VISIBLE_COUNT - 1;
+  const slotIndex = Math.min(lastSlot, Math.max(1, t));
+  const offset = t - slotIndex;
+  return { slotIndex, offset };
+}
+
 export function moveDown(
   state: SuggestionWindowState,
   totalMatches: number,
 ): SuggestionWindowState {
   if (totalMatches <= 1) return state;
+  const cur = selectedMatchIndex(state, totalMatches);
+  if (cur === totalMatches - 1) {
+    return stateForLogicalIndex(0, totalMatches);
+  }
   const lastSlot = VISIBLE_COUNT - 1;
   const { slotIndex, offset } = state;
 
@@ -38,6 +58,11 @@ export function moveUp(
   totalMatches: number,
 ): SuggestionWindowState {
   if (totalMatches === 0) return state;
+  if (totalMatches === 1) return state;
+  const cur = selectedMatchIndex(state, totalMatches);
+  if (cur === 0) {
+    return stateForLogicalIndex(totalMatches - 1, totalMatches);
+  }
   const { slotIndex, offset } = state;
 
   if (slotIndex > 1) {

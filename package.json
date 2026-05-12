@@ -1,6 +1,6 @@
 {
   "name": "urljumper",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "URL jumping Chrome extension that lets you navigate the web via personal aliases.",
   "type": "module",
   "private": true,

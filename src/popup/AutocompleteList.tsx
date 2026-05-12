@@ -1,10 +1,10 @@
 import type { Mapping } from '../lib/parser';
+import type { RankedAutocompleteEntry } from '../lib/autocompleteRank';
 
 type Props = {
-  suggestions: Mapping[];
+  suggestions: RankedAutocompleteEntry[];
   activeIndex: number;
   onSelect: (mapping: Mapping) => void;
-  onHover: (index: number) => void;
   hiddenAbove?: number;
   hiddenBelow?: number;
 };
@@ -13,18 +13,19 @@ export function AutocompleteList({
   suggestions,
   activeIndex,
   onSelect,
-  onHover,
   hiddenAbove = 0,
   hiddenBelow = 0,
 }: Props) {
   return (
     <div>
       <ul className="suggestions" role="listbox" aria-label="Matching aliases">
-        {suggestions.map((m, i) => {
+        {suggestions.map((row, i) => {
+          const m = row.mapping;
           const classes = [
             i === activeIndex ? 'active' : '',
             i === 0 ? 'pinned' : '',
             i === 1 && hiddenAbove > 0 ? 'gap-above' : '',
+            row.matchKind === 'partial' ? 'partial-match' : '',
           ]
             .filter(Boolean)
             .join(' ');
@@ -34,11 +35,11 @@ export function AutocompleteList({
               role="option"
               aria-selected={i === activeIndex}
               className={classes || undefined}
+              data-urljumper-suggestion-slot={i}
               onMouseDown={(e) => {
                 e.preventDefault();
                 onSelect(m);
               }}
-              onMouseEnter={() => onHover(i)}
             >
               <span className="alias">{m.name}</span>
               <span className="url">{m.url}</span>

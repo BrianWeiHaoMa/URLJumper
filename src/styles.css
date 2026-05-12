@@ -299,6 +299,27 @@ textarea.mappings-editor-textarea::-webkit-scrollbar-corner {
   border-top: 1px dashed var(--color-border);
 }
 
+.suggestions li.partial-match {
+  border-left: 3px solid var(--color-fg-muted);
+  background: color-mix(in srgb, var(--color-fg-muted) 10%, var(--color-bg-elevated));
+}
+
+.suggestions li.partial-match .alias {
+  color: color-mix(in srgb, var(--color-fg) 75%, var(--color-fg-muted));
+}
+
+.suggestions li.partial-match.active {
+  background: color-mix(in srgb, var(--color-fg-muted) 22%, var(--color-highlight-bg));
+}
+
+.suggestions li.pinned.partial-match {
+  box-shadow: inset 3px 0 0 var(--color-fg-muted);
+}
+
+.suggestions li.pinned.partial-match:not(.active) {
+  background: color-mix(in srgb, var(--color-fg-muted) 14%, var(--color-bg-elevated));
+}
+
 .suggestions li .alias {
   font-family: var(--font-mono);
   font-size: 13px;

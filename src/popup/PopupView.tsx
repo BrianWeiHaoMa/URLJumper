@@ -6,6 +6,10 @@ import { storage } from '../lib/storage';
 import { navigate } from '../lib/navigation';
 import { AutocompleteList } from './AutocompleteList';
 import {
+  rankAutocompleteEntries,
+  type RankedAutocompleteEntry,
+} from '../lib/autocompleteRank';
+import {
   initialSuggestionWindow,
   moveDown,
   moveUp,
@@ -19,6 +23,27 @@ type Props = {
   onOpenSettings: () => void;
 };
 
+function suggestionSlotUnderPointer(
+  clientX: number,
+  clientY: number,
+  root: Element | null,
+): number | null {
+  if (!root) return null;
+  const hit = document.elementFromPoint(clientX, clientY);
+  if (!hit || !root.contains(hit)) return null;
+  const li = hit.closest('[data-urljumper-suggestion-slot]');
+  if (!li || !root.contains(li)) return null;
+  const raw = li.getAttribute('data-urljumper-suggestion-slot');
+  if (raw == null) return null;
+  const slot = Number(raw);
+  return Number.isFinite(slot) ? slot : null;
+}
+
+/** Minimum cumulative pointer travel (px) along the path since the current lock began. */
+const POINTER_UNLOCK_DRIFT_PX = 30
+/** Ignore the first N mousemoves after lock (avoids synthetic / layout noise). */
+const POINTER_UNLOCK_MIN_MOUSEMOVES = 4;
+
 export function PopupView({ mode, onOpenSettings }: Props) {
   const [mappings, setMappings] = useState<Mapping[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -28,8 +53,17 @@ export function PopupView({ mode, onOpenSettings }: Props) {
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const allMatchesRef = useRef<Mapping[]>([]);
-  const allowPointerHighlightRef = useRef(true);
+  const rankedMatchesRef = useRef<RankedAutocompleteEntry[]>([]);
+  /** Client position of the last mousemove anywhere in the popup (for desync detection). */
+  const lastPointerClientRef = useRef<{ x: number; y: number } | null>(null);
+  /** Until wheel on the list or enough deliberate pointer travel, ignore mouse-driven slot changes. */
+  const pointerSelectionLockedRef = useRef(true);
+  /** Count of `.app` mousemove events since this lock; reset when lock clears. */
+  const pointerLockMoveEventsRef = useRef(0);
+  /** Sum of Euclidean segment lengths between consecutive mouse positions since this lock. */
+  const pointerLockCumulativeDriftRef = useRef(0);
+  /** Previous client position for the next segment contribution to cumulative drift. */
+  const pointerLockPrevClientRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     storage.getMappings().then((text) => {
@@ -43,24 +77,50 @@ export function PopupView({ mode, onOpenSettings }: Props) {
     inputRef.current?.focus();
   }, []);
 
-  const allMatches = useMemo(() => {
-    if (query.trim() === '') return [];
-    const q = query.toLowerCase();
-    return mappings.filter((m) => m.name.toLowerCase().startsWith(q));
-  }, [mappings, query]);
+  const rankedMatches = useMemo(
+    () => rankAutocompleteEntries(mappings, query),
+    [mappings, query],
+  );
 
   useEffect(() => {
-    allowPointerHighlightRef.current = true;
+    pointerSelectionLockedRef.current = true;
+    pointerLockMoveEventsRef.current = 0;
+    pointerLockCumulativeDriftRef.current = 0;
+    pointerLockPrevClientRef.current = null;
+    lastPointerClientRef.current = null;
     setWindowState(initialSuggestionWindow);
   }, [query, mappings]);
 
   const visible = useMemo(() => {
-    return visibleIndices(windowState, allMatches.length)
-      .map((i) => allMatches[i])
-      .filter((m): m is Mapping => m !== undefined);
-  }, [allMatches, windowState]);
+    return visibleIndices(windowState, rankedMatches.length)
+      .map((i) => rankedMatches[i])
+      .filter((row): row is RankedAutocompleteEntry => row !== undefined);
+  }, [rankedMatches, windowState]);
 
-  allMatchesRef.current = allMatches;
+  rankedMatchesRef.current = rankedMatches;
+
+  useEffect(() => {
+    if (rankedMatches.length === 0 || visible.length === 0) return;
+
+    const last = lastPointerClientRef.current;
+    if (last == null) return;
+
+    const root = suggestionsRef.current;
+    if (!root) return;
+
+    const under = suggestionSlotUnderPointer(last.x, last.y, root);
+    if (under === windowState.slotIndex) return;
+
+    pointerSelectionLockedRef.current = true;
+    pointerLockMoveEventsRef.current = 0;
+    pointerLockCumulativeDriftRef.current = 0;
+    pointerLockPrevClientRef.current = null;
+  }, [
+    windowState.slotIndex,
+    windowState.offset,
+    visible.length,
+    rankedMatches.length,
+  ]);
 
   useEffect(() => {
     const el = suggestionsRef.current;
@@ -69,11 +129,10 @@ export function PopupView({ mode, onOpenSettings }: Props) {
     }
 
     const onWheel = (e: WheelEvent) => {
-      const N = allMatchesRef.current.length;
+      const N = rankedMatchesRef.current.length;
       if (N === 0) return;
       e.preventDefault();
       e.stopPropagation();
-      allowPointerHighlightRef.current = false;
       if (e.deltaY > 0) {
         setWindowState((s) => moveDown(s, N));
       } else if (e.deltaY < 0) {
@@ -86,7 +145,7 @@ export function PopupView({ mode, onOpenSettings }: Props) {
     return () => {
       el.removeEventListener('wheel', onWheel, wheelOpts);
     };
-  }, [visible.length, allMatches.length]);
+  }, [visible.length, rankedMatches.length]);
 
   const performNavigate = async (m: Mapping) => {
     try {
@@ -97,37 +156,78 @@ export function PopupView({ mode, onOpenSettings }: Props) {
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const N = allMatches.length;
+    if (e.key === ' ' && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      return;
+    }
+    const N = rankedMatches.length;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (N === 0) return;
-      allowPointerHighlightRef.current = false;
       setWindowState((s) => moveDown(s, N));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (N === 0) return;
-      allowPointerHighlightRef.current = false;
       setWindowState((s) => moveUp(s, N));
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (N === 0) return;
       const idx = selectedMatchIndex(windowState, N) ?? 0;
-      const target = allMatches[idx] ?? allMatches[0];
+      const target =
+        rankedMatches[idx]?.mapping ?? rankedMatches[0]?.mapping;
       if (target) void performNavigate(target);
     }
   };
 
   const showEmptyState = loaded && mappings.length === 0;
   const showNoResults =
-    loaded && !showEmptyState && query.trim() !== '' && allMatches.length === 0;
+    loaded && !showEmptyState && query.trim() !== '' && rankedMatches.length === 0;
   const hiddenAbove = windowState.offset;
   const hiddenBelow = Math.max(
     0,
-    allMatches.length - (visible.length + windowState.offset),
+    rankedMatches.length - (visible.length + windowState.offset),
   );
 
+  const onAppMouseMove = (e: React.MouseEvent) => {
+    lastPointerClientRef.current = { x: e.clientX, y: e.clientY };
+
+    if (!pointerSelectionLockedRef.current) return;
+
+    const x = e.clientX;
+    const y = e.clientY;
+
+    pointerLockMoveEventsRef.current += 1;
+    const prev = pointerLockPrevClientRef.current;
+    if (prev != null) {
+      pointerLockCumulativeDriftRef.current += Math.hypot(x - prev.x, y - prev.y);
+    }
+    pointerLockPrevClientRef.current = { x, y };
+
+    if (
+      pointerLockMoveEventsRef.current < POINTER_UNLOCK_MIN_MOUSEMOVES ||
+      pointerLockCumulativeDriftRef.current < POINTER_UNLOCK_DRIFT_PX
+    ) {
+      return;
+    }
+
+    pointerSelectionLockedRef.current = false;
+    pointerLockMoveEventsRef.current = 0;
+    pointerLockCumulativeDriftRef.current = 0;
+    pointerLockPrevClientRef.current = null;
+
+    const slot = suggestionSlotUnderPointer(
+      x,
+      y,
+      suggestionsRef.current,
+    );
+    if (slot == null) return;
+    setWindowState((s) =>
+      s.slotIndex === slot ? s : { ...s, slotIndex: slot },
+    );
+  };
+
   return (
-    <div className="app">
+    <div className="app" onMouseMove={onAppMouseMove}>
       <div className="row">
         <button type="button" onClick={onOpenSettings} title="Edit mappings in Settings.">
           Settings
@@ -154,7 +254,7 @@ export function PopupView({ mode, onOpenSettings }: Props) {
             type="text"
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value);
+              setQuery(e.target.value.replace(/ /g, ''));
             }}
             onKeyDown={onKeyDown}
             placeholder="Type a name and press Enter to jump to the corresponding URL."
@@ -168,18 +268,23 @@ export function PopupView({ mode, onOpenSettings }: Props) {
             <div
               id="urljumper-suggestions"
               ref={suggestionsRef}
-              onMouseMove={() => {
-                allowPointerHighlightRef.current = true;
+              onMouseMove={(e) => {
+                if (pointerSelectionLockedRef.current) return;
+                const slot = suggestionSlotUnderPointer(
+                  e.clientX,
+                  e.clientY,
+                  suggestionsRef.current,
+                );
+                if (slot == null) return;
+                setWindowState((s) =>
+                  s.slotIndex === slot ? s : { ...s, slotIndex: slot },
+                );
               }}
             >
               <AutocompleteList
                 suggestions={visible}
                 activeIndex={windowState.slotIndex}
                 onSelect={performNavigate}
-                onHover={(slot) => {
-                  if (!allowPointerHighlightRef.current) return;
-                  setWindowState((s) => ({ ...s, slotIndex: slot }));
-                }}
                 hiddenAbove={hiddenAbove}
                 hiddenBelow={hiddenBelow}
               />
