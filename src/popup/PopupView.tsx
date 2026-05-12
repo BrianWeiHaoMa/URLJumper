@@ -157,7 +157,7 @@ export function PopupView({ mode, onOpenSettings }: Props) {
               setQuery(e.target.value);
             }}
             onKeyDown={onKeyDown}
-            placeholder="Type a name and press ENTER to jump to the corresponding URL."
+            placeholder="Type a name and press Enter to jump to the corresponding URL."
             spellCheck={false}
             autoComplete="off"
             aria-autocomplete="list"
