@@ -15,6 +15,7 @@ export type ParseResult = {
 };
 
 const COMMENT_CHAR = '\\';
+export const URL_SCHEME_RE = /^[a-z][a-z\d+.-]*:/i;
 
 function stripComment(line: string): string {
   const idx = line.indexOf(COMMENT_CHAR);
@@ -30,35 +31,39 @@ export function parseMappings(text: string): ParseResult {
   for (let i = 0; i < lines.length; i++) {
     const lineNumber = i + 1;
     const raw = lines[i] ?? '';
-    const stripped = stripComment(raw).trim();
-    if (stripped === '') continue;
+    const noComment = stripComment(raw).replace(/\s+$/, '');
+    const leftIdx = noComment.search(/\S/);
+    if (leftIdx === -1) continue;
 
-    const tokens = stripped.split(/\s+/);
-
-    if (tokens.length === 1) {
+    const content = noComment.slice(leftIdx);
+    const trailing = content.match(/\s+\S+$/);
+    if (!trailing) {
       errors.push({
         line: lineNumber,
-        message: `Expected "name URL" but found a single token "${tokens[0]}". Each mapping needs an alias and a URL separated by whitespace.`,
+        message: `Expected "name URL" but found a single token "${content}". Each mapping needs a name and a URL separated by whitespace.`,
       });
       continue;
     }
 
-    if (tokens.length > 2) {
+    const sepStart = content.length - trailing[0].length;
+    const urlOffsetInSep = trailing[0].search(/\S/);
+    const name = content.slice(0, sepStart);
+    const url = content.slice(sepStart + urlOffsetInSep);
+
+    if (!URL_SCHEME_RE.test(url)) {
       errors.push({
         line: lineNumber,
-        message: `Expected "name URL" but found ${tokens.length} tokens. Aliases cannot contain spaces, and each line must have exactly one alias and one URL.`,
+        message: `Expected a valid URL but found "${url}". URLs must include a scheme (e.g., https://, http://, ftp://...).`,
       });
       continue;
     }
-
-    const [name, url] = tokens as [string, string];
 
     const key = name.toLowerCase();
     const previous = seen.get(key);
     if (previous !== undefined) {
       errors.push({
         line: lineNumber,
-        message: `Duplicate alias "${name}" (also defined on line ${previous}). Aliases are case-insensitive.`,
+        message: `Duplicate name "${name}" (also defined on line ${previous}). Names are case-insensitive.`,
       });
       continue;
     }

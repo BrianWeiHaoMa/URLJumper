@@ -327,6 +327,7 @@ textarea.mappings-editor-textarea::-webkit-scrollbar-corner {
   line-height: 1.25;
   letter-spacing: 0.01em;
   color: var(--color-fg);
+  white-space: pre;
 }
 
 .suggestions li .url {

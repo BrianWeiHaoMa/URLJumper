@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseMappings } from './parser';
+import { parseMappings, URL_SCHEME_RE } from './parser';
 
 describe('parseMappings', () => {
   it('parses a simple valid mapping', () => {
@@ -52,17 +52,32 @@ describe('parseMappings', () => {
     expect(result.errors[0]!.message).toMatch(/single token/i);
   });
 
-  it('errors when a row has more than two tokens', () => {
-    const result = parseMappings('yahoo https://yahoo.com/ extra');
-    expect(result.mappings).toEqual([]);
-    expect(result.errors).toHaveLength(1);
-    expect(result.errors[0]!.message).toMatch(/3 tokens/);
+  it('treats everything except the final token as the name, preserving internal spacing', () => {
+    const result = parseMappings('my  cool  alias    https://example.com/');
+    expect(result.errors).toEqual([]);
+    expect(result.mappings).toEqual([
+      { name: 'my  cool  alias', url: 'https://example.com/', line: 1 },
+    ]);
   });
 
-  it('accepts any URL token (no validation)', () => {
-    const result = parseMappings('foo @@notaurl@@');
+  it('strips leading whitespace from the name but keeps inner spaces verbatim', () => {
+    const result = parseMappings('   personal stocks https://ca.finance.yahoo.com/');
     expect(result.errors).toEqual([]);
-    expect(result.mappings).toEqual([{ name: 'foo', url: '@@notaurl@@', line: 1 }]);
+    expect(result.mappings).toEqual([
+      {
+        name: 'personal stocks',
+        url: 'https://ca.finance.yahoo.com/',
+        line: 1,
+      },
+    ]);
+  });
+
+  it('errors when the URL lacks a valid scheme', () => {
+    const result = parseMappings('foo @@notaurl@@');
+    expect(result.mappings).toEqual([]);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toMatchObject({ line: 1 });
+    expect(result.errors[0]!.message).toMatch(/must include a scheme/i);
   });
 
   it('detects case-insensitive duplicate aliases and reports both line numbers', () => {
@@ -72,7 +87,7 @@ describe('parseMappings', () => {
     expect(result.mappings[0]!.name).toBe('github');
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toMatchObject({ line: 2 });
-    expect(result.errors[0]!.message).toMatch(/Duplicate alias "GitHub"/);
+    expect(result.errors[0]!.message).toMatch(/Duplicate name "GitHub"/);
     expect(result.errors[0]!.message).toMatch(/line 1/);
   });
 
@@ -81,11 +96,12 @@ describe('parseMappings', () => {
       'github https://github.com/',
       'bad',
       'github https://duplicate.com/',
-      'foo bar baz',
+      'foo bar https://baz',
     ].join('\n');
     const result = parseMappings(text);
-    expect(result.mappings).toHaveLength(1);
-    expect(result.errors.map((e) => e.line)).toEqual([2, 3, 4]);
+    expect(result.mappings).toHaveLength(2);
+    expect(result.mappings.map((m) => m.name)).toEqual(['github', 'foo bar']);
+    expect(result.errors.map((e) => e.line)).toEqual([2, 3]);
   });
 
   it('handles inline comments that come immediately after the URL with no space', () => {
@@ -124,4 +140,33 @@ describe('parseMappings', () => {
   });
 });
 
+describe('URL_SCHEME_RE', () => {
+  it('matches http://, https://, ftp://, etc.', () => {
+    expect(URL_SCHEME_RE.test('https://example.com')).toBe(true);
+    expect(URL_SCHEME_RE.test('http://example.com')).toBe(true);
+    expect(URL_SCHEME_RE.test('ftp://files.example.com')).toBe(true);
+    expect(URL_SCHEME_RE.test('file:///home/user/doc.txt')).toBe(true);
+    expect(URL_SCHEME_RE.test('mailto:user@example.com')).toBe(true);
+    expect(URL_SCHEME_RE.test('ssh://host')).toBe(true);
+    expect(URL_SCHEME_RE.test('data:text/plain,hello')).toBe(true);
+  });
 
+  it('is case-insensitive', () => {
+    expect(URL_SCHEME_RE.test('HTTPS://example.com')).toBe(true);
+    expect(URL_SCHEME_RE.test('HTTP://example.com')).toBe(true);
+    expect(URL_SCHEME_RE.test('FTP://files.example.com')).toBe(true);
+  });
+
+  it('rejects strings without a scheme', () => {
+    expect(URL_SCHEME_RE.test('example.com')).toBe(false);
+    expect(URL_SCHEME_RE.test('www.example.com')).toBe(false);
+    expect(URL_SCHEME_RE.test('/path/to/file')).toBe(false);
+    expect(URL_SCHEME_RE.test('')).toBe(false);
+  });
+
+  it('rejects schemes starting with a digit or non-letter', () => {
+    expect(URL_SCHEME_RE.test('1http://example.com')).toBe(false);
+    expect(URL_SCHEME_RE.test('+http://example.com')).toBe(false);
+    expect(URL_SCHEME_RE.test('.http://example.com')).toBe(false);
+  });
+});

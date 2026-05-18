@@ -22,4 +22,19 @@ describe('rankAutocompleteEntries', () => {
   it('returns empty for blank query', () => {
     expect(rankAutocompleteEntries([m(1, 'a', 'u')], '  ')).toEqual([]);
   });
+
+  it('preserves spaces inside and at the end of the query while matching', () => {
+    const mappings = [
+      m(1, 'foo bar', 'a'),
+      m(2, 'foo  bar', 'b'),
+      m(3, 'foo', 'c'),
+    ];
+
+    expect(
+      rankAutocompleteEntries(mappings, 'foo ').map((x) => x.mapping.name),
+    ).toEqual(['foo bar', 'foo  bar']);
+    expect(
+      rankAutocompleteEntries(mappings, 'foo  ').map((x) => x.mapping.name),
+    ).toEqual(['foo  bar']);
+  });
 });

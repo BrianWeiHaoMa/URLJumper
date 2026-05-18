@@ -1,6 +1,5 @@
-.agents/
+.windsurf
 dist/
 node_modules/
 *.log
 .DS_Store
-package-lock.json

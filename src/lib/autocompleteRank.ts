@@ -10,7 +10,7 @@ export function rankAutocompleteEntries(
   mappings: Mapping[],
   queryRaw: string,
 ): RankedAutocompleteEntry[] {
-  const q = queryRaw.trim().toLowerCase();
+  const q = queryRaw.replace(/^\s+/, '').toLowerCase();
   if (q === '') return [];
   const prefix: RankedAutocompleteEntry[] = [];
   const partial: RankedAutocompleteEntry[] = [];

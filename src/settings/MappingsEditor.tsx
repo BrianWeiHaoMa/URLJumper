@@ -10,6 +10,15 @@ import type { ParseError } from '../lib/parser';
 import { parseMappings } from '../lib/parser';
 import { storage } from '../lib/storage';
 
+declare global {
+  interface Window {
+    showSaveFilePicker: (options: {
+      suggestedName?: string;
+      types?: Array<{ description: string; accept: Record<string, string[]> }>;
+    }) => Promise<FileSystemFileHandle>;
+  }
+}
+
 const PLACEHOLDER = `\\ This is an example.
 \\ Use \\ to write comments.
 \\ Here are some example mappings:
@@ -29,7 +38,10 @@ type Status =
 
 type Props = {
   rows?: number;
+  showCopyUrl?: boolean;
 };
+
+type CopyState = 'idle' | 'ok' | 'err';
 
 export type MappingsEditorHandle = {
   focusForNewMappingLine: () => void;
@@ -38,31 +50,35 @@ export type MappingsEditorHandle = {
 export const MappingsEditor = forwardRef<
   MappingsEditorHandle,
   Props
->(function MappingsEditor({ rows = 16 }, ref) {
+>(function MappingsEditor({ rows = 16, showCopyUrl = false }, ref) {
   const [text, setText] = useState('');
   const [originalText, setOriginalText] = useState('');
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
+  const [copyState, setCopyState] = useState<CopyState>('idle');
   const savedTimerRef = useRef<number | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useImperativeHandle(ref, () => ({
-    focusForNewMappingLine() {
-      flushSync(() => {
-        setText((prev) => {
-          if (prev.length === 0) return prev;
-          if (prev.endsWith('\n')) return prev;
-          return `${prev}\n`;
-        });
+  const focusForNewMappingLine = () => {
+    flushSync(() => {
+      setText((prev) => {
+        if (prev.length === 0) return prev;
+        if (prev.endsWith('\n')) return prev;
+        return `${prev}\n`;
       });
-      const el = textareaRef.current;
-      if (!el) return;
-      const len = el.value.length;
-      el.focus();
-      el.setSelectionRange(len, len);
-      el.scrollTop = el.scrollHeight;
-    },
+    });
+    const el = textareaRef.current;
+    if (!el) return;
+    const len = el.value.length;
+    el.focus();
+    el.setSelectionRange(len, len);
+    el.scrollTop = el.scrollHeight;
+  };
+
+  useImperativeHandle(ref, () => ({
+    focusForNewMappingLine,
   }));
 
   useEffect(() => {
@@ -74,6 +90,9 @@ export const MappingsEditor = forwardRef<
     return () => {
       if (savedTimerRef.current !== null) {
         window.clearTimeout(savedTimerRef.current);
+      }
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
       }
     };
   }, []);
@@ -98,16 +117,61 @@ export const MappingsEditor = forwardRef<
     }, 2000);
   };
 
-  const handleExport = () => {
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = EXPORT_FILENAME;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const flashCopyState = (next: Exclude<CopyState, 'idle'>) => {
+    setCopyState(next);
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopyState('idle');
+      copyTimerRef.current = null;
+    }, 2000);
+  };
+
+  const handleCopyUrl = async () => {
+    let didCopy = false;
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      const url = tab?.url;
+      if (url) {
+        await navigator.clipboard.writeText(url);
+        didCopy = true;
+        flashCopyState('ok');
+      } else {
+        console.warn('Current URL could not be retrieved.');
+        flashCopyState('err');
+      }
+    } catch (err) {
+      console.warn('navigator.clipboard.writeText() failed:', err);
+      flashCopyState('err');
+    }
+    if (didCopy) {
+      focusForNewMappingLine();
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: EXPORT_FILENAME,
+        types: [
+          {
+            description: 'Text files',
+            accept: { 'text/plain': ['.txt'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(text);
+      await writable.close();
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.warn('Export failed:', err);
+      }
+    }
   };
 
   const handleImportClick = () => {
@@ -144,10 +208,23 @@ export const MappingsEditor = forwardRef<
           <button className="primary" onClick={handleSave}>
             Save Changes
           </button>
-          {dirty && <span className="muted">unsaved changes</span>}
+          {dirty && <span className="muted">Unsaved Changes</span>}
         </div>
         <span className="spacer" aria-hidden />
         <div className="row">
+          {showCopyUrl && (
+            <button
+              type="button"
+              onClick={handleCopyUrl}
+              title="Copy current tab's URL."
+            >
+              {copyState === 'ok'
+                ? 'Copied!'
+                : copyState === 'err'
+                  ? 'Copy Failed!'
+                  : 'Copy URL'}
+            </button>
+          )}
           <button onClick={handleExport} title="Download mappings.">
             Export
           </button>

@@ -156,10 +156,6 @@ export function PopupView({ mode, onOpenSettings }: Props) {
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === ' ' && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      return;
-    }
     const N = rankedMatches.length;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -254,7 +250,7 @@ export function PopupView({ mode, onOpenSettings }: Props) {
             type="text"
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value.replace(/ /g, ''));
+              setQuery(e.target.value.replace(/^\s+/, ''));
             }}
             onKeyDown={onKeyDown}
             placeholder="Type a name and press Enter to jump to the corresponding URL."
