@@ -225,16 +225,16 @@ export function PopupView({ mode, onOpenSettings }: Props) {
   return (
     <div className="app" onMouseMove={onAppMouseMove}>
       <div className="row">
-        <button type="button" onClick={onOpenSettings} title="Edit mappings in Settings.">
-          Settings
-        </button>
-        <span className="spacer" aria-hidden />
         <span
           className="mode-pill"
           title={mode === 'new' ? 'Enter opens in a new tab' : 'Enter opens in the current tab'}
         >
           {mode === 'new' ? 'new tab mode' : 'same tab mode'}
         </span>
+        <span className="spacer" aria-hidden />
+        <button type="button" onClick={onOpenSettings} title="Edit mappings in Settings.">
+          Settings
+        </button>
       </div>
 
       {showEmptyState ? (
