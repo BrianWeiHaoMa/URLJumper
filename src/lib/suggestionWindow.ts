@@ -3,7 +3,7 @@ export type SuggestionWindowState = {
   offset: number;
 };
 
-export const VISIBLE_COUNT = 8;
+export const VISIBLE_COUNT = 7;
 
 export const initialSuggestionWindow: SuggestionWindowState = {
   slotIndex: 0,
