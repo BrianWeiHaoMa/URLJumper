@@ -5,6 +5,7 @@ type Props = {
   suggestions: RankedAutocompleteEntry[];
   activeIndex: number;
   onSelect: (mapping: Mapping) => void;
+  onEdit: (mapping: Mapping) => void;
   hiddenAbove?: number;
   hiddenBelow?: number;
 };
@@ -13,6 +14,7 @@ export function AutocompleteList({
   suggestions,
   activeIndex,
   onSelect,
+  onEdit,
   hiddenAbove = 0,
   hiddenBelow = 0,
 }: Props) {
@@ -41,8 +43,26 @@ export function AutocompleteList({
                 onSelect(m);
               }}
             >
-              <span className="alias">{m.name}</span>
-              <span className="url">{m.url}</span>
+              <span className="suggestion-main">
+                <span className="alias">{m.name}</span>
+                <span className="url">{m.url}</span>
+              </span>
+              <button
+                type="button"
+                className="suggestion-edit-button"
+                title={`Edit ${m.name}`}
+                aria-label={`Edit ${m.name}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(m);
+                }}
+              >
+                ✎
+              </button>
             </li>
           );
         })}

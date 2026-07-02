@@ -45,7 +45,7 @@ describe('suggestionWindow', () => {
       let state = initialSuggestionWindow;
       const N = 8;
       for (let i = 0; i < 7; i++) state = moveDown(state, N);
-      expect(state).toEqual({ slotIndex: 7, offset: 0 });
+      expect(state).toEqual({ slotIndex: 6, offset: 1 });
       state = moveDown(state, N);
       expect(state).toEqual({ slotIndex: 0, offset: 0 });
       expect(moveDown(state, N)).toEqual({ slotIndex: 1, offset: 0 });
@@ -55,9 +55,9 @@ describe('suggestionWindow', () => {
       let state = initialSuggestionWindow;
       const N = 9;
       for (let i = 0; i < 7; i++) state = moveDown(state, N);
-      expect(state).toEqual({ slotIndex: 7, offset: 0 });
+      expect(state).toEqual({ slotIndex: 6, offset: 1 });
       state = moveDown(state, N);
-      expect(state).toEqual({ slotIndex: 7, offset: 1 });
+      expect(state).toEqual({ slotIndex: 6, offset: 2 });
       expect(selectedMatchIndex(state, N)).toBe(8);
       state = moveDown(state, N);
       expect(state).toEqual({ slotIndex: 0, offset: 0 });
@@ -68,7 +68,7 @@ describe('suggestionWindow', () => {
       const N = 12;
       for (let i = 0; i < 20; i++) state = moveDown(state, N);
       expect(selectedMatchIndex(state, N)).toBe(8);
-      expect(state).toEqual({ slotIndex: 7, offset: 1 });
+      expect(state).toEqual({ slotIndex: 6, offset: 2 });
     });
   });
 
@@ -150,14 +150,14 @@ describe('suggestionWindow', () => {
     });
 
     it('returns the locked first plus a sliding window with offset = 1', () => {
-      expect(visibleIndices({ slotIndex: 7, offset: 1 }, 9)).toEqual([
-        0, 2, 3, 4, 5, 6, 7, 8,
+      expect(visibleIndices({ slotIndex: 6, offset: 1 }, 9)).toEqual([
+        0, 2, 3, 4, 5, 6, 7,
       ]);
     });
 
     it('returns the locked first plus a sliding window with offset = 3', () => {
-      expect(visibleIndices({ slotIndex: 7, offset: 3 }, 12)).toEqual([
-        0, 4, 5, 6, 7, 8, 9, 10,
+      expect(visibleIndices({ slotIndex: 6, offset: 3 }, 12)).toEqual([
+        0, 4, 5, 6, 7, 8, 9,
       ]);
     });
   });

@@ -22,6 +22,17 @@ function stripComment(line: string): string {
   return idx === -1 ? line : line.slice(0, idx);
 }
 
+export function lineStartOffset(text: string, line: number): number {
+  if (line <= 1) return 0;
+  let offset = 0;
+  for (let i = 1; i < line; i++) {
+    const next = text.indexOf('\n', offset);
+    if (next === -1) return text.length;
+    offset = next + 1;
+  }
+  return offset;
+}
+
 export function parseMappings(text: string): ParseResult {
   const errors: ParseError[] = [];
   const mappings: Mapping[] = [];

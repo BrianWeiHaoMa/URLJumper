@@ -3,9 +3,10 @@ import { MappingsEditor } from '../settings/MappingsEditor';
 type Props = {
   onBack: () => void;
   onToggleTheme: () => void;
+  editLine?: number | null;
 };
 
-export function SettingsView({ onBack, onToggleTheme }: Props) {
+export function SettingsView({ onBack, onToggleTheme, editLine }: Props) {
   const handleOpenInTab = () => {
     if (chrome?.runtime?.openOptionsPage) {
       chrome.runtime.openOptionsPage();
@@ -29,7 +30,7 @@ export function SettingsView({ onBack, onToggleTheme }: Props) {
           Toggle Theme
         </button>
       </div>
-      <MappingsEditor showCopyUrl />
+      <MappingsEditor showCopyUrl focusLine={editLine} />
     </div>
   );
 }

@@ -12,6 +12,7 @@ export function App() {
   const [view, setView] = useState<View>('popup');
   const [mode, setMode] = useState<NavMode>('new');
   const [modeReady, setModeReady] = useState(false);
+  const [requestedEditLine, setRequestedEditLine] = useState<number | null>(null);
 
   useEffect(() => {
     storage.takePendingMode().then((pending) => {
@@ -41,14 +42,27 @@ export function App() {
   if (view === 'settings') {
     return (
       <ExtensionFrame title="URL Jumper Settings">
-        <SettingsView onBack={() => setView('popup')} onToggleTheme={toggle} />
+        <SettingsView
+          onBack={() => {
+            setRequestedEditLine(null);
+            setView('popup');
+          }}
+          onToggleTheme={toggle}
+          editLine={requestedEditLine}
+        />
       </ExtensionFrame>
     );
   }
 
   return (
     <ExtensionFrame title="URL Jumper">
-      <PopupView mode={mode} onOpenSettings={() => setView('settings')} />
+      <PopupView
+        mode={mode}
+        onOpenSettings={(editLine) => {
+          setRequestedEditLine(editLine ?? null);
+          setView('settings');
+        }}
+      />
     </ExtensionFrame>
   );
 }

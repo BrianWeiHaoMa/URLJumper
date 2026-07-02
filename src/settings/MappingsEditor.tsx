@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -7,7 +8,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import type { ParseError } from '../lib/parser';
-import { parseMappings } from '../lib/parser';
+import { lineStartOffset, parseMappings } from '../lib/parser';
 import { storage } from '../lib/storage';
 
 declare global {
@@ -31,6 +32,10 @@ server        http://192.168.1.251:8989/
 
 const EXPORT_FILENAME = 'URLJumperMappings.txt';
 
+function isCaretAtLineStart(value: string, offset: number): boolean {
+  return offset === 0 || value[offset - 1] === '\n';
+}
+
 type Status =
   | { kind: 'idle' }
   | { kind: 'errors'; errors: ParseError[] }
@@ -39,6 +44,7 @@ type Status =
 type Props = {
   rows?: number;
   showCopyUrl?: boolean;
+  focusLine?: number | null;
 };
 
 type CopyState = 'idle' | 'ok' | 'err';
@@ -50,7 +56,7 @@ export type MappingsEditorHandle = {
 export const MappingsEditor = forwardRef<
   MappingsEditorHandle,
   Props
->(function MappingsEditor({ rows = 16, showCopyUrl = false }, ref) {
+>(function MappingsEditor({ rows = 16, showCopyUrl = false, focusLine = null }, ref) {
   const [text, setText] = useState('');
   const [originalText, setOriginalText] = useState('');
   const [loaded, setLoaded] = useState(false);
@@ -60,6 +66,48 @@ export const MappingsEditor = forwardRef<
   const copyTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const focusedLineRef = useRef<number | null>(null);
+  const textareaFocusedBeforeRef = useRef(false);
+
+  const focusMappingLine = useCallback((line: number) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = lineStartOffset(el.value, line);
+    el.focus();
+    el.setSelectionRange(start, start);
+    const style = window.getComputedStyle(el);
+    const parsedLineHeight = Number.parseFloat(style.lineHeight);
+    const lineHeight = Number.isFinite(parsedLineHeight) && parsedLineHeight > 0
+      ? parsedLineHeight
+      : 16;
+    el.scrollTop = Math.max(0, (line - 1) * lineHeight - el.clientHeight / 2);
+    el.scrollLeft = 0;
+  }, []);
+
+  // Restore left padding when caret moves to line start.
+  const restoreLineStartPadding = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el || el.selectionStart !== el.selectionEnd) return;
+
+    const offset = el.selectionStart;
+    if (!isCaretAtLineStart(el.value, offset)) return;
+
+    // Deferred to the next animation frame because the browser performs its
+    // caret-driven horizontal auto-scroll after the event handler returns;
+    // resetting scrollLeft synchronously would be clobbered by that scroll.
+    // Worked without this in testing but it is a safety net.
+    window.requestAnimationFrame(() => {
+      const current = textareaRef.current;
+      if (
+        current &&
+        current.selectionStart === offset &&
+        current.selectionEnd === offset &&
+        isCaretAtLineStart(current.value, offset)
+      ) {
+        current.scrollLeft = 0;
+      }
+    });
+  }, []);
 
   const focusForNewMappingLine = () => {
     flushSync(() => {
@@ -96,6 +144,12 @@ export const MappingsEditor = forwardRef<
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!loaded || focusLine == null || focusedLineRef.current === focusLine) return;
+    focusedLineRef.current = focusLine;
+    focusMappingLine(focusLine);
+  }, [loaded, focusLine, focusMappingLine]);
 
   const dirty = loaded && text !== originalText;
 
@@ -148,7 +202,7 @@ export const MappingsEditor = forwardRef<
       console.warn('navigator.clipboard.writeText() failed:', err);
       flashCopyState('err');
     }
-    if (didCopy) {
+    if (didCopy && !textareaFocusedBeforeRef.current) {
       focusForNewMappingLine();
     }
   };
@@ -196,6 +250,12 @@ export const MappingsEditor = forwardRef<
         onChange={(e) => {
           setText(e.target.value);
           if (status.kind !== 'idle') setStatus({ kind: 'idle' });
+        }}
+        onKeyUp={restoreLineStartPadding}
+        onMouseUp={restoreLineStartPadding}
+        onSelect={restoreLineStartPadding}
+        onFocus={() => {
+          textareaFocusedBeforeRef.current = true;
         }}
         placeholder={PLACEHOLDER}
         spellCheck={false}

@@ -20,7 +20,7 @@ import {
 
 type Props = {
   mode: NavMode;
-  onOpenSettings: () => void;
+  onOpenSettings: (editLine?: number) => void;
 };
 
 function suggestionSlotUnderPointer(
@@ -232,7 +232,7 @@ export function PopupView({ mode, onOpenSettings }: Props) {
           {mode === 'new' ? 'new tab mode' : 'same tab mode'}
         </span>
         <span className="spacer" aria-hidden />
-        <button type="button" onClick={onOpenSettings} title="Edit mappings in Settings.">
+        <button type="button" onClick={() => onOpenSettings()} title="Edit mappings in Settings.">
           Settings
         </button>
       </div>
@@ -281,6 +281,7 @@ export function PopupView({ mode, onOpenSettings }: Props) {
                 suggestions={visible}
                 activeIndex={windowState.slotIndex}
                 onSelect={performNavigate}
+                onEdit={(mapping) => onOpenSettings(mapping.line)}
                 hiddenAbove={hiddenAbove}
                 hiddenBelow={hiddenBelow}
               />
