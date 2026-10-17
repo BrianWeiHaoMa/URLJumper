@@ -6,13 +6,13 @@ This document outranks every other document, decision, and line of code in this 
 
 ## Product
 
-URLJumper is a Chrome extension for one person who returns to the same web pages often and would rather type a short name than find a bookmark or retype a URL. The user keeps **mappings**, each pairing a **name** of their own choosing with a **URL**, in one plain-text **document**. From anywhere in Chrome they open the **popup** with a keyboard shortcut, type part of a name, and press Enter to arrive. The promise is: type a name, press Enter, arrive.
+URLJumper is a Chrome extension for one person who returns to the same web pages often and would rather type a short name than find a bookmark or retype a URL. The user keeps **mappings**, each pairing a **name** of their own choosing with a **URL**, in one plain-text **document**. From any Chrome window that shows its toolbar they open the **popup** with a keyboard shortcut, type part of a name, and press Enter to arrive. The promise is: type a name, press Enter, arrive.
 
 Version 2.0 replaces version 1.x and serves three people. The long-time user has a hand-maintained document, often with comment lines as section headings and columns aligned with spaces; their test is that everything they had still works the same way and nothing moved their lines. The newcomer installs from the Chrome Web Store, sees nothing, and needs a first mapping in without reading a grammar; their test is that they were on a page, gave it a name, and the next time they typed that name they were there. The daily user has dozens to hundreds of mappings and wants the one they use daily to come up first, wants to pass a search term through a name, and wants to reach the popup without taking hands off the keyboard.
 
 What they get, beyond everything 1.x gave (the popup, the document edited as text with Save, Import and Export, Copy tab URL, light and dark theme, two shortcuts): **Name this page**, which turns the current page or a right-clicked link into a mapping with one action and one name; a **List view** that edits the same document line by line without a grammar; **argument aliases**, where a URL containing `%s` takes the text typed after the name; **Smart order**, an optional ranking that puts recently used mappings first; **address matches**, a lower group for the day the user remembers the site but not the name; and an **address-bar keyword**, `j`, that offers the same mappings from Chrome's address bar.
 
-What must not be lost is the document. The extension writes it only when the user saves text or asks for a single-line change, and a change is applied as a whole or not at all. Upgrading from 1.x leaves the stored document byte for byte, keeps the search order the user is used to, keeps their theme, and adds no permission that shows a warning.
+What must not be lost is the document. The extension writes it only when the user saves text, asks for a single-line change, or loads the example mappings into an empty document, and a change is applied as a whole or not at all. Upgrading from 1.x leaves the stored document byte for byte, keeps the search order the user is used to, keeps their theme, and adds no permission that shows a warning.
 
 Accepted limits, each of which also lowers the cost of building it:
 
@@ -57,7 +57,7 @@ Accepted limits, each of which also lowers the cost of building it:
 - **N1.** No bookmark-manager features: no folders, tags, favicons, or page previews.
 - **N2.** No accounts, servers, shared or team directories, telemetry, or network requests of the extension's own, including fonts or scripts loaded from the network.
 - **N3.** No sync between profiles or machines, and no import from Chrome bookmarks or history.
-- **N4.** Neither the popup nor the address-bar keyword ever lists browsing history, open tabs, bookmarks, page contents, or web suggestions; the only rows are mappings and, in the popup, the Name row.
+- **N4.** Neither the popup nor the address-bar keyword ever lists browsing history, open tabs, bookmarks, page contents, or web suggestions; the only rows offered as results are mappings, the popup's Name row, and the one line the address bar shows when it lists no mapping.
 - **N5.** No matching of typed letters in order with gaps (`gh` does not find `github`).
 - **N6.** No automatic naming: a page title never becomes a name without the user typing it.
 - **N7.** No scripted or multi-step actions, and no mapping with several URLs.
@@ -128,13 +128,13 @@ Search and the list:
 Naming:
 
 - **G8.** The Name form saves when the name, trimmed, is not empty, contains no backslash or line break, and is not already the name of another line regardless of case; and the URL begins with a scheme per F4 and contains no whitespace, backslash, or line break. A taken name blocks Save, names the line that has it, and offers to edit that mapping instead. A rejected value is kept in the field.
-- **G9.** The saved line is written per F12 after the last non-blank line of the document, or, when a section is chosen, after the last non-blank line of that section. If the chosen heading no longer exists when Save runs, the line goes after the last non-blank line of the document and the confirmation says so. The confirmation names the name and the line number and offers Undo. Every other line of the document is unchanged byte for byte.
+- **G9.** The saved line is written per F12 after the last line of the document that holds more than whitespace (at its start when there is none), or, when a section is chosen, after the last such line of that section. If the chosen heading no longer exists when Save runs, the line goes after the last such line of the document and the confirmation says so. The confirmation names the name and the line number and offers Undo. Every other line of the document is unchanged byte for byte (G12).
 - **G10.** When the current tab's address equals a mapping's URL exactly, the popup says *This page is "‹name›"* with an edit action, and naming the page again saves a second name for the same URL.
 - **G11.** The Name form opened for a link names the link's address and shows the page the link was on; the Name form reached from *Add mapping* has no page and an empty URL field.
 
 Editing single lines:
 
-- **G12.** Every change made from the List view, the popup's row editor, the Name form, or Undo rewrites, inserts, or removes exactly the line it concerns and leaves every other line byte for byte, comments, blank lines, spacing, and line endings included. Moving a row cuts its line and pastes it directly before the previous mapping line (up) or directly after the next mapping line (down); comment and blank lines keep their relative order, so no other mapping changes section. The first mapping cannot move up and the last cannot move down.
+- **G12.** Every change made from the List view, the popup's row editor, the Name form, or Undo rewrites, inserts, or removes exactly the line it concerns and leaves every other line byte for byte, comments, blank lines, spacing, and line endings included, except that a line that stops being last gains the document's line ending (F12) and a line that becomes last loses its own. Moving a row cuts its line and pastes it directly before the previous mapping line (up) or directly after the next mapping line (down); comment and blank lines keep their relative order, so every other mapping keeps its place among them. The first mapping cannot move up, the last cannot move down, and no mapping moves past another line with its name.
 - **G13.** Before storing, every such change other than Undo (which has its own check in G15) re-reads the stored document and applies itself to the line it was loaded from, found again by its exact text even when lines above it were added or removed since. If that line has been changed or removed, nothing is stored, the view reloads the document, says what changed, and offers *Edit again* with the user's values still filled in. An insert re-checks that the name is still free. The stored document therefore never holds a duplicate name or an unreadable line of the extension's own making.
 - **G14.** The row editors apply G8's rules to the name and the URL, refuse a backslash or a line break in the note as well, and keep a rejected value in its field. A cleared note removes the comment and the whitespace before it.
 - **G15.** Each change from G12 offers Undo until the user's next action in that view, the popup or page closing, or ten seconds, whichever comes first. Undo is a single-line change of its own that reverses the change: it removes an inserted line, re-inserts a removed line at its former line number (at the end when the document is now shorter), restores a rewritten line, or moves a moved line back. It re-reads the stored document first, as G13 does, and acts only when the line it must remove, restore, or move back still stands as the change left it and, for a re-insertion, the name is still free; otherwise nothing is stored and the view says so.
@@ -165,11 +165,11 @@ Smart order:
 
 Address bar:
 
-- **G28.** After the keyword `j` and a space, the suggestions are groups (a) to (e) of G1 for the text typed, in the order of G1 and G2, as many as Chrome shows, each showing the name and the URL (the filled URL for the argument row); the top match is the default suggestion. Enter opens the selected suggestion as G6 opens it, in the tab Chrome's own modifier for new-tab opening selects. When nothing matches, the one suggestion says so and Enter does nothing; with nothing typed after the keyword, Enter does nothing. A jump from here is a use (G26).
+- **G28.** While the address bar is in URLJumper's keyword mode for `j`, the suggestions are groups (a) to (e) of G1 for the text typed, in the order of G1 and G2, as many as Chrome shows, each showing the name and the URL (the filled URL for the argument row); the top match is the default suggestion. Enter opens the selected suggestion as G6 opens it, in the tab Chrome's own modifier for new-tab opening selects. When nothing matches, the one suggestion says so and Enter does nothing; with nothing typed after the keyword, Enter does nothing. A jump from here is a use (G26).
 
 Right-click menu:
 
-- **G29.** *Name this page in URLJumper* opens the popup on the Name form for the page; *Name this link in URLJumper* opens it per G11 for the link.
+- **G29.** In a window that shows its toolbar, *Name this page in URLJumper* opens the popup on the Name form for the page, and *Name this link in URLJumper* opens it per G11 for the link.
 
 First run and surfaces:
 
@@ -179,7 +179,7 @@ First run and surfaces:
 Everyone:
 
 - **G32.** Every flow in *In use* can be completed with the keyboard alone, and every control is also reachable by pointer. Every control has a name a screen reader can speak, focus is always visible, and text meets a contrast ratio of 4.5:1 against its background in both themes.
-- **G33.** The extension makes no network request of its own. Nothing the user types, saves, or opens leaves the machine except by the navigation the user asked for.
+- **G33.** The extension makes no network request of its own. Nothing the user types in the extension's own views, saves, or opens leaves the machine except by the navigation the user asked for.
 
 ## Left open
 
@@ -192,9 +192,9 @@ Everyone:
 
 ## Done when
 
-- A fresh profile runs 1.3.0 with a saved document holding aligned columns, a comment heading, a mapping with a trailing comment, a blank line, and a tab; the theme is set to dark and Alt+N is reassigned to Alt+J in Chrome. 2.0 is installed over it. The stored `mappings` value is byte-identical to the one saved before; the theme is dark; Alt+J opens the popup; the Preferences show Document order; typing a prefix shared by two names lists them in line order, and typing one name in full lists that name first.
-- On an ordinary web page, the user presses Alt+Shift+N, types a new name, and presses Enter. The document gains exactly one line, at its end, formed per F12, and every other byte is unchanged. Typing that name in the popup and pressing Enter opens that page in a new tab; typing `j`, a space, and that name in the address bar and pressing Enter opens it too.
+- A fresh profile runs 1.3.0 with a saved document holding aligned columns, a comment heading, a mapping with a trailing comment, a blank line, and a tab; the theme is set to dark and Alt+N is reassigned to Alt+J in Chrome. 2.0 is installed over it. The stored `mappings` value is byte-identical to the one saved before; the theme is dark; Alt+J opens the popup; the Preferences show Document order; typing a prefix shared by two names lists them in line order, and typing in full a name that an earlier line's name starts with lists it first.
+- On an ordinary web page whose address holds no `%s`, the user presses Alt+Shift+N, types a new name, and presses Enter. The document gains exactly one line, after its last line that holds more than whitespace, formed per F12, and every other byte is unchanged. Typing that name in the popup and pressing Enter opens that page in a new tab; typing `j`, a space, and that name in the address bar and pressing Enter opens it too.
 - With `yt` mapped to `https://www.youtube.com/results?search_query=%s`, typing `yt lo-fi beats` and Enter opens `https://www.youtube.com/results?search_query=lo-fi%20beats`; typing `yt` and Enter opens `https://www.youtube.com/results?search_query=`.
-- In a 40-line document with comments, blank lines, tab-separated lines, and one line that is not a mapping, the user renames one mapping in the List view, then moves another mapping up past a heading. Only the renamed line and the moved line differ from the original; the non-mapping line is listed as unreadable and is unchanged; the moved mapping sits directly before the mapping that preceded it and no other mapping changed section.
+- In a 40-line document with comments, blank lines, tab-separated lines, and one line that is not a mapping, the user renames one mapping in the List view, then moves another mapping up past a heading. Apart from the line endings G12 moves, the document is the original with the renamed line rewritten and the moved line, byte for byte, in its new place; the non-mapping line is listed as unreadable and is unchanged; the moved mapping sits directly before the mapping that preceded it and no other mapping changed its place among the comment and blank lines.
 - The Text view is open in a settings tab with an unsaved new line in the draft. In another window the user names the current page. Back in the settings tab, Save reports the change and offers to bring it in; after accepting, Save stores a document holding both the named page's line and the draft's line, and nothing else differs from before.
 - With a document that holds mappings, the popup open, and the box blank, Enter opens nothing. With a draft that holds a line with a name and no URL, Save stores nothing, the error names that line, and the draft is unchanged; the stored document is byte for byte what it was.
