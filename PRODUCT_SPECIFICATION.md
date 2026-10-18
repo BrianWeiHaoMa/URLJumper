@@ -72,11 +72,11 @@ Behavior outside these assumptions is not promised.
 
 - **E1.** Google Chrome 127 or later on Windows, macOS, Linux, or ChromeOS, installed from the Chrome Web Store as an update of the existing listing or loaded unpacked for development. One person uses one Chrome profile; several windows, popups, and settings tabs of that profile may be open at once and may save in any order.
 - **E2.** No program other than the extension and Chrome itself writes the extension's storage; the user changes the document only through the extension's own views and Import. Chrome's profile storage is intact: power loss, disk failure, profile deletion, and corruption of Chrome's storage are outside the supported use.
-- **E3.** The document holds at most 10,000 lines and at most 1 MB of text as Chrome stores it, the UTF-8 bytes of its JSON serialization. Its content is any text: lines 1.x accepted, lines the user typed, and lines the extension cannot read.
+- **E3.** The document holds at most 10,000 lines and at most 1 MB of text as Chrome stores it, the UTF-8 bytes of its JSON serialization. Its content is any text: lines 1.x accepted, lines the user typed, and lines the extension cannot read. A Text view draft, the text typed after the address-bar keyword, and the address of a link being named together with the address and title of the page it is on are each at most 1 MB measured the same way.
 - **E4.** The popup may be closed at any moment, including during a save, because Chrome closes it whenever it loses focus; Chrome itself may be closed at any moment.
 - **E5.** The current tab's address and title are available only when Chrome grants them for the user's own invocation: the toolbar button, a keyboard command, or a menu item. A popup reached otherwise has neither.
 - **E6.** The user may have reassigned any shortcut in Chrome's shortcuts page, and Chrome may leave a suggested key unassigned when another extension or the system already uses it.
-- **E7.** A mapping's URL may use any scheme; whether Chrome opens a given scheme is Chrome's decision.
+- **E7.** A mapping's URL may use any scheme; whether Chrome opens a given scheme, or a URL longer than Chrome navigates to (2,097,152 characters once Chrome has percent-encoded it), is Chrome's decision.
 - **E8.** Names, URLs, notes, and argument text are whatever the user types, in any script.
 - **E9.** After the extension is installed or updated, Chrome stays open for the fraction of a second in which the extension records that install; a Chrome closed within it may start a new install in Document order and show an upgrader no notice of what is new.
 
@@ -129,7 +129,7 @@ Search and the list:
 Naming:
 
 - **G8.** The Name form saves when the name, trimmed, is not empty, contains no backslash or line break, and is not already the name of another line regardless of case; and the URL begins with a scheme per F4 and contains no whitespace, backslash, or line break. A taken name blocks Save, names the line that has it, and offers to edit that mapping instead. A rejected value is kept in the field.
-- **G9.** The saved line is written per F12 after the last line of the document that holds more than whitespace (at its start when there is none), or, when a section is chosen, after the last such line of that section. If the chosen heading no longer exists when Save runs, the line goes after the last such line of the document and the confirmation says so. The confirmation names the name and the line number and offers Undo. Every other line of the document is unchanged byte for byte (G12).
+- **G9.** The saved line is written per F12 after the last line of the document that holds more than whitespace (at its start when there is none), or, when a section is chosen, after the last such line of that section. When Save runs, the chosen heading is found again as the heading with its exact text that has as many headings with that text before it as when it was chosen; if there is none, the line goes after the last such line of the document and the confirmation says so. The confirmation names the name and the line number and offers Undo. Every other line of the document is unchanged byte for byte (G12).
 - **G10.** When the current tab's address equals a mapping's URL exactly, the popup says *This page is "‹name›"* with an edit action, and naming the page again saves a second name for the same URL.
 - **G11.** The Name form opened for a link names the link's address and shows the page the link was on; the Name form reached from *Add mapping* has no page and an empty URL field.
 
@@ -145,7 +145,7 @@ The text document:
 
 - **G17.** Save in the Text view validates the whole draft by F4. With no error the draft is stored as the text area holds it. With any error nothing is stored, each error is listed with its line number, and activating an error moves the caret to that line. The draft stays exactly as typed either way.
 - **G18.** If the stored document changed after the draft was loaded, Save stores nothing until the user decides: changes in the stored document to lines the draft did not change are brought into the draft with one action, and a line changed in both is offered in the stored version and the draft's. No save from any view overwrites another view's change silently.
-- **G19.** One draft, the most recent unsaved Text view edit, is kept across the popup closing, a return to search, and a switch to the List view, and is offered back the next time a Text view opens, to resume or discard. It is stored as it is typed and discarded only when its Save has stored or the user discards it; keystrokes still in flight when the popup or Chrome closes may be lost. Switching to List with unsaved changes asks: save and switch, keep the draft and switch, or stay. Import with unsaved changes asks before replacing the draft.
+- **G19.** One draft, the most recent unsaved Text view edit, is kept across the popup closing, a return to search, and a switch to the List view, and is offered back the next time a Text view opens, to resume or discard. It is stored as it is typed and discarded only when the stored document holds its text, as after its Save, or the user discards it; keystrokes still in flight when the popup or Chrome closes may be lost, and of two edits made in different views within one millisecond either may be the one kept. Switching to List with unsaved changes asks: save and switch, keep the draft and switch, or stay. Import with unsaved changes asks before replacing the draft.
 - **G20.** Import makes the chosen file's text the draft and stores nothing until Save. Export writes the stored document unchanged (F10).
 
 Storing:
@@ -161,7 +161,7 @@ Upgrade:
 
 Smart order:
 
-- **G26.** A use is a jump from the popup (Enter or click), a jump from the address bar, or the creation of a mapping. Browsing is never a use. Each use records the mapping's name (regardless of case), URL, and time outside the document.
+- **G26.** A use is a jump from the popup (Enter or click), a jump from the address bar, or the creation of a mapping. Browsing is never a use. Each use of a mapping the document still holds records its name (regardless of case), URL, and time outside the document.
 - **G27.** Under Smart order, mappings within a group are ordered by a use score that rises with each use and decays with the time since each use; a mapping used within the last 24 hours ranks above any mapping not used in the last 30 days, whatever their counts. Renaming a mapping or changing its URL starts its learning afresh. *Reset learned order* removes all learned usage. Changing the order preference takes effect on the next list.
 
 Address bar:
