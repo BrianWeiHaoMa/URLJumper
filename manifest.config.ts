@@ -8,6 +8,7 @@ export default defineManifest({
   version: '2.0.0',
   minimum_chrome_version: '127',
   description: 'Open web pages by names you keep in one text document. Type a name, press Enter, arrive.',
+  // Drawn by scripts/icons.ts.
   icons: {
     16: 'icons/icon16.png',
     48: 'icons/icon48.png',

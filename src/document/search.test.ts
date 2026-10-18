@@ -143,6 +143,40 @@ describe('the argument row (G1 c)', () => {
   test('a name without %s takes no argument', () => {
     expect(list(['mail https://mail.example/'], 'mail foo')).toEqual(['name mail foo']);
   });
+
+  describe('only while the filled URL is at most 2,097,152 characters, the longest Chrome navigates to', () => {
+    const groups = (lines: readonly string[], typed: string) => rows(lines, typed).map((row) => row.group);
+
+    test('up to that length the row is offered; past it the list is G1 without the row', () => {
+      expect(groups(['q x:%s'], `q ${'a'.repeat(2_097_150)}`)).toEqual(['argument']);
+      expect(groups(['q x:%s'], `q ${'a'.repeat(2_097_151)}`)).toEqual(['name']);
+      // x:%s/%s filled with n × é is 3 + 2 × 6n characters long.
+      expect(groups(['q x:%s/%s'], `q ${'é'.repeat(174_762)}`)).toEqual(['argument']);
+      expect(groups(['q x:%s/%s'], `q ${'é'.repeat(174_763)}`)).toEqual(['name']);
+    });
+
+    test('a fill too long to build is measured, not built', () => {
+      expect(groups([`q x:${'%s'.repeat(65_536)}`], `q ${'a'.repeat(65_536)}`)).toEqual(['name']);
+      expect(groups(['q x:%s'], `q ${'a'.repeat(3_000_000)}`)).toEqual(['name']);
+    });
+
+    test("when the longest alias's fill is too long, no shorter alias takes the text instead", () => {
+      expect(groups(['g x:%s', `g s x:${'%s'.repeat(2_000)}`], `g s ${'a'.repeat(1_100)}`)).toEqual(['name']);
+    });
+  });
+});
+
+describe('typed text of any length', () => {
+  test('a name or alias whose lowercase is twice as long as it is still matches', () => {
+    expect(list(['İİ x:'], 'i̇i̇')).toEqual(['exact İİ']);
+    expect(list(['İİ x:%s'], 'i̇i̇ cat')).toEqual(['argument İİ <cat>']);
+  });
+
+  test('text whose lowercase is longer than a string can be still gets its list', () => {
+    // 268,435,445 × U+0130 lowercases to 536,870,890 code units, past the longest string V8 holds.
+    const typed = 'İ'.repeat(268_435_445);
+    expect(rows(['q x:%s', 'İ https://i'], typed).map((row) => row.group)).toEqual(['name']);
+  });
 });
 
 describe('blank typed text (G3)', () => {

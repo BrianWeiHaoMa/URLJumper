@@ -1,6 +1,6 @@
 // The search list (G1) in its order (G2). The popup and the address bar both call `searchList` with what
 // they read from storage, so they list the same mappings in the same order.
-import { isArgumentAlias } from './argument';
+import { fillArgument, isArgumentAlias } from './argument';
 import { readDocument, type Mapping } from './grammar';
 import { useScoreLog2, type Usage } from './score';
 
@@ -8,8 +8,9 @@ export type SearchOrder = 'document' | 'smart';
 
 /**
  * One row of the list. `all` rows are the list for blank typed text; the rest are G1's groups: (a) `exact`,
- * (b) `prefix`, (c) `argument`, whose URL is filled with `fillArgument(mapping.url, argument)`, (d)
- * `contains`, (e) `address`, and (f) `name`, the row that names the page with the typed text.
+ * (b) `prefix`, (c) `argument`, whose URL is filled with `fillArgument(mapping.url, argument)`, never
+ * undefined for a listed row, (d) `contains`, (e) `address`, and (f) `name`, the row that names the page
+ * with the typed text.
  */
 export type SearchRow =
   | { group: 'all' | 'exact' | 'prefix' | 'contains' | 'address'; mapping: Mapping }
@@ -34,12 +35,17 @@ export function searchList({ document, typed, order, usage, now }: SearchInput):
   const t = typed.trim();
   if (t === '') return ordered(mappings).map((mapping) => ({ group: 'all', mapping }));
 
-  const query = t.toLowerCase();
   const exact: Mapping[] = [];
   const prefix: Mapping[] = [];
   const contains: Mapping[] = [];
   const address: Mapping[] = [];
+  // Lowercasing never shortens text and at most doubles it (U+0130 becomes two code units), so a T more
+  // than twice as long as every name and URL is in none of them. Such a T is not lowercased: its lowercase
+  // can be longer than V8's longest string, and V8 then crashes instead of throwing.
+  const longest = mappings.reduce((most, { name, url }) => Math.max(most, name.length, url.length), 0);
+  const query = t.length > 2 * longest ? undefined : t.toLowerCase();
   for (const mapping of mappings) {
+    if (query === undefined) break;
     const name = mapping.name.toLowerCase();
     if (name === query) exact.push(mapping);
     else if (name.startsWith(query)) prefix.push(mapping);
@@ -80,11 +86,16 @@ function orderGroup(group: Mapping[], order: SearchOrder, usage: Usage | undefin
  * G1 (c): the longest alias whose name, regardless of case, starts the typed text (after leading
  * whitespace) and is followed there by a space, U+0020, with a remainder that is not empty once trimmed;
  * that trimmed remainder, its case kept, is the argument. "Longest" compares lowercased names, which is
- * the alias that takes in the most of the typed text.
+ * the alias that takes in the most of the typed text. The row exists only when `fillArgument` can fill
+ * that alias's URL, at most 2,097,152 characters; a shorter alias never stands in for it.
  */
 function findArgumentRow(mappings: readonly Mapping[], typed: string): { mapping: Mapping; argument: string } | undefined {
   const text = typed.trimStart();
-  const lowered = text.toLowerCase();
+  // Only the start of the text can hold an alias's name and the space after it. A name's lowercase is at
+  // most twice as long as it and no text's is shorter, so that start is twice the longest alias name and
+  // one code unit, plus one for a surrogate pair the cut would split; only it is lowercased (see `searchList`).
+  const longest = mappings.reduce((most, { name, url }) => (isArgumentAlias(url) ? Math.max(most, name.length) : most), 0);
+  const lowered = text.slice(0, 2 * longest + 2).toLowerCase();
   let found: { mapping: Mapping; argument: string; length: number } | undefined;
   for (const mapping of mappings) {
     if (!isArgumentAlias(mapping.url)) continue;
@@ -94,7 +105,8 @@ function findArgumentRow(mappings: readonly Mapping[], typed: string): { mapping
     const argument = text.slice(typedLength(text, name.length) + 1).trim();
     if (argument !== '') found = { mapping, argument, length: name.length };
   }
-  return found && { mapping: found.mapping, argument: found.argument };
+  if (!found || fillArgument(found.mapping.url, found.argument) === undefined) return undefined;
+  return { mapping: found.mapping, argument: found.argument };
 }
 
 /**

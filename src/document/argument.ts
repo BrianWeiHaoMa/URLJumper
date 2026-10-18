@@ -4,20 +4,24 @@ export function isArgumentAlias(url: string): boolean {
   return url.includes('%s');
 }
 
+/** The longest URL Chrome navigates to (E7), in UTF-16 code units as `String.prototype.length` counts them. */
+const LONGEST_URL = 2_097_152;
+
 /**
  * The URL with the argument put in place of every `%s`, percent-encoded as a URI component, so a space
  * becomes `%20` (F9); an empty argument removes every `%s`. A lone surrogate is encoded as U+FFFD, where
  * `encodeURIComponent` alone would throw. The substituted text is not searched for `%s` again.
- * Undefined when the filled URL is longer than a string can be, which many `%s` and a long argument reach
- * inside E3 (a 128 KB URL of `%s` and a 64 KB argument fill 4 billion characters); such a URL is far past
- * the 2,097,152 characters Chrome navigates to (E7).
+ * Undefined when the filled URL would be longer than `LONGEST_URL`, where G1 (c) offers no argument row.
+ * Its length is found before it is built, so no argument, however long, builds a longer string: many `%s`
+ * and a long argument reach far past what a string can hold inside E3.
  */
 export function fillArgument(url: string, argument: string): string | undefined {
+  const pieces = url.split('%s');
+  const slots = pieces.length - 1;
+  if (slots === 0) return url.length > LONGEST_URL ? undefined : url;
+  // Encoding never shortens the argument, so one longer than the limit is too long before it is encoded.
+  if (argument.length > LONGEST_URL) return undefined;
   const encoded = encodeURIComponent(argument.toWellFormed());
-  try {
-    return url.split('%s').join(encoded);
-  } catch (error) {
-    if (!(error instanceof RangeError)) throw error;
-    return undefined;
-  }
+  if (url.length - 2 * slots + slots * encoded.length > LONGEST_URL) return undefined;
+  return pieces.join(encoded);
 }
