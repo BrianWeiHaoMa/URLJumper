@@ -108,6 +108,14 @@ describe('the list (G28, N4)', () => {
     expect(list(document, 'inbox.').record.rows).toEqual([]);
     expect(list(document, 'example/inbox').record.rows.map(([, name]) => name)).toEqual(['inbox']);
   });
+
+  test('a list longer than Chrome ranks in order gives its first 1,001 rows, and each of them opens', () => {
+    const lines = Array.from({ length: 1_200 }, (_, i) => `m${i} https://x.example/${i}`);
+    const shown = list(lines, 'x.example');
+    expect(shown.record.rows.map(([, name]) => name)).toEqual(lines.slice(0, 1_001).map((line) => line.split(' ')[0]));
+    expect(shown.suggestions.map(({ content }) => content)).toEqual(lines.slice(1, 1_001).map((line) => line.split(' ')[0]));
+    expect(enteredTarget('m1000', shown.record, inputs(lines))).toEqual({ name: 'm1000', url: 'https://x.example/1000', argument: null });
+  });
 });
 
 describe('contents (How G28, S7)', () => {
@@ -238,7 +246,8 @@ describe('the stored record (State, omnibox)', () => {
   ])('with 10,000 rows of %s, holds at most 0.5 MB of line numbers, suffixes, and structure', (_, name) => {
     const lines = Array.from({ length: 10_000 }, (_, i) => `${name(i + 1)} https://example.com/${i + 1}`);
     const { record } = list(lines, lines[0]!.startsWith('m') ? 'm' : 'a');
-    expect(record.rows).toHaveLength(10_000);
+    // Row 1 and the 1,000 after it, all Chrome ranks in order (G28).
+    expect(record.rows).toHaveLength(1_001);
     const structure = { ...record, typed: '', rows: record.rows.map(([line, , , suffix]) => [line, '', '', suffix]) };
     expect(new TextEncoder().encode(JSON.stringify(structure)).length).toBeLessThanOrEqual(500_000);
   });
@@ -302,6 +311,10 @@ describe('what Enter opens (How G28)', () => {
 
   test('a list with no row opens nothing for its own text', () => {
     expect(enteredTarget('qqq', list(document, 'qqq').record, inputs(document))).toBeUndefined();
+    // Also when the document came to match it since: the one suggestion shown said nothing matches (G28).
+    const { record } = list(['other https://other.example/'], 'gmail');
+    expect(enteredTarget('gmail', undefined, inputs(document))).toEqual({ name: 'gmail', url: 'https://mail.example/', argument: null });
+    expect(enteredTarget('gmail', record, inputs(document))).toBeUndefined();
   });
 
   test("an alias with 500 %s opens its filled URL from its content", () => {

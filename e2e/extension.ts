@@ -10,7 +10,7 @@ import { checkAccessibilityInBothSchemes } from './accessibility.ts';
 import { checkFit } from './popup-fit.ts';
 
 export { expect } from '@playwright/test';
-export { addressBar, type AddressBar, type AddressBarInput, type Disposition } from './address-bar.ts';
+export { addressBar, chromeShows, type AddressBar, type AddressBarInput, type ChromeRow, type Disposition } from './address-bar.ts';
 export { checkAccessibility } from './accessibility.ts';
 export { checkFit } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';

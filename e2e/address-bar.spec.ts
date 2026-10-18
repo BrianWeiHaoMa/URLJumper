@@ -7,6 +7,7 @@ import type { Page } from '@playwright/test';
 import {
   addressBar,
   checkFitAndAccessibility,
+  chromeShows,
   expect,
   popupOnNewPage,
   restartWorker,
@@ -164,6 +165,21 @@ test("the suggestions are the popup's rows for the same text, in its order, unde
   await popup.getByRole('combobox').fill('zzz');
   await expect(popup.getByRole('option')).toHaveCount(1);
   await expect(popup.getByRole('option')).toHaveAccessibleName('Name "zzz" for this page');
+});
+
+test("Chrome's own autocomplete shows the list in its order however long it is, and keeps apart rows whose contents it sanitizes alike", async ({ extension }) => {
+  // More rows than the default's relevance (at most 1,500), which Chrome counts down by one per suggestion.
+  const lines = Array.from({ length: 1_600 }, (_, i) => `m${i} https://x.example/${i}`);
+  await extension.seedStorage({ mappings: lines.join('\n') });
+  const long = await chromeShows(extension.context, 'x.example');
+  expect(long.length).toBeGreaterThan(5);
+  expect(long.map(({ contents }) => contents)).toEqual(lines.slice(0, long.length).map((line) => line.replace(' ', ' – ')));
+
+  await extension.seedStorage({ mappings: 'a https://a.example/\nab https://ab.example/\na\tb https://atb.example/\n' });
+  const shown = await chromeShows(extension.context, 'a');
+  // Chrome shows a tab in a name as nothing, so the third row reads like the second.
+  expect(shown.map(({ contents }) => contents)).toEqual(['a – https://a.example/', 'ab – https://ab.example/', 'ab – https://atb.example/']);
+  expect(shown.map(({ fillIntoEdit }) => fillIntoEdit)).toEqual(['j a', 'j ab', 'j ab (line 3)']);
 });
 
 test("every description is XML Chrome's parser takes, reading as the name and the URL, as row 1 and as a later row", async ({ extension }) => {

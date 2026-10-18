@@ -31,7 +31,7 @@ export interface AddressBarList {
   record: AddressBarRecord;
   /** For `setDefaultSuggestion`: row 1's description, or one line that names no mapping. */
   defaultDescription: string;
-  /** For `suggest`: rows 2 onward. */
+  /** For `suggest`: rows 2 onward, at most `MOST_SUGGESTIONS`. */
   suggestions: Suggestion[];
 }
 
@@ -46,10 +46,18 @@ const NOTHING_TYPED = 'Type the name of a URLJumper mapping';
 const NOTHING_MATCHES = 'No URLJumper mapping matches';
 
 /**
- * The list for `input.typed`: G1's groups (a) to (e), never the Name row (N4), and nothing for blank text,
- * for which the popup lists every mapping (How G28: "empty text lists nothing"). Each row's content is
- * unique in `comparisonForm` among the rows and against the typed text, and never empty there: the first
- * of two that collide keeps its bare content, the other gets ` (line N)`, then ` 2`, ` 3`, … (How G28).
+ * How many rows at most follow the default. Chrome ranks suggestion i (from 0) at the default's relevance less
+ * i + 1, and one that would rank below 0 at the default's own, so past the default's relevance (at least 1,100
+ * for a typed keyword) the late rows would show before row 2 (G28). Far more than Chrome shows.
+ */
+const MOST_SUGGESTIONS = 1_000;
+
+/**
+ * The list for `input.typed`: G1's groups (a) to (e), never the Name row (N4), row 1 and at most
+ * `MOST_SUGGESTIONS` rows after it, and nothing for blank text, for which the popup lists every mapping
+ * (How G28: "empty text lists nothing"). Each row's content is unique in `comparisonForm` among the rows
+ * and against the typed text, and never empty there: the first of two that collide keeps its bare content,
+ * the other gets ` (line N)`, then ` 2`, ` 3`, … (How G28).
  */
 export function addressBarList(input: SearchInput): AddressBarList {
   const found = searchList(input);
@@ -58,6 +66,7 @@ export function addressBarList(input: SearchInput): AddressBarList {
   const suggestions: Suggestion[] = [];
   for (const row of found) {
     if (row.group === 'all' || row.group === 'name') continue;
+    if (record.rows.length > MOST_SUGGESTIONS) break;
     const index = record.rows.push([row.mapping.line, row.mapping.name, row.mapping.url, '']) - 1;
     if (row.group === 'argument') record.argumentRow = index;
     // The content is built as Enter rebuilds it, so the two never differ.

@@ -1,8 +1,8 @@
 // Chrome's address bar, which headless Chrome cannot show: what a check needs to type after the keyword `j`
-// and press Enter there, re-exported by e2e/extension.ts. Both dispatch Chrome's omnibox events to the
+// and press Enter there, re-exported by e2e/extension.ts. `addressBar` dispatches Chrome's omnibox events to the
 // worker's own listeners with the arguments Chrome passes; what the worker hands Chrome is recorded on the
-// way and still reaches it.
-import type { Worker } from '@playwright/test';
+// way and still reaches it. `chromeShows` has Chrome's own autocomplete call the worker and reads the rows it shows.
+import type { BrowserContext, Worker } from '@playwright/test';
 import type { Request } from '../src/requests.ts';
 
 export type Disposition = `${chrome.omnibox.OnInputEnteredDisposition}`;
@@ -42,6 +42,49 @@ export function addressBar(worker: Worker, requests: { send(request: Request): P
       await requests.send({ kind: 'remove-intent', windowId: -1, time: 0 });
     },
   };
+}
+
+/** A row of the list Chrome's own autocomplete makes, as `chrome://omnibox` reports it. */
+export interface ChromeRow {
+  /** The description as Chrome shows it, its markup read. */
+  contents: string;
+  /** What the address bar holds with the row selected: the keyword, a space, and the content Chrome kept. */
+  fillIntoEdit: string;
+}
+
+/**
+ * The rows Chrome itself shows for `text` typed after the keyword, in its order. `chrome://omnibox` runs the
+ * address bar's own providers on what is typed into it, so Chrome fires the worker's `onInputChanged` with its own
+ * `suggest`, and its parsing, ranking, and merging of what the worker gives all apply. Resolves once Chrome's
+ * autocomplete is done; Enter there opens nothing, so it says nothing about `onInputEntered`.
+ */
+export async function chromeShows(context: BrowserContext, text: string): Promise<ChromeRow[]> {
+  const page = await context.newPage();
+  try {
+    await page.goto('chrome://chrome-urls');
+    const toggle = page.getByRole('button', { name: /^(Enable|Disable) internal debugging pages$/ });
+    if ((await toggle.textContent())?.trim().startsWith('Enable')) {
+      await toggle.click();
+      await page.getByRole('button', { name: 'Disable internal debugging pages', exact: true }).waitFor();
+    }
+    await page.goto('chrome://omnibox');
+    const input = `j ${text}`;
+    await page.locator('#input-text').fill(input);
+    // `responsesHistory` is the page's own record of each autocomplete pass for the latest input.
+    await page.waitForFunction((input) => {
+      const pass = (document.querySelector('omnibox-output') as unknown as OmniboxOutput | null)?.responsesHistory.at(-1)?.at(-1);
+      return pass?.inputText === input && pass.done;
+    }, input);
+    return await page.locator('omnibox-output').evaluate((output) =>
+      (output as unknown as OmniboxOutput).responsesHistory.at(-1)!.at(-1)!.combinedResults.map(({ contents, fillIntoEdit }) => ({ contents, fillIntoEdit })),
+    );
+  } finally {
+    await page.close();
+  }
+}
+
+interface OmniboxOutput {
+  responsesHistory: { inputText: string; done: boolean; combinedResults: ChromeRow[] }[][];
 }
 
 // Runs in the worker. The recorders are added once per worker instance, so again after a restart.
