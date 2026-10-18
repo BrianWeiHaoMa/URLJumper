@@ -151,7 +151,7 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
     .poll(() =>
       popup.evaluate(() => {
         const height = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().height;
-        return Math.abs(innerHeight - (height('.search-bar') + height('.view-content') + height('footer'))) < 1;
+        return Math.abs(innerHeight - (height('.search-bar') + height('.view-content') + height('.page-bar') + height('footer'))) < 1;
       }),
     )
     .toBe(true);
@@ -219,7 +219,9 @@ test('a mapping found only by its address is listed as an address match, visibly
   await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\ndev  http://localhost:5173/\n' });
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('localhost');
-  await expect(popup.getByRole('option')).toHaveCount(1);
+  // No name holds the text, so the Name row follows the address match (G1 (f)).
+  await expect(popup.getByRole('option')).toHaveCount(2);
+  await expect(popup.getByRole('option').last()).toHaveAccessibleName('Name "localhost" for this page');
   await expect(popup.getByRole('option').locator('.row-tag')).toHaveText('address match');
   await expect(popup.getByRole('option', { name: 'dev address match http://localhost:5173/', exact: true })).toBeVisible();
   await expect(selected(popup).locator('.row-name')).toHaveText('dev');
@@ -246,17 +248,11 @@ test('an argument alias without an argument shows its %s marked and the hint; th
   await checkAccessibilityInBothSchemes(popup);
 });
 
-test('text that matches nothing, and an empty or blank document, list no row: no cue, and Enter does nothing', async ({ extension, site }) => {
-  for (const [stored, typed, says] of [
-    [{ mappings: 'mail  https://mail.example.com/\n' }, 'zzz', 'No mapping matches · Enter does nothing'],
-    [{}, '', 'No mappings to list · Enter does nothing'],
-    [{ mappings: ' \n\t\n' }, '', 'No mappings to list · Enter does nothing'],
-    [{ mappings: ' \n\t\n' }, 'mail', 'No mapping matches · Enter does nothing'],
-  ] as const) {
+test('an empty or blank document with nothing typed lists no row: no cue, and Enter does nothing', async ({ extension, site }) => {
+  for (const stored of [{}, { mappings: ' \n\t\n' }]) {
     await extension.seedStorage(stored);
     const { popup } = await popupOnNewPage(extension, site);
-    await popup.keyboard.type(typed);
-    await expect(footer(popup)).toHaveText(says);
+    await expect(footer(popup)).toHaveText('No mappings to list · Enter does nothing');
     await expect(popup.getByRole('option')).toHaveCount(0);
     await expect(cue(popup)).toHaveCount(0);
     const tabs = await pageTabs(extension);
@@ -265,6 +261,30 @@ test('text that matches nothing, and an empty or blank document, list no row: no
     expect(await pageTabs(extension)).toEqual(tabs);
     expect(await extension.openPopups()).toBe(1);
     await checkAccessibilityInBothSchemes(popup);
+    await popup.close();
+  }
+});
+
+test('text that matches no mapping lists only the Name row, selected: no cue, and Enter opens nothing but the Name form', async ({ extension, site }) => {
+  for (const [stored, typed] of [
+    [{ mappings: 'mail  https://mail.example.com/\n' }, 'zzz'],
+    [{ mappings: ' \n\t\n' }, 'mail'],
+  ] as const) {
+    await extension.seedStorage(stored);
+    const { popup } = await popupOnNewPage(extension, site);
+    await popup.keyboard.type(typed);
+    await expect(footer(popup)).toHaveText('Enter opens the Name form');
+    await expect(popup.getByRole('option')).toHaveCount(1);
+    await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
+    await expect(cue(popup)).toHaveCount(0);
+    await checkAccessibilityInBothSchemes(popup);
+    const tabs = await pageTabs(extension);
+    await popup.keyboard.press('Enter');
+    await expect(popup.getByRole('textbox', { name: 'Name' })).toHaveValue(typed);
+    await popup.waitForTimeout(300);
+    expect(await pageTabs(extension)).toEqual(tabs);
+    expect(await extension.openPopups()).toBe(1);
+    expect((await extension.readStorage()).mappings).toBe(stored.mappings);
     await popup.close();
   }
 });
@@ -344,9 +364,11 @@ test("after an update from 1.x the popup is dark and in Document order, and list
   await expect.poll(() => names(popup)).toEqual(['mail', 'mailbox']);
   await popup.keyboard.type(' ');
   await expect.poll(() => names(popup)).toEqual(['mail', 'mailbox']);
+  // Unreadable lines are never listed: what only they hold finds the Name row alone.
   for (const typed of ['not', 'other']) {
     await popup.getByRole('combobox').fill(typed);
-    await expect(footer(popup)).toHaveText('No mapping matches · Enter does nothing');
+    await expect(popup.getByRole('option')).toHaveCount(1);
+    await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
   }
   expect(await extension.readStorage()).toEqual({ ...oneX, upgradeNotice: 'pending' });
 });

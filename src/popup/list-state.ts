@@ -5,11 +5,9 @@ import { searchList, type SearchInput, type SearchRow } from '../document/search
 /** How many rows the popup shows at a time (F13). */
 export const WINDOW_ROWS = 7;
 
-/** Every row of the search list but the Name row, which the popup does not offer. */
-export type ListedRow = Exclude<SearchRow, { group: 'name' }>;
-
 export interface ListState {
-  rows: readonly ListedRow[];
+  /** The search list's rows as it returns them, the Name row included. */
+  rows: readonly SearchRow[];
   /** Whether the typed text was blank, so the rows are every mapping and nothing is selected until Down. */
   blank: boolean;
   /** The selected row's index in `rows`, or null when nothing is selected. */
@@ -23,8 +21,7 @@ export function newList(input: SearchInput): ListState {
   const found = searchList(input);
   // The search list holds `all` rows exactly when the text is blank, and for other text at least the Name row.
   const blank = found.length === 0 || found[0]!.group === 'all';
-  const rows = found.filter((row): row is ListedRow => row.group !== 'name');
-  return { rows, blank, selected: !blank && rows.length > 0 ? 0 : null, top: 0 };
+  return { rows: found, blank, selected: !blank && found.length > 0 ? 0 : null, top: 0 };
 }
 
 /** The list for `input` after a storage change: the same rows keep their selection and window; other rows are a new list. */
@@ -63,11 +60,12 @@ function select(list: ListState, selected: number): ListState {
   return { ...list, selected, top };
 }
 
-function sameRows(a: readonly ListedRow[], b: readonly ListedRow[]): boolean {
+function sameRows(a: readonly SearchRow[], b: readonly SearchRow[]): boolean {
   return a.length === b.length && a.every((row, i) => rowIdentity(row) === rowIdentity(b[i]!));
 }
 
-function rowIdentity(row: ListedRow): string {
+function rowIdentity(row: SearchRow): string {
+  if (row.group === 'name') return `name\n${row.name}`;
   const argument = row.group === 'argument' ? row.argument : '';
   return `${row.group}\n${row.mapping.line}\n${row.mapping.key}\n${argument}`;
 }

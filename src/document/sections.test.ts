@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { readDocument } from './grammar';
-import { findSection, findSections, namedSections } from './sections';
+import { findSection, findSections, headingText, namedSections } from './sections';
 
 const sectionsOf = (...lines: string[]) => findSections(readDocument(lines.join('\n')).lines);
 
@@ -44,4 +44,26 @@ test("a heading's identity is its lines' exact texts and how many headings with 
 test('a heading is found again by its texts after lines were added above it', () => {
   const { lines } = readDocument('\\ new\n\nx  x:1\n\\ Work\nw  w:1\n');
   expect(findSection(lines, { texts: ['\\ Work'], before: 0 })).toMatchObject({ heading: { first: 4, last: 4 }, last: 6 });
+});
+
+// What the Section choice shows for each heading of the document whose lines are `lines`.
+const headingTexts = (...lines: string[]) => {
+  const read = readDocument(lines.join('\n')).lines;
+  return findSections(read).map(({ heading }) => headingText(read, heading));
+};
+
+test("a heading is shown as its lines' comment texts, trimmed, joined by single spaces", () => {
+  expect(headingTexts('\\ Work', '\\   more  ', 'a  https://a')).toEqual(['Work more']);
+  expect(headingTexts('  \\Daily', '\t\\\tnews\u3000', '', '\\ Search')).toEqual(['Daily news', 'Search']);
+  // Spaces inside a line's text are its own.
+  expect(headingTexts('\\ To  read   later')).toEqual(['To  read   later']);
+});
+
+test("only a line's first backslash starts its comment; a later one is text", () => {
+  expect(headingTexts('\\ a \\ b', '\\\\')).toEqual(['a \\ b \\']);
+});
+
+test('a line with no comment text adds nothing, and a heading with none on any line has no text', () => {
+  expect(headingTexts('\\', '\\ Work', '  \\   ', '\\ more', '\\')).toEqual(['Work more']);
+  expect(headingTexts('\\', ' \\ ', '', '\\ Home')).toEqual(['', 'Home']);
 });

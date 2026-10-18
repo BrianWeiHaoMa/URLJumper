@@ -1,15 +1,20 @@
-// The popup's search (In use, "Jump"): the search box with the mode chip, the list seven rows at a time with
-// a cue for the rest, and a footer saying what Enter does. Everything shown derives from storage, read when
-// the popup opens and again after every change; a mapping opens only through the worker's jump, sent from
-// the popup's Enter handler or a row's click handler (R4), never from anything else.
-import { useEffect, useLayoutEffect, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
+// The popup (In use, "Jump", "Name this page", "Name from a search"): search, with the search box and the
+// mode chip, the list seven rows at a time with a cue for the rest, what the page is called (G10), and the
+// *Name this page* button; or the Name form. A footer says what Enter does. Everything shown derives from
+// storage, read when the popup opens and again after every change; a mapping opens only through the
+// worker's jump, sent from the popup's Enter handler or a row's click handler (R4), never from anything else.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { isArgumentAlias } from '../document/argument';
-import type { SearchOrder } from '../document/search';
+import { readDocument } from '../document/grammar';
+import { mappingOfPage } from '../document/page-mapping';
+import type { SearchOrder, SearchRow } from '../document/search';
 import type { Usage } from '../document/score';
 import { intentFor, startMode, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme, type Theme } from '../preferences';
 import { send, type JumpReply, type JumpRequest } from '../requests';
-import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListedRow, type ListState } from './list-state';
+import { Confirmation, useConfirmationLifetime, type Confirmed } from './Confirmation';
+import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
+import { NameForm, type NameSubject, type Saved } from './NameForm';
 import { Row, rowId } from './Row';
 import { useFitToViewport } from './fit-to-viewport';
 
@@ -20,28 +25,51 @@ interface Stored {
   theme: Theme;
 }
 
+/** The tab the popup was opened on: its id, and its address and title when Chrome granted them (E5). */
+interface Opener {
+  tabId: number | undefined;
+  url: string | undefined;
+  title: string | undefined;
+  mode: OpenMode;
+}
+
+/** Search, or the Name form opened with a name to start with; `opened` counts the openings, so each starts afresh. */
+type View = { kind: 'search' } | { kind: 'name'; name: string; subject: NameSubject; opened: number };
+
 interface State {
   /** What storage held at the last read; undefined until the first read. */
   stored: Stored | undefined;
-  /** The tab the popup was opened on, and the mode its opening asked for; undefined until both are known. */
-  opener: { tabId: number | undefined; mode: OpenMode } | undefined;
+  /** Undefined until the tab and the mode its opening asked for are known. */
+  opener: Opener | undefined;
+  view: View;
   typed: string;
   list: ListState;
   mode: OpenMode;
-  chipFocused: boolean;
+  /** The control in search whose focus changes what Enter does, if one has it. */
+  focused: 'chip' | 'name-page' | null;
   /** Why the last jump did not open; kept until the user types or jumps again. */
   message: string | null;
+  /** The last save's confirmation, until its lifetime ends (G15). */
+  confirmed: Confirmed | null;
+  /** How many confirmations and form openings there have been. */
+  count: number;
 }
+
+type MappingRow = Exclude<SearchRow, { group: 'name' }>;
 
 type Action =
   | { kind: 'stored'; stored: Stored; now: number }
-  | { kind: 'opener'; tabId: number | undefined; mode: OpenMode }
+  | { kind: 'opener'; opener: Opener }
   | { kind: 'typed'; typed: string; now: number }
   | { kind: 'move'; step: 1 | -1 }
   | { kind: 'scroll'; rows: number }
   | { kind: 'flip' }
-  | { kind: 'chip-focused'; focused: boolean }
-  | { kind: 'message'; message: string | null };
+  | { kind: 'focused'; focused: State['focused'] }
+  | { kind: 'message'; message: string | null }
+  | { kind: 'name'; name: string }
+  | { kind: 'cancel' }
+  | { kind: 'saved'; saved: Saved; now: number }
+  | { kind: 'confirmation-ended'; id: number };
 
 const STORED_KEYS = ['mappings', 'usage', 'searchOrder', 'themePref'];
 const NO_ROWS: ListState = { rows: [], blank: true, selected: null, top: 0 };
@@ -53,6 +81,9 @@ export function Popup() {
   const [state, dispatch] = useReducer(reduce, undefined, initialState);
   const wheel = useRef(0);
   const layout = useFitToViewport();
+  const confirmation = useRef<HTMLParagraphElement>(null);
+  const endConfirmation = useCallback((id: number) => dispatch({ kind: 'confirmation-ended', id }), []);
+  useConfirmationLifetime(state.confirmed, endConfirmation, confirmation);
 
   useEffect(() => {
     // Every read asks for the keys again, and Chrome answers reads in the order they were made, so the last
@@ -64,23 +95,23 @@ export function Popup() {
     };
     chrome.storage.onChanged.addListener(changed);
     void read();
-    void findOpener().then(({ tabId, mode }) => dispatch({ kind: 'opener', tabId, mode }));
+    void findOpener().then((opener) => dispatch({ kind: 'opener', opener }));
     return () => chrome.storage.onChanged.removeListener(changed);
   }, []);
 
   const theme = state.stored?.theme ?? 'system';
   useEffect(() => applyTheme(theme), [theme]);
 
-  // The selected row is always in view, also when the view has to scroll (G3, G7) and when a message above
-  // the rows pushes them down.
+  // The selected row is always in view, also when the view has to scroll (G3, G7), when a message above the
+  // rows pushes them down, and when search is shown again after the Name form.
   useLayoutEffect(() => {
     if (state.list.selected !== null) document.getElementById(rowId(state.list.selected))?.scrollIntoView({ block: 'nearest' });
-  }, [state.list.selected, state.list.top, state.message]);
+  }, [state.list.selected, state.list.top, state.message, state.confirmed, state.view]);
 
   const other = otherMode(state.mode);
   const ready = state.stored !== undefined && state.opener !== undefined;
 
-  const jump = async (row: ListedRow, mode: OpenMode) => {
+  const jump = async (row: MappingRow, mode: OpenMode) => {
     if (!ready) return;
     const request = jumpRequest(row, mode, state.opener?.tabId);
     if (request === undefined) {
@@ -93,13 +124,22 @@ export function Popup() {
     else dispatch({ kind: 'message', message: notOpened(reply) });
   };
 
-  // The popup's keys, wherever the focus is (the search box, the view when Chrome lets it take focus to
-  // scroll, or nothing), so the footer is true for all of them; on the chip, Enter and Space flip it instead.
+  // The Name form opens only once the popup knows the document and the page it names.
+  const openForm = (name: string) => {
+    if (ready) dispatch({ kind: 'name', name });
+  };
+  // The Name row opens the form with its text, whatever the mode (G4); every other row opens its mapping.
+  const act = (row: SearchRow, mode: OpenMode) => (row.group === 'name' ? openForm(row.name) : void jump(row, mode));
+
+  // Search's keys, wherever the focus is (the search box, the view when Chrome lets it take focus to scroll,
+  // or nothing), so the footer is true for all of them; on a button, Enter and Space activate it instead.
+  // The Name form has its own Enter; Escape closes the popup from every view.
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
   onKey.current = (event: KeyboardEvent) => {
     // A key that ends an input method's composition belongs to the composition.
     if (event.isComposing) return;
     if (event.key === 'Escape') window.close();
+    else if (state.view.kind !== 'search') return;
     else if (event.target instanceof Element && event.target.closest('button')) return;
     else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -107,7 +147,7 @@ export function Popup() {
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const selected = state.list.selected === null ? undefined : state.list.rows[state.list.selected];
-      if (selected) void jump(selected, event.shiftKey ? other : state.mode);
+      if (selected) act(selected, event.shiftKey ? other : state.mode);
     }
   };
   useEffect(() => {
@@ -116,7 +156,7 @@ export function Popup() {
     return () => document.removeEventListener('keydown', listener);
   }, []);
 
-  const onRowClick = (row: ListedRow, event: MouseEvent) => void jump(row, event.shiftKey ? other : state.mode);
+  const onRowClick = (row: SearchRow, event: MouseEvent) => act(row, event.shiftKey ? other : state.mode);
 
   const onWheel = (event: ReactWheelEvent) => {
     const pixels = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? event.deltaY : event.deltaY * WHEEL_ROW_PIXELS;
@@ -126,6 +166,26 @@ export function Popup() {
     wheel.current -= rows * WHEEL_ROW_PIXELS;
     dispatch({ kind: 'scroll', rows });
   };
+
+  const storedDocument = state.stored?.document;
+  const pageUrl = state.opener?.url;
+  const thisPage = useMemo(
+    () => (storedDocument === undefined || pageUrl === undefined ? undefined : mappingOfPage(readDocument(storedDocument).mappings, pageUrl)),
+    [storedDocument, pageUrl],
+  );
+
+  if (state.view.kind === 'name' && state.stored !== undefined) {
+    return (
+      <NameForm
+        key={state.view.opened}
+        document={state.stored.document}
+        name={state.view.name}
+        subject={state.view.subject}
+        onSaved={(saved) => dispatch({ kind: 'saved', saved, now: Date.now() })}
+        onCancel={() => dispatch({ kind: 'cancel' })}
+      />
+    );
+  }
 
   const { list } = state;
   const shown = list.rows.slice(list.top, list.top + WINDOW_ROWS);
@@ -158,14 +218,15 @@ export function Popup() {
           // A click flips the chip and leaves the typing in the search box.
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => dispatch({ kind: 'flip' })}
-          onFocus={() => dispatch({ kind: 'chip-focused', focused: true })}
-          onBlur={() => dispatch({ kind: 'chip-focused', focused: false })}
+          onFocus={() => dispatch({ kind: 'focused', focused: 'chip' })}
+          onBlur={() => dispatch({ kind: 'focused', focused: null })}
         >
           {MODE_LABEL[state.mode]}
         </button>
       </header>
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
+          {state.confirmed !== null && <Confirmation confirmed={state.confirmed} own={confirmation} />}
           {state.message !== null && (
             <p className="message" role="alert">
               {state.message}
@@ -187,7 +248,20 @@ export function Popup() {
             </ul>
           )}
           {cue !== '' && <p className="cue">{cue}</p>}
+          {/* In the view, which scrolls, since a name may be as long as the document. */}
+          {thisPage && <p className="this-page">This page is "{thisPage.name}"</p>}
         </div>
+      </div>
+      <div className="page-bar">
+        <button
+          type="button"
+          className="name-page"
+          onClick={() => openForm('')}
+          onFocus={() => dispatch({ kind: 'focused', focused: 'name-page' })}
+          onBlur={() => dispatch({ kind: 'focused', focused: null })}
+        >
+          Name this page
+        </button>
       </div>
       <footer className="footer">
         {footer(state, ready)}
@@ -197,7 +271,18 @@ export function Popup() {
 }
 
 function initialState(): State {
-  return { stored: undefined, opener: undefined, typed: '', list: NO_ROWS, mode: 'new-tab', chipFocused: false, message: null };
+  return {
+    stored: undefined,
+    opener: undefined,
+    view: { kind: 'search' },
+    typed: '',
+    list: NO_ROWS,
+    mode: 'new-tab',
+    focused: null,
+    message: null,
+    confirmed: null,
+    count: 0,
+  };
 }
 
 function reduce(state: State, action: Action): State {
@@ -207,22 +292,49 @@ function reduce(state: State, action: Action): State {
       return { ...state, stored: action.stored, list: state.stored === undefined ? newList(input) : relist(state.list, input) };
     }
     case 'opener':
-      return { ...state, opener: { tabId: action.tabId, mode: action.mode }, mode: action.mode };
-    case 'typed': {
-      const list = state.stored === undefined ? NO_ROWS : newList({ ...searchInputs(state.stored), typed: action.typed, now: action.now });
-      return { ...state, typed: action.typed, list, message: null };
+      return { ...state, opener: action.opener, mode: action.opener.mode };
+    case 'typed':
+      // An edit of the search box is the user's next action (G15).
+      return { ...state, typed: action.typed, list: listFor(state, action.typed, action.now), message: null, confirmed: null };
+    case 'move': {
+      const list = move(state.list, action.step);
+      return { ...state, list, confirmed: list.selected === state.list.selected ? state.confirmed : null };
     }
-    case 'move':
-      return { ...state, list: move(state.list, action.step) };
-    case 'scroll':
-      return { ...state, list: scroll(state.list, action.rows) };
+    case 'scroll': {
+      // Moving the window, which can carry the selection along, is the user's next action too (G15).
+      const list = scroll(state.list, action.rows);
+      return { ...state, list, confirmed: list.top === state.list.top ? state.confirmed : null };
+    }
     case 'flip':
       return { ...state, mode: otherMode(state.mode) };
-    case 'chip-focused':
-      return { ...state, chipFocused: action.focused };
+    case 'focused':
+      return { ...state, focused: action.focused };
     case 'message':
       return { ...state, message: action.message };
+    case 'name': {
+      const subject: NameSubject = { kind: 'page', url: state.opener?.url, title: state.opener?.title };
+      return { ...state, view: { kind: 'name', name: action.name, subject, opened: state.count + 1 }, focused: null, confirmed: null, count: state.count + 1 };
+    }
+    case 'cancel':
+      return { ...state, view: { kind: 'search' } };
+    case 'saved':
+      // Back to a blank search box, where an Enter left over from the save opens nothing (G3).
+      return {
+        ...state,
+        view: { kind: 'search' },
+        typed: '',
+        list: listFor(state, '', action.now),
+        message: null,
+        confirmed: { id: state.count + 1, saved: action.saved },
+        count: state.count + 1,
+      };
+    case 'confirmation-ended':
+      return state.confirmed?.id === action.id ? { ...state, confirmed: null } : state;
   }
+}
+
+function listFor(state: State, typed: string, now: number): ListState {
+  return state.stored === undefined ? NO_ROWS : newList({ ...searchInputs(state.stored), typed, now });
 }
 
 function searchInputs(stored: Stored) {
@@ -243,7 +355,7 @@ function readStored(items: Record<string, unknown>): Stored {
  * The tab the popup was opened on, and its start mode: from `openIntent` when it names this window and is
  * fresh, which the popup then removes; a record for another window stays for that window (G5).
  */
-async function findOpener(): Promise<{ tabId: number | undefined; mode: OpenMode }> {
+async function findOpener(): Promise<Opener> {
   try {
     const [[tab], { openIntent }] = await Promise.all([chrome.tabs.query({ active: true, currentWindow: true }), chrome.storage.local.get('openIntent')]);
     const intent = intentFor(openIntent, tab?.windowId, Date.now());
@@ -251,14 +363,14 @@ async function findOpener(): Promise<{ tabId: number | undefined; mode: OpenMode
     // for another window, would go too. Awaited, so the popup shows the mode it honored only once no later
     // popup in this window, the toolbar's included, can honor the record again.
     if (intent !== undefined) await send({ kind: 'remove-intent', windowId: intent.windowId, time: intent.time });
-    return { tabId: tab?.id, mode: startMode(intent) };
+    return { tabId: tab?.id, url: tab?.url || undefined, title: tab?.title, mode: startMode(intent) };
   } catch {
-    return { tabId: undefined, mode: startMode(undefined) };
+    return { tabId: undefined, url: undefined, title: undefined, mode: startMode(undefined) };
   }
 }
 
 /** The jump for `row` in `mode`: the mapping as stored, and the argument only for the argument row (G6). */
-function jumpRequest(row: ListedRow, mode: OpenMode, openerTabId: number | undefined): JumpRequest | undefined {
+function jumpRequest(row: MappingRow, mode: OpenMode, openerTabId: number | undefined): JumpRequest | undefined {
   const { name, url } = row.mapping;
   const argument = row.group === 'argument' ? row.argument : null;
   if (mode === 'new-tab') return { kind: 'jump', name, url, argument, mode, active: true };
@@ -278,11 +390,14 @@ function otherMode(mode: OpenMode): OpenMode {
 /** What Enter does now (L2). */
 function footer(state: State, ready: boolean): string {
   const { list, mode } = state;
-  if (state.chipFocused) return `Enter or Space switches to ${MODE_LABEL[otherMode(mode)]}`;
+  if (state.focused === 'chip') return `Enter or Space switches to ${MODE_LABEL[otherMode(mode)]}`;
   if (!ready) return 'Enter does nothing until the popup is ready';
-  if (list.rows.length === 0) return list.blank ? 'No mappings to list · Enter does nothing' : 'No mapping matches · Enter does nothing';
+  if (state.focused === 'name-page') return 'Enter opens the Name form';
+  // Typed text always lists a row, the Name row at least.
+  if (list.rows.length === 0) return 'No mappings to list · Enter does nothing';
   const selected = list.selected === null ? undefined : list.rows[list.selected];
   if (selected === undefined) return 'Enter does nothing · Down selects a row';
+  if (selected.group === 'name') return 'Enter opens the Name form';
   const where = (m: OpenMode) => (m === 'new-tab' ? 'in a new tab' : 'in this tab');
   const opens = selected.group !== 'argument' && isArgumentAlias(selected.mapping.url) ? 'Enter opens it with %s empty' : 'Enter opens it';
   return `${opens} ${where(mode)} · Shift+Enter ${where(otherMode(mode))}`;

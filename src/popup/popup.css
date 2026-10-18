@@ -108,7 +108,8 @@
    Only the inline axis clips (`clip`, unlike `hidden`, leaves the other axis visible), so marks a script
    stacks above or below the line are drawn whole. */
 .row-name,
-.row-url {
+.row-url,
+.name-row-name {
   flex: 0 1 auto;
   min-width: 0;
   overflow-x: clip;
@@ -117,7 +118,8 @@
   white-space: pre;
 }
 
-.row-name {
+.row-name,
+.name-row-name {
   font-weight: 600;
 }
 
@@ -134,6 +136,16 @@
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.name-row-line {
+  gap: 0;
+}
+
+/* The words around the Name row's typed name stay whole; only the name is cut. */
+.name-row-words {
+  flex: none;
+  white-space: pre;
 }
 
 .slot {
@@ -157,9 +169,44 @@
   overflow-wrap: anywhere;
 }
 
+/* What the page is called (G10), below the rows in the view; a long name wraps and the view scrolls. */
+.this-page {
+  margin: 6px 8px 2px;
+  overflow-wrap: anywhere;
+}
+
+/* The button that names the page, fixed above the footer. */
+.page-bar {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 12px;
+  border-top: 1px solid var(--line-separator);
+}
+
+.name-page {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.confirmation {
+  margin: 2px 2px 6px;
+  padding: 6px 8px;
+  color: var(--text-primary);
+  background: var(--bg-confirmation);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
 .footer {
   flex: none;
   padding: 8px 12px;
+  overflow-wrap: anywhere;
   font-size: 12px;
   color: var(--text-muted);
   background: var(--bg-footer);

@@ -1,0 +1,158 @@
+/* The Name form's layout, inside the popup's fixed header, scrolling view, and footer (G7): the page, the
+   fields, the Section choice, the preview, and the actions. None of the form's own text is cut off: titles,
+   hosts, headings, the preview, and messages wrap; a field's value scrolls inside the field. Every color is
+   a token of src/theme.css, and every line height a whole number of pixels. */
+.form-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-separator);
+}
+
+.form-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
+.name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 6px 6px;
+}
+
+.subject {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subject p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.subject-title {
+  font-weight: 600;
+}
+
+.subject-host,
+.subject-missing {
+  color: var(--text-muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.field-input {
+  font: inherit;
+  font-size: 14px;
+  /* The field clips its text to its line box, so the line box holds the room marks above and below need. */
+  line-height: 26px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.field-input:focus-visible,
+.sections:focus-visible {
+  outline-offset: 0;
+}
+
+.field-url {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.sections {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+}
+
+.section {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.section:hover {
+  background: var(--bg-hover);
+}
+
+.section[aria-selected="true"] {
+  background: var(--bg-selected);
+}
+
+.preview {
+  padding: 6px 8px;
+  background: var(--bg-control);
+  border-radius: 6px;
+}
+
+.preview-where {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The exact line, its spaces kept: the alignment is part of it (F12). */
+.preview-line {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.form-problem {
+  margin: 0;
+  color: var(--text-alert);
+  overflow-wrap: anywhere;
+}
+
+.form-problem:empty {
+  display: none;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.form-button {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.form-button.save {
+  font-weight: 600;
+}
+
+.form-button[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}

@@ -21,6 +21,7 @@
   --bg-selected: light-dark(#eceefd, #262a4e);
   --bg-argument: light-dark(#fbeaf2, #3a1f2d);
   --bg-alert: light-dark(#fdeceb, #3a1c1b);
+  --bg-confirmation: light-dark(#e8f5ea, #1b3022);
 
   --line-separator: light-dark(#e7e7ec, #2d2d35);
   --line-control: light-dark(#d3d3db, #3c3c46);

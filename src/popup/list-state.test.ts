@@ -16,7 +16,7 @@ const input = (document: readonly string[], typed: string, extra: Partial<Search
   ...extra,
 });
 
-const names = (list: ListState) => list.rows.map((row) => row.mapping.name);
+const names = (list: ListState) => list.rows.map((row) => (row.group === 'name' ? `Name "${row.name}"` : row.mapping.name));
 const repeat = (list: ListState, step: 1 | -1, times: number) => Array.from({ length: times }).reduce<ListState>((l) => move(l, step), list);
 
 test('a blank box lists every mapping with nothing selected; Down selects the first row, Up does nothing', () => {
@@ -35,12 +35,24 @@ test('typed text selects the first row of each new list', () => {
   expect(newList(input(['st  x:1', 'stocks  x:2', 'start  x:3'], 'st')).selected).toBe(0);
 });
 
-test('the Name row is left out, so text matching nothing lists no row and selects none', () => {
-  const list = newList(input(lines(3), 'nothing'));
-  expect([list.rows, list.blank, list.selected]).toEqual([[], false, null]);
+test('text matching no name lists the Name row, selected when it is the only row and last after address matches', () => {
+  const list = newList(input(lines(3), ' nothing  '));
+  expect([names(list), list.blank, list.selected]).toEqual([['Name "nothing"'], false, 0]);
   expect(move(list, 1)).toEqual(list);
-  // Address matches stay, and the Name row after them does not.
-  expect(names(newList(input(lines(3), 'e.example/2')))).toEqual(['m2']);
+  const addressed = newList(input(lines(3), 'e.example/2'));
+  expect([names(addressed), addressed.selected]).toEqual([['m2', 'Name "e.example/2"'], 0]);
+  expect(move(addressed, 1).selected).toBe(1);
+  expect(outsideWindow(addressed)).toEqual({ above: 0, below: 0 });
+  // Text that starts a name lists no Name row.
+  expect(names(newList(input(lines(3), 'm2')))).toEqual(['m2']);
+});
+
+test('a storage change that leaves the Name row as it was keeps the selection on it', () => {
+  const list = move(newList(input(lines(3), 'e.example/2')), 1);
+  expect(relist(list, input([...lines(3), '\\ a comment'], 'e.example/2')).selected).toBe(1);
+  // The document gains a mapping with the name: a new list, its first row selected.
+  const named = relist(list, input([...lines(3), 'e.example/2  x:1'], 'e.example/2'));
+  expect([names(named), named.selected]).toEqual([['e.example/2', 'm2'], 0]);
 });
 
 test('Up on the first row selects the last and moves the window to the end; Down on the last returns to the top', () => {

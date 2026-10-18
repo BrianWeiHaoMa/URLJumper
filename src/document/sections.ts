@@ -51,6 +51,19 @@ export function namedSections(lines: readonly ReadLine[]): (Section & { identity
   });
 }
 
+/**
+ * What the Section choice shows for `heading` (P2): each line's comment text, after its first backslash with
+ * the surrounding whitespace removed as a note's is, joined by single spaces; a line with no such text adds
+ * nothing. Empty when no line has any, and the heading is then shown by its first line's number.
+ */
+export function headingText(lines: readonly ReadLine[], heading: Section['heading']): string {
+  return lines
+    .slice(heading.first - 1, heading.last)
+    .map((line) => line.text.slice(line.text.indexOf('\\') + 1).trim())
+    .filter((text) => text !== '')
+    .join(' ');
+}
+
 /** The section whose heading has `identity`; undefined when no heading has it now. */
 export function findSection(lines: readonly ReadLine[], identity: HeadingIdentity): Section | undefined {
   const textsKey = JSON.stringify(identity.texts);
