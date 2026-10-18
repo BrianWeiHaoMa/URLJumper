@@ -1,0 +1,8 @@
+{
+  // The document module uses no Chrome API, DOM, or Node built-in: none is declared here.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024"],
+    "types": []
+  }
+}

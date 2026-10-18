@@ -1,14 +1,18 @@
 {
+  // Node-side files: the configs, scripts/, and e2e/ (whose callbacks also run in the extension's
+  // pages and worker, hence DOM and chrome). src/tsconfig.json checks src/.
   "compilerOptions": {
     "target": "ES2024",
-    "lib": ["ES2024"],
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": []
-  }
+    "types": ["node", "chrome"]
+  },
+  "exclude": ["src", "node_modules"]
 }

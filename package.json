@@ -4,11 +4,24 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p . && tsc -p src && tsc -p src/document",
+    "build": "vite build",
+    "package": "npm run typecheck && npm run build && node scripts/release-zip.ts",
+    "e2e": "npm run package && playwright test"
   },
   "devDependencies": {
+    "@crxjs/vite-plugin": "3.0.0",
+    "@playwright/test": "1.64.1",
+    "@types/chrome": "0.3.5",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "typescript": "7.0.2",
     "vite": "8.3.4",
     "vitest": "5.0.5"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

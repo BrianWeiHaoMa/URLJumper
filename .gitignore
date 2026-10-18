@@ -3,3 +3,6 @@ dist/
 node_modules/
 *.log
 .DS_Store
+release/
+test-results/
+playwright-report/

@@ -1,0 +1,10 @@
+{
+  // The extension's pages and service worker. src/document/tsconfig.json narrows its directory.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "types": ["chrome"]
+  },
+  // Replaces the root's exclude, which leaves src/ to this file.
+  "exclude": []
+}
