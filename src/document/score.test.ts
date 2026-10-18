@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { useScoreLog2 } from './score';
+import { recordUse, useScoreLog2 } from './score';
 
 const NOW = Date.UTC(2026, 9, 18, 12);
 const DAY = 24 * 60 * 60 * 1000;
@@ -31,4 +31,18 @@ test('uses decades old still compare, where the score itself rounds to 0', () =>
   expect(2 ** from2028).toBe(0);
   expect(from2028).toBeGreaterThan(from2027);
   expect(from2028).toBeCloseTo(-(at2050 - Date.UTC(2028, 0, 1)) / DAY / 7, 9);
+});
+
+test('a use is recorded last under its key, and other keys keep their times', () => {
+  const usage = { 'a\nhttps://a.example/': [1, 2], 'b\nhttps://b.example/': [3] };
+  expect(recordUse(usage, 'a\nhttps://a.example/', 4)).toEqual({ 'a\nhttps://a.example/': [1, 2, 4], 'b\nhttps://b.example/': [3] });
+  expect(recordUse(undefined, 'c\nhttps://c.example/', 5)).toEqual({ 'c\nhttps://c.example/': [5] });
+  expect(usage).toEqual({ 'a\nhttps://a.example/': [1, 2], 'b\nhttps://b.example/': [3] });
+});
+
+test('a mapping keeps its last ten uses, the oldest dropped first', () => {
+  let usage = recordUse(undefined, 'k', 1);
+  for (let time = 2; time <= 11; time++) usage = recordUse(usage, 'k', time);
+  expect(usage).toEqual({ k: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11] });
+  expect(recordUse({ k: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }, 'k', 13)).toEqual({ k: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13] });
 });

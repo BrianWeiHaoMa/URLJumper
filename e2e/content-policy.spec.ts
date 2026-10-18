@@ -1,4 +1,4 @@
-import { expect, test, watchPolicy } from './extension.ts';
+import { expect, test, watchPolicy, type LoadedExtension } from './extension.ts';
 
 test('an extension page renders under the CSP with no violation and no request outside the package', async ({ extension, site }) => {
   const page = await extension.context.newPage();
@@ -24,4 +24,21 @@ test('an extension page renders under the CSP with no violation and no request o
   }, outside);
   await expect.poll(() => policy.violations()).toEqual([`img-src ${outside}`]);
   expect(policy.offPackage).toEqual([outside]);
+});
+
+// The CSP does not govern an extension page's own navigation, so this plant reaches the network.
+async function plantNavigation(extension: LoadedExtension, url: string) {
+  const page = await extension.context.newPage();
+  await page.goto(extension.url('popup.html'));
+  await Promise.all([page.waitForURL(url), page.evaluate((url) => location.assign(url), url)]);
+}
+
+test("a request from the extension's origin that reaches the network is recorded, wherever it was made", async ({ extension, site }) => {
+  const planted = site.pageUrl('Planted');
+  extension.expectExtensionRequest(planted);
+  await plantNavigation(extension, planted);
+});
+
+test.fail('a check fails when a request from the extension reached the network and the check did not declare it', async ({ extension, site }) => {
+  await plantNavigation(extension, site.pageUrl('Planted, undeclared'));
 });

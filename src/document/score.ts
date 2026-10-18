@@ -1,10 +1,17 @@
 // The use score Smart order ranks mappings by (G27): each kept use counts 1, halving every seven days.
 
-/** Stored usage: for each mapping key, the times of its last uses in milliseconds since the Unix epoch. */
+/** Stored usage: for each mapping key, the times of its last uses in milliseconds since the Unix epoch, newest last. */
 export type Usage = Readonly<Record<string, readonly number[]>>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HALF_LIFE_DAYS = 7;
+/** How many use times each mapping keeps (P3). */
+const KEPT_USES = 10;
+
+/** `usage` with a use of the mapping keyed `key` at `time`: its times gain `time` last and keep the newest ten. */
+export function recordUse(usage: Usage | undefined, key: string, time: number): Usage {
+  return { ...usage, [key]: [...(usage?.[key] ?? []), time].slice(-KEPT_USES) };
+}
 
 /**
  * The base-2 logarithm of the use score, Σ over the times of 2^(−age in days ÷ 7), each age measured back
