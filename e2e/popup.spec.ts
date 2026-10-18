@@ -1,6 +1,8 @@
 import { expect, test } from './extension.ts';
 
 test('the toolbar button opens the real popup, rendered by React, which sees the page it was opened on', async ({ extension, site }) => {
+  // A mapping, so the popup shows search rather than the first run.
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
   // A popup.html open in an ordinary tab is not the popup: the helper must not return it.
   const popupInTab = await extension.context.newPage();
   await popupInTab.goto(extension.url('popup.html'));

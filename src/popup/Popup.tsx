@@ -1,19 +1,23 @@
-// The popup (In use, "Jump", "Name this page", "Name from a search"): search, with the search box and the
-// mode chip, the confirmation of the last change with its Undo, the list seven rows at a time with a cue for
-// the rest, what the page is called (G10), and the *Name this page* button; or the Name form. A footer says
-// what Enter does. Everything shown derives from storage, read when the popup opens and again after every
-// change; a mapping opens only through the worker's jump, sent from the popup's Enter handler or a row's
-// click handler (R4), never from anything else.
+// The popup (In use, "Jump", "Name this page", "Name from a search", "Name a link", "First run"): search,
+// with the search box and the mode chip, the confirmation of the last change with its Undo, the list seven
+// rows at a time with a cue for the rest, what the page is called (G10), and the *Name this page* button; the
+// Name form, also opened for a command or a menu item that asked for it; or, while the document is empty,
+// the first-run state in search's place (G30). A footer says what Enter does. Everything shown derives from
+// storage, read when the popup opens and again after every change; a mapping opens only through the worker's
+// jump, sent from the popup's Enter handler or a row's click handler (R4), never from anything else.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { flushSync } from 'react-dom';
 import { isArgumentAlias } from '../document/argument';
+import { isEmptyDocument } from '../document/example';
 import { readDocument } from '../document/grammar';
 import { mappingOfPage } from '../document/page-mapping';
 import type { SearchOrder, SearchRow } from '../document/search';
 import type { Usage } from '../document/score';
-import { intentFor, startMode, type OpenMode } from '../open-intent';
+import { intentFor, startMode, type OpenIntent, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme, type Theme } from '../preferences';
 import { send, type JumpReply, type JumpRequest } from '../requests';
 import { Confirmation, offersUndo, undoFooter, useConfirmationLifetime, useUndo, type Confirmed, type Outcome } from './Confirmation';
+import { FirstRun } from './FirstRun';
 import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
 import { NameForm, type NameSubject, type Saved } from './NameForm';
 import { Row, rowId } from './Row';
@@ -32,6 +36,8 @@ interface Opener {
   url: string | undefined;
   title: string | undefined;
   mode: OpenMode;
+  /** What the honored record asked the Name form to name, until the form has opened for it. */
+  asks: NameSubject | undefined;
 }
 
 /** Search, or the Name form opened with a name to start with; `opened` counts the openings, so each starts afresh. */
@@ -48,7 +54,7 @@ interface State {
   mode: OpenMode;
   /** The control in search whose focus changes what Enter does, if one has it. */
   focused: 'chip' | 'name-page' | 'undo' | null;
-  /** Why the last jump did not open; kept until the user types or jumps again. */
+  /** Why the last jump did not open, or the example mappings were not loaded; kept until the user types or tries again. */
   message: string | null;
   /** The last change's confirmation, a save's or an Undo's, until its lifetime ends (G15). */
   confirmed: Confirmed | null;
@@ -60,7 +66,7 @@ type MappingRow = Exclude<SearchRow, { group: 'name' }>;
 
 type Action =
   | { kind: 'stored'; stored: Stored; now: number }
-  | { kind: 'opener'; opener: Opener }
+  | { kind: 'opener'; opener: Opener; now: number }
   | { kind: 'typed'; typed: string; now: number }
   | { kind: 'move'; step: 1 | -1 }
   | { kind: 'scroll'; rows: number }
@@ -84,28 +90,37 @@ export function Popup() {
   const wheel = useRef(0);
   const layout = useFitToViewport();
   const searchBox = useRef<HTMLInputElement>(null);
+  const namePage = useRef<HTMLButtonElement>(null);
   const confirmation = useRef<HTMLDivElement>(null);
   const endConfirmation = useCallback((id: number) => dispatch({ kind: 'confirmation-ended', id }), []);
   useConfirmationLifetime(state.confirmed, endConfirmation, confirmation);
   const { undo, undoing } = useUndo(state.confirmed, (outcome) => dispatch({ kind: 'undone', outcome }));
 
-  // Undo going while it has the focus, with its confirmation or for a refusal, gives the focus back to the
-  // search box instead of to nothing (G32).
+  const ready = state.stored !== undefined && state.opener !== undefined;
+  // Shown only once the popup knows whether it opened for the Name form, so keys typed until then go to the search box.
+  const firstRun = ready && state.view.kind === 'search' && isEmptyDocument(state.stored!.document);
+
+  // Focus taken away with what held it gives it to the view's first control instead of to nothing (G32): Undo
+  // going with its confirmation or for a refusal, or the view switching between search and the first run. An
+  // Undo still offered there takes it back.
   useLayoutEffect(() => {
-    if (document.activeElement === document.body) searchBox.current?.focus();
-  }, [state.confirmed]);
+    if (document.activeElement !== document.body) return;
+    if (state.focused === 'undo') confirmation.current?.querySelector('button')?.focus();
+    else (firstRun ? namePage : searchBox).current?.focus();
+  }, [state.confirmed, firstRun]);
 
   useEffect(() => {
     // Every read asks for the keys again, and Chrome answers reads in the order they were made, so the last
-    // answer shows the latest change, whenever its event arrived.
+    // answer shows the latest change, whenever its event arrived. Drawn before the next key arrives (flushSync),
+    // so a Name form these open has the keyboard from then on.
     const read = () =>
-      chrome.storage.local.get(STORED_KEYS).then((items) => dispatch({ kind: 'stored', stored: readStored(items), now: Date.now() }));
+      chrome.storage.local.get(STORED_KEYS).then((items) => flushSync(() => dispatch({ kind: 'stored', stored: readStored(items), now: Date.now() })));
     const changed = (_changes: unknown, area: string) => {
       if (area === 'local') void read();
     };
     chrome.storage.onChanged.addListener(changed);
     void read();
-    void findOpener().then((opener) => dispatch({ kind: 'opener', opener }));
+    void findOpener().then((opener) => flushSync(() => dispatch({ kind: 'opener', opener, now: Date.now() })));
     return () => chrome.storage.onChanged.removeListener(changed);
   }, []);
 
@@ -119,7 +134,6 @@ export function Popup() {
   }, [state.list.selected, state.list.top, state.message, state.confirmed, state.view]);
 
   const other = otherMode(state.mode);
-  const ready = state.stored !== undefined && state.opener !== undefined;
 
   const jump = async (row: MappingRow, mode: OpenMode) => {
     if (!ready) return;
@@ -143,7 +157,8 @@ export function Popup() {
 
   // Search's keys, wherever the focus is (the search box, the view when Chrome lets it take focus to scroll,
   // or nothing), so the footer is true for all of them; on a button, Enter and Space activate it instead.
-  // The Name form has its own Enter; Escape closes the popup from every view.
+  // In the first run, Enter starts *Name this page* (G30). The Name form has its own Enter; Escape closes the
+  // popup from every view.
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
   onKey.current = (event: KeyboardEvent) => {
     // A key that ends an input method's composition belongs to the composition.
@@ -151,7 +166,11 @@ export function Popup() {
     if (event.key === 'Escape') window.close();
     else if (state.view.kind !== 'search') return;
     else if (event.target instanceof Element && event.target.closest('button')) return;
-    else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    else if (firstRun) {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      openForm('');
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       dispatch({ kind: 'move', step: event.key === 'ArrowDown' ? 1 : -1 });
     } else if (event.key === 'Enter') {
@@ -197,6 +216,31 @@ export function Popup() {
     );
   }
 
+  const shownConfirmation = state.confirmed !== null && (
+    <Confirmation
+      confirmed={state.confirmed}
+      own={confirmation}
+      undoing={undoing}
+      onUndo={() => void undo()}
+      onUndoFocus={(focused) => dispatch({ kind: 'focused', focused: focused ? 'undo' : null })}
+      onTyping={() => searchBox.current?.focus()}
+    />
+  );
+
+  if (firstRun) {
+    return (
+      <FirstRun
+        ready={ready}
+        confirmation={shownConfirmation}
+        undoFooter={state.focused === 'undo' && state.confirmed !== null ? undoFooter(state.confirmed.outcome, undoing) : undefined}
+        message={state.message}
+        namePage={namePage}
+        onNamePage={() => openForm('')}
+        onMessage={(message) => dispatch({ kind: 'message', message })}
+      />
+    );
+  }
+
   const { list } = state;
   const shown = list.rows.slice(list.top, list.top + WINDOW_ROWS);
   const { above, below } = outsideWindow(list);
@@ -237,16 +281,7 @@ export function Popup() {
       </header>
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
-          {state.confirmed !== null && (
-            <Confirmation
-              confirmed={state.confirmed}
-              own={confirmation}
-              undoing={undoing}
-              onUndo={() => void undo()}
-              onUndoFocus={(focused) => dispatch({ kind: 'focused', focused: focused ? 'undo' : null })}
-              onTyping={() => searchBox.current?.focus()}
-            />
-          )}
+          {shownConfirmation}
           {state.message !== null && (
             <p className="message" role="alert">
               {state.message}
@@ -315,10 +350,10 @@ function reduceAction(state: State, action: Action): State {
   switch (action.kind) {
     case 'stored': {
       const input = { ...searchInputs(action.stored), typed: state.typed, now: action.now };
-      return { ...state, stored: action.stored, list: state.stored === undefined ? newList(input) : relist(state.list, input) };
+      return openAsked({ ...state, stored: action.stored, list: state.stored === undefined ? newList(input) : relist(state.list, input) }, action.now);
     }
     case 'opener':
-      return { ...state, opener: action.opener, mode: action.opener.mode };
+      return openAsked({ ...state, opener: action.opener, mode: action.opener.mode }, action.now);
     case 'typed':
       // An edit of the search box is the user's next action (G15).
       return { ...state, typed: action.typed, list: listFor(state, action.typed, action.now), message: null, confirmed: null };
@@ -337,10 +372,8 @@ function reduceAction(state: State, action: Action): State {
       return { ...state, focused: action.focused };
     case 'message':
       return { ...state, message: action.message };
-    case 'name': {
-      const subject: NameSubject = { kind: 'page', url: state.opener?.url, title: state.opener?.title };
-      return { ...state, view: { kind: 'name', name: action.name, subject, opened: state.count + 1 }, focused: null, confirmed: null, count: state.count + 1 };
-    }
+    case 'name':
+      return withForm(state, action.name, { kind: 'page', url: state.opener?.url, title: state.opener?.title });
     case 'cancel':
       return { ...state, view: { kind: 'search' } };
     case 'saved': {
@@ -364,6 +397,21 @@ function reduceAction(state: State, action: Action): State {
   }
 }
 
+function withForm(state: State, name: string, subject: NameSubject): State {
+  return { ...state, view: { kind: 'name', name, subject, opened: state.count + 1 }, focused: null, confirmed: null, count: state.count + 1 };
+}
+
+/**
+ * The Name form a command or a menu item asked for (F5, G29), once the document and the page are known. Keys
+ * typed before it showed went to the search box; they are the name typed so far, and move to its name field.
+ */
+function openAsked(state: State, now: number): State {
+  const { opener, stored } = state;
+  if (opener?.asks === undefined || stored === undefined) return state;
+  const opened = withForm({ ...state, opener: { ...opener, asks: undefined }, typed: '' }, state.typed, opener.asks);
+  return { ...opened, list: listFor(opened, '', now) };
+}
+
 function listFor(state: State, typed: string, now: number): ListState {
   return state.stored === undefined ? NO_ROWS : newList({ ...searchInputs(state.stored), typed, now });
 }
@@ -383,8 +431,9 @@ function readStored(items: Record<string, unknown>): Stored {
 }
 
 /**
- * The tab the popup was opened on, and its start mode: from `openIntent` when it names this window and is
- * fresh, which the popup then removes; a record for another window stays for that window (G5).
+ * The tab the popup was opened on, its start mode, and the Name form its opening asked for: from `openIntent`
+ * when it names this window and is fresh, which the popup then removes; a record for another window stays
+ * for that window (G5).
  */
 async function findOpener(): Promise<Opener> {
   try {
@@ -394,10 +443,18 @@ async function findOpener(): Promise<Opener> {
     // for another window, would go too. Awaited, so the popup shows the mode it honored only once no later
     // popup in this window, the toolbar's included, can honor the record again.
     if (intent !== undefined) await send({ kind: 'remove-intent', windowId: intent.windowId, time: intent.time });
-    return { tabId: tab?.id, url: tab?.url || undefined, title: tab?.title, mode: startMode(intent) };
+    const url = tab?.url || undefined;
+    return { tabId: tab?.id, url, title: tab?.title, mode: startMode(intent), asks: askedSubject(intent, url, tab?.title) };
   } catch {
-    return { tabId: undefined, url: undefined, title: undefined, mode: startMode(undefined) };
+    return { tabId: undefined, url: undefined, title: undefined, mode: startMode(undefined), asks: undefined };
   }
+}
+
+/** What an honored record asks the Name form to name: the page (F5, G29), or a link on it (G11); nothing for search. */
+function askedSubject(intent: OpenIntent | undefined, url: string | undefined, title: string | undefined): NameSubject | undefined {
+  if (intent?.kind === 'name-page') return { kind: 'page', url, title };
+  if (intent?.kind === 'name-link') return { kind: 'link', url: intent.linkUrl, pageUrl: intent.pageUrl, pageTitle: intent.pageTitle, tabUrl: url };
+  return undefined;
 }
 
 /** The jump for `row` in `mode`: the mapping as stored, and the argument only for the argument row (G6). */

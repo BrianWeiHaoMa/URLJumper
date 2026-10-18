@@ -1,0 +1,70 @@
+/* The first-run state's layout, inside the popup's fixed header, scrolling view, and footer (G7): the two
+   actions, *Name this page* drawn as the one Enter starts, and the shortcuts with the way to change them.
+   Every color is a token of src/theme.css, and every line height a whole number of pixels. */
+.first-run-intro {
+  margin: 4px 6px 10px;
+  overflow-wrap: anywhere;
+}
+
+.first-run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 6px 14px;
+}
+
+.first-run-action {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 14px;
+  margin: 0 6px 6px;
+  cursor: pointer;
+}
+
+.first-run-actions .first-run-action {
+  margin: 0;
+}
+
+/* The action Enter starts (G30). */
+.first-run-action.name-first {
+  font-weight: 600;
+  background: var(--bg-selected);
+}
+
+.first-run-action[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.first-run-heading {
+  margin: 0 6px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.shortcuts {
+  margin: 0 6px 8px;
+}
+
+.shortcut {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.shortcut dt,
+.shortcut dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.shortcut dd {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}

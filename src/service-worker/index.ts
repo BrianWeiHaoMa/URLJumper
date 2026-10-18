@@ -4,11 +4,16 @@
 import { isRequest } from '../requests';
 import { runCommand } from './commands';
 import { recordInstall } from './install';
+import { createMenuItems, runMenuItem } from './menus';
 import { reopenPopupOnFocus } from './open-popup';
 import { perform } from './perform';
 
 chrome.runtime.onInstalled.addListener(recordInstall);
+// Added after recordInstall, which Chrome calls first, so the install's storage write stays its first act (G24, R5).
+chrome.runtime.onInstalled.addListener(createMenuItems);
+chrome.runtime.onStartup.addListener(createMenuItems);
 chrome.commands.onCommand.addListener(runCommand);
+chrome.contextMenus.onClicked.addListener(runMenuItem);
 chrome.windows.onFocusChanged.addListener(reopenPopupOnFocus);
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!isRequest(message)) return false;

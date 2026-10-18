@@ -1,23 +1,11 @@
 import type { Page } from '@playwright/test';
-import { expect, test, type LoadedExtension } from './extension.ts';
+import { expect, slowWorkerReads, test } from './extension.ts';
 
 // The window a popup belongs to, as the popup itself sees it.
 const windowOf = (popup: Page) => popup.evaluate(async () => (await chrome.windows.getCurrent()).id);
 
 // A listener that would act runs within milliseconds of its dispatch; this waits long past it.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 1_000));
-
-// Chrome's storage answers the worker's reads of the intent `ms` late, as it may under load.
-const slowIntentReads = (extension: LoadedExtension, ms: number) =>
-  extension.worker.evaluate((ms) => {
-    const local = chrome.storage.local;
-    const get = local.get.bind(local) as (keys: unknown) => Promise<Record<string, unknown>>;
-    (local as unknown as { get: unknown }).get = async (keys: unknown) => {
-      const items = await get(keys);
-      if (keys === 'openIntent') await new Promise((resolve) => setTimeout(resolve, ms));
-      return items;
-    };
-  }, ms);
 
 for (const [command, kind] of [
   ['open-same-tab', 'this-tab'],
@@ -50,14 +38,17 @@ test('a command Chrome passes without a tab opens the popup for the focused wind
   expect((await changes())[0]).toEqual({ openIntent: { newValue: { kind: 'new-tab', windowId, time: expect.any(Number) } } });
 });
 
-test('name-this-page records nothing and opens no popup', async ({ extension, site }) => {
+test('name-this-page records a name-page intent for the window in front, then opens the popup there on the Name form', async ({ extension, site }) => {
   const page = await extension.context.newPage();
   await page.goto(site.pageUrl('To be named'));
   const changes = await extension.watchStorage();
-  await extension.dispatchEvent('commands.onCommand', 'name-this-page', await extension.frontTab(page));
-  await settle();
-  expect(await changes()).toEqual([]);
-  expect(await extension.openPopups()).toBe(0);
+  const { windowId } = await extension.frontTab(page);
+  const popup = await extension.popupByCommand('name-this-page', page);
+  expect(await windowOf(popup)).toBe(windowId);
+  await expect(popup.getByRole('textbox', { name: 'Name' })).toBeFocused();
+  const [written, removed] = await changes();
+  expect(written).toEqual({ openIntent: { newValue: { kind: 'name-page', windowId, time: expect.any(Number) } } });
+  expect(removed).toEqual({ openIntent: { oldValue: written!.openIntent!.newValue } });
 });
 
 test('a command in a window without a toolbar removes its intent and opens nothing', async ({ extension, site }) => {
@@ -119,6 +110,8 @@ test('focus opens no popup for an intent older than ten seconds, or for another 
 });
 
 test("a refused command's cleanup never removes the intent a later command wrote", async ({ extension, site }) => {
+  // A mapping, so the popup shows search and its chip rather than the first run.
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
   // The ordinary page first: a page opened later would open in the toolbar-less window.
   const page = await extension.context.newPage();
   await page.goto(site.pageUrl('Normal window'));
@@ -190,7 +183,7 @@ test('a record a command writes while a popup is having its own removed stays', 
 
   const honored = { kind: 'this-tab', windowId: tab.windowId! + 1, time: Date.now() };
   await extension.seedStorage({ openIntent: honored });
-  await slowIntentReads(extension, 300);
+  await slowWorkerReads(extension.worker, 'openIntent', 300);
   const removal = extension.sendRequest({ kind: 'remove-intent', windowId: honored.windowId, time: honored.time });
   await new Promise((resolve) => setTimeout(resolve, 100));
   // Refused, since the window's popup is open: its record stays for that window.
@@ -201,9 +194,10 @@ test('a record a command writes while a popup is having its own removed stays', 
 });
 
 test('a popup shows the mode it honored only once its record is gone, so the toolbar opens the next one in New tab', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
   const page = await extension.context.newPage();
   await page.goto(site.pageUrl('Slow storage'));
-  await slowIntentReads(extension, 300);
+  await slowWorkerReads(extension.worker, 'openIntent', 300);
   const first = await extension.popupByCommand('open-same-tab', page);
   await expect(first.locator('.chip')).toHaveText('This tab');
   expect('openIntent' in (await extension.readStorage())).toBe(false);

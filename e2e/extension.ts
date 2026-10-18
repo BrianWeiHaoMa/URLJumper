@@ -9,6 +9,7 @@ import type { Request } from '../src/requests.ts';
 
 export { expect } from '@playwright/test';
 export { checkAccessibility, checkAccessibilityInBothSchemes } from './accessibility.ts';
+export { assignedShortcuts, assignShortcut, createMenuItemAgain, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
 
 export const distDir = path.resolve(import.meta.dirname, '..', 'dist');
 
@@ -344,6 +345,35 @@ export async function watchPolicy(page: Page, extension: LoadedExtension) {
       return seen;
     },
   };
+}
+
+/**
+ * F11's example document, read from the product specification: the indented block after F11, its two-space
+ * indent removed, with LF endings and a final line break.
+ */
+export function exampleFromSpecification(): string {
+  const specification = fs.readFileSync(path.resolve(import.meta.dirname, '..', 'PRODUCT_SPECIFICATION.md'), 'utf8').split('\n');
+  const f11 = specification.findIndex((line) => line.startsWith('- **F11.**'));
+  const open = specification.indexOf('  ```', f11);
+  const close = specification.indexOf('  ```', open + 1);
+  if (f11 === -1 || open === -1 || close === -1) throw new Error("F11's block was not found in the product specification");
+  return specification.slice(open + 1, close).map((line) => line.slice(2)).join('\n') + '\n';
+}
+
+/** Makes Chrome's storage answer the worker's reads that ask for `key` `ms` late, as it may under load. */
+export async function slowWorkerReads(worker: Worker, key: string, ms: number): Promise<void> {
+  await worker.evaluate(
+    ([key, ms]) => {
+      const local = chrome.storage.local;
+      const get = local.get.bind(local) as (keys: unknown) => Promise<Record<string, unknown>>;
+      (local as unknown as { get: unknown }).get = async (keys: unknown) => {
+        const items = await get(keys);
+        if ((Array.isArray(keys) ? keys : [keys]).includes(key)) await new Promise((resolve) => setTimeout(resolve, ms));
+        return items;
+      };
+    },
+    [key, ms] as const,
+  );
 }
 
 /** Opens a page of `site` titled `title` and clicks the toolbar button on it: that page, and the real popup opened on it. */

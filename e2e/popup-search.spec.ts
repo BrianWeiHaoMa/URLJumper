@@ -248,8 +248,9 @@ test('an argument alias without an argument shows its %s marked and the hint; th
   await checkAccessibilityInBothSchemes(popup);
 });
 
-test('an empty or blank document with nothing typed lists no row: no cue, and Enter does nothing', async ({ extension, site }) => {
-  for (const stored of [{}, { mappings: ' \n\t\n' }]) {
+// An empty document shows the first run instead (G30).
+test('a document without a mapping line, with nothing typed, lists no row: no cue, and Enter does nothing', async ({ extension, site }) => {
+  for (const stored of [{ mappings: '\\ notes\n' }, { mappings: '\n\\ notes\nnot a mapping\n' }]) {
     await extension.seedStorage(stored);
     const { popup } = await popupOnNewPage(extension, site);
     await expect(footer(popup)).toHaveText('No mappings to list · Enter does nothing');
@@ -268,7 +269,7 @@ test('an empty or blank document with nothing typed lists no row: no cue, and En
 test('text that matches no mapping lists only the Name row, selected: no cue, and Enter opens nothing but the Name form', async ({ extension, site }) => {
   for (const [stored, typed] of [
     [{ mappings: 'mail  https://mail.example.com/\n' }, 'zzz'],
-    [{ mappings: ' \n\t\n' }, 'mail'],
+    [{ mappings: '\\ notes\nnot a mapping\n' }, 'mail'],
   ] as const) {
     await extension.seedStorage(stored);
     const { popup } = await popupOnNewPage(extension, site);

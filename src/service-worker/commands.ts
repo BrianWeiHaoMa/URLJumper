@@ -1,15 +1,17 @@
-// The keyboard commands (F5): `open-new-tab` and `open-same-tab` open the popup, in New tab and This tab
-// mode, for the window the command was pressed in. `name-this-page` opens the Name form, which the popup
-// does not have yet, so it opens nothing rather than the popup in a mode nobody asked for.
+// The keyboard commands (F5): `open-new-tab` and `open-same-tab` open the popup in New tab and This tab
+// mode, and `name-this-page` opens it on the Name form for the page, in the window the command was pressed in.
 import type { OpenIntentKind } from '../open-intent';
-import { openPopupFor } from './open-popup';
+import { openPopupFor, windowOf } from './open-popup';
 
-const INTENTS: Readonly<Record<string, OpenIntentKind>> = { 'open-new-tab': 'new-tab', 'open-same-tab': 'this-tab' };
+const INTENTS: Readonly<Record<string, Exclude<OpenIntentKind, 'name-link'>>> = {
+  'open-new-tab': 'new-tab',
+  'open-same-tab': 'this-tab',
+  'name-this-page': 'name-page',
+};
 
 export async function runCommand(command: string, tab?: chrome.tabs.Tab): Promise<void> {
   const kind = INTENTS[command];
   if (kind === undefined) return;
-  // Chrome may pass no tab; the command was then pressed in the focused window.
-  const windowId = tab?.windowId ?? (await chrome.windows.getLastFocused().catch(() => undefined))?.id;
-  if (windowId !== undefined) await openPopupFor(kind, windowId);
+  const windowId = await windowOf(tab);
+  if (windowId !== undefined) await openPopupFor({ kind }, windowId);
 }

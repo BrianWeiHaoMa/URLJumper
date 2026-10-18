@@ -1,17 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { expect, test } from './extension.ts';
-
-// F11's text, read from the product specification: the indented block after F11, its two-space indent removed,
-// with LF endings and a final line break.
-function exampleFromSpecification(): string {
-  const specification = fs.readFileSync(path.resolve(import.meta.dirname, '..', 'PRODUCT_SPECIFICATION.md'), 'utf8').split('\n');
-  const f11 = specification.findIndex((line) => line.startsWith('- **F11.**'));
-  const open = specification.indexOf('  ```', f11);
-  const close = specification.indexOf('  ```', open + 1);
-  if (f11 === -1 || open === -1 || close === -1) throw new Error("F11's block was not found in the product specification");
-  return specification.slice(open + 1, close).map((line) => line.slice(2)).join('\n') + '\n';
-}
+import { exampleFromSpecification, expect, test } from './extension.ts';
 
 const EXAMPLE_KEYS = [
   'mail\nhttps://mail.google.com/',

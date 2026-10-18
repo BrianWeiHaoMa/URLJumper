@@ -56,6 +56,22 @@
   cursor: pointer;
 }
 
+/* The header of a view without the search bar, the Name form or the first-run state: its title alone. */
+.form-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-separator);
+}
+
+.form-title {
+  margin: 0;
+  font-size: 16px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
 .view {
   flex: 1 1 auto;
   min-height: 0;

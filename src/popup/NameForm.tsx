@@ -1,8 +1,9 @@
-// The Name form (In use, "Name this page"; G8, G9, G10, N6, E5): what the page is, the URL prefilled and
-// editable, the name, the Section choice when the document has headings, and a preview of the exact line
-// and where it goes. Every check and the preview come from the document module against the document as
-// last read, so they follow every storage change and agree with what the worker writes. Save sends one
-// insert; the confirmation is built from the worker's reply alone.
+// The Name form (In use, "Name this page", "Name a link"; G8, G9, G10, G11, N6, E5): what the page is, or
+// for a link the page it is on, the URL prefilled and editable, the name, the Section choice when the
+// document has headings, and a preview of the exact line and where it goes. Every check and the preview
+// come from the document module against the document as last read, so they follow every storage change and
+// agree with what the worker writes. Save sends one insert; the confirmation is built from the worker's
+// reply alone.
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
@@ -13,12 +14,14 @@ import { useFitToViewport } from './fit-to-viewport';
 import { SectionChoice, type SectionOption } from './SectionChoice';
 import './name-form.css';
 
-/** What the form names: the page the popup was opened on, with its address and title when Chrome granted them (E5). */
-export interface NameSubject {
-  kind: 'page';
-  url: string | undefined;
-  title: string | undefined;
-}
+/**
+ * What the form names: the page the popup was opened on, with its address and title when Chrome granted them
+ * (E5); or a link, with the address and title of the page it is on as Chrome gave them, and the address of
+ * the tab the popup was opened on, which *This page is* follows (G10).
+ */
+export type NameSubject =
+  | { kind: 'page'; url: string | undefined; title: string | undefined }
+  | { kind: 'link'; url: string; pageUrl: string | undefined; pageTitle: string | undefined; tabUrl: string | undefined };
 
 /** A stored line, as the worker's reply gives it: what the confirmation names and what an Undo needs. */
 export interface Saved {
@@ -31,7 +34,7 @@ export interface Saved {
 interface NameFormProps {
   /** The stored document as last read. */
   document: string;
-  /** The name to start with: empty, or the Name row's typed text. */
+  /** The name to start with: empty, the Name row's typed text, or what was typed before a form a command or menu item asked for showed. */
   name: string;
   subject: NameSubject;
   onSaved(saved: Saved): void;
@@ -55,7 +58,8 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
   const sections = useMemo(() => namedSections(read.lines), [read]);
   const result = useMemo(() => insertMapping(stored, { name, url, note: '' }, heading), [stored, name, url, heading]);
   const point = insertionPoint(read.lines, heading);
-  const thisPage = subject.url === undefined ? undefined : mappingOfPage(read.mappings, subject.url);
+  const tabUrl = subject.kind === 'link' ? subject.tabUrl : subject.url;
+  const thisPage = tabUrl === undefined ? undefined : mappingOfPage(read.mappings, tabUrl);
   const label = (section: Section) => headingText(read.lines, section.heading) || `Heading at line ${section.heading.first}`;
   const chosen = heading === null ? undefined : findSection(read.lines, heading);
   const options: SectionOption[] = [{ key: 'end', label: 'End of document' }, ...sections.map((section) => ({ key: `${section.heading.first}`, label: label(section) }))];
@@ -112,7 +116,7 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
   return (
     <main className="popup" ref={layout.root}>
       <header className="form-header">
-        <h1 className="form-title">Name this page</h1>
+        <h1 className="form-title">{subject.kind === 'link' ? 'Name this link' : 'Name this page'}</h1>
       </header>
       <div className="view" ref={layout.view} role="region" aria-label="Name form">
         <div className="view-content" ref={layout.content}>
@@ -125,7 +129,9 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
             }}
           >
             <div className="subject">
-              {subject.url === undefined ? (
+              {subject.kind === 'link' ? (
+                <p className="subject-page">{linkPage(subject)}</p>
+              ) : subject.url === undefined ? (
                 <p className="subject-missing">Chrome gave no address for this tab: type or paste the URL.</p>
               ) : (
                 <>
@@ -206,6 +212,13 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
 /** The name of the line the worker stored, read back from its exact text. */
 function storedName(text: string): string {
   return readDocument(text).mappings[0]?.name ?? '';
+}
+
+/** The page a link is on (G11): its title, else its address. */
+function linkPage(subject: Extract<NameSubject, { kind: 'link' }>): string {
+  if (subject.pageTitle) return `A link on the page "${subject.pageTitle}"`;
+  if (subject.pageUrl) return `A link on ${subject.pageUrl}`;
+  return 'Chrome did not say which page this link is on.';
 }
 
 /** The tab's host, shown with its title; none for an address without one. */

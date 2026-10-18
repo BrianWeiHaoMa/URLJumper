@@ -2,21 +2,6 @@
    fields, the Section choice, the preview, and the actions. None of the form's own text is cut off: titles,
    hosts, headings, the preview, and messages wrap; a field's value scrolls inside the field. Every color is
    a token of src/theme.css, and every line height a whole number of pixels. */
-.form-header {
-  flex: none;
-  display: flex;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line-separator);
-}
-
-.form-title {
-  margin: 0;
-  font-size: 16px;
-  line-height: 32px;
-  font-weight: 600;
-}
-
 .name-form {
   display: flex;
   flex-direction: column;

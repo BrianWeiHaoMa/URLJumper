@@ -1,22 +1,29 @@
-// Opening the popup for a command (G5): the intent record first, so the popup knows why it opened, then
-// Chrome's openPopup. Refused for an inactive window, the record stays and the popup opens when that window
-// next takes focus while the record is fresh; refused for any other reason, the record goes and nothing opens.
-import { isFresh, isOpenIntent, sameIntent, type OpenIntent, type OpenIntentKind } from '../open-intent';
+// Opening the popup for a command or a menu item (G5, G29): the intent record first, so the popup knows why
+// it opened, then Chrome's openPopup. Refused for an inactive window, the record stays and the popup opens
+// when that window next takes focus while the record is fresh; refused for any other reason, the record goes
+// and nothing opens.
+import { isFresh, isOpenIntent, sameIntent, type IntentSubject, type OpenIntent } from '../open-intent';
 import { chromeMessage, type RemoveIntentReply, type RemoveIntentRequest } from '../requests';
 import { enqueue } from './queue';
 
 // Chrome's kOpenPopupInactiveWindow, the same from Chrome 127 on.
 const INACTIVE_WINDOW = 'Cannot show popup for an inactive window.';
 
-export async function openPopupFor(kind: OpenIntentKind, windowId: number): Promise<void> {
-  const intent: OpenIntent = { kind, windowId, time: Date.now() };
+export async function openPopupFor(subject: IntentSubject, windowId: number): Promise<void> {
+  const intent: OpenIntent = { ...subject, windowId, time: Date.now() };
   try {
     await enqueue(() => chrome.storage.local.set({ openIntent: intent }));
   } catch {
-    // Without its record the popup would start in New tab mode, the wrong one for This tab: open nothing.
+    // Without its record the popup would open in search in New tab mode, wrong for This tab and for the Name
+    // form: open nothing.
     return;
   }
   await showPopup(intent);
+}
+
+/** The window a command was pressed or a menu item clicked in: its tab's, or the focused one when Chrome passes no tab. */
+export async function windowOf(tab: chrome.tabs.Tab | undefined): Promise<number | undefined> {
+  return tab?.windowId ?? (await chrome.windows.getLastFocused().catch(() => undefined))?.id;
 }
 
 /** Opens the popup a fresh record still waits on, when its window takes focus. The record is read from

@@ -12,7 +12,34 @@ test('a record is fresh for ten seconds after it was written, and never before',
 test('only a record with a known kind, a window id, and a time is an intent', () => {
   expect(isOpenIntent({ kind: 'new-tab', windowId: 3, time: 5 })).toBe(true);
   expect(isOpenIntent({ kind: 'this-tab', windowId: 3, time: 5 })).toBe(true);
-  for (const value of [undefined, null, 'new-tab', { kind: 'other', windowId: 3, time: 5 }, { kind: 'new-tab', time: 5 }, { kind: 'new-tab', windowId: 3 }, { kind: 'new-tab', windowId: 3.5, time: 5 }]) {
+  expect(isOpenIntent({ kind: 'name-page', windowId: 3, time: 5 })).toBe(true);
+  for (const value of [
+    undefined,
+    null,
+    'new-tab',
+    { kind: 'other', windowId: 3, time: 5 },
+    { kind: 'new-tab', time: 5 },
+    { kind: 'new-tab', windowId: 3 },
+    { kind: 'new-tab', windowId: 3.5, time: 5 },
+    { kind: 'name-page', windowId: '3', time: 5 },
+  ]) {
+    expect(isOpenIntent(value)).toBe(false);
+  }
+});
+
+test("a name-link record is an intent only with its link's address, and the page's address and title, when given, as text", () => {
+  const link = { kind: 'name-link', windowId: 3, time: 5, linkUrl: 'https://l.example/a' };
+  expect(isOpenIntent(link)).toBe(true);
+  expect(isOpenIntent({ ...link, pageUrl: 'https://p.example/', pageTitle: 'The page' })).toBe(true);
+  expect(isOpenIntent({ ...link, pageTitle: '' })).toBe(true);
+  for (const value of [
+    { kind: 'name-link', windowId: 3, time: 5 },
+    { ...link, linkUrl: '' },
+    { ...link, linkUrl: 7 },
+    { ...link, pageUrl: null },
+    { ...link, pageTitle: 1 },
+    { ...link, windowId: undefined },
+  ]) {
     expect(isOpenIntent(value)).toBe(false);
   }
 });
@@ -24,11 +51,14 @@ test('the popup honors only a fresh record for its own window', () => {
   expect(intentFor(intent, undefined, 1_000_000)).toBeUndefined();
   expect(intentFor(intent, 3, 1_011_000)).toBeUndefined();
   expect(intentFor({ ...intent, kind: 'other' }, 3, 1_000_000)).toBeUndefined();
+  expect(intentFor({ kind: 'name-link', windowId: 3, time: 1_000_000 }, 3, 1_000_000)).toBeUndefined();
 });
 
 test('only an honored this-tab record starts the popup in This tab', () => {
   expect(startMode({ kind: 'this-tab', windowId: 3, time: 5 })).toBe('this-tab');
   expect(startMode({ kind: 'new-tab', windowId: 3, time: 5 })).toBe('new-tab');
+  expect(startMode({ kind: 'name-page', windowId: 3, time: 5 })).toBe('new-tab');
+  expect(startMode({ kind: 'name-link', windowId: 3, time: 5, linkUrl: 'https://l.example/' })).toBe('new-tab');
   expect(startMode(undefined)).toBe('new-tab');
 });
 
