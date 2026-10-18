@@ -124,7 +124,7 @@ Search and the list:
 - **G4.** Enter, and a click, act on the selected or clicked row and on nothing else: a mapping opens its URL; the argument row opens the filled URL; the Name row opens the Name form with T as the name. With nothing selected Enter does nothing. Nothing opens without Enter or a click.
 - **G5.** Enter and a click open in the mode the chip shows; Shift+Enter and Shift+click open in the other mode. The chip starts as New tab when the popup was opened by the toolbar button, `open-new-tab`, `name-this-page`, or a menu item, and as This tab when opened by `open-same-tab`.
 - **G6.** Opening a mapping navigates to its URL exactly as written, in a new tab or the current tab, and the popup closes. An argument alias opened without an argument navigates with every `%s` removed; with an argument, with F9's substitution. A row for an argument alias without an argument shows the URL with `%s` marked and a hint that Space and text fill it.
-- **G7.** The popup fits within Chrome's popup size limit in every state, with no content of its own cut off.
+- **G7.** The popup fits within Chrome's popup size limit in every state, with no content of its own cut off, except that a name, URL, or note longer than the row that lists it is shown from its start and cut with an ellipsis.
 
 Naming:
 
