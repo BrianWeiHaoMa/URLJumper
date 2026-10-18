@@ -8,8 +8,10 @@ import path from 'node:path';
 import type { Request } from '../src/requests.ts';
 
 export { expect } from '@playwright/test';
+export { addressBar, type AddressBar, type AddressBarInput, type Disposition } from './address-bar.ts';
 export { checkAccessibility, checkAccessibilityInBothSchemes } from './accessibility.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
+export { restartWorker } from './worker-restart.ts';
 
 export const distDir = path.resolve(import.meta.dirname, '..', 'dist');
 

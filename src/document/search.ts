@@ -83,30 +83,39 @@ function orderGroup(group: Mapping[], order: SearchOrder, usage: Usage | undefin
 }
 
 /**
- * G1 (c): the longest alias whose name, regardless of case, starts the typed text (after leading
- * whitespace) and is followed there by a space, U+0020, with a remainder that is not empty once trimmed;
- * that trimmed remainder, its case kept, is the argument. "Longest" compares lowercased names, which is
- * the alias that takes in the most of the typed text. The row exists only when `fillArgument` can fill
- * that alias's URL, at most 2,097,152 characters; a shorter alias never stands in for it.
+ * G1 (c): the longest alias whose argument the typed text holds (`typedArgument`). "Longest" compares
+ * lowercased names, which is the alias that takes in the most of the typed text. The row exists only when
+ * `fillArgument` can fill that alias's URL, at most 2,097,152 characters; a shorter alias never stands in for it.
  */
 function findArgumentRow(mappings: readonly Mapping[], typed: string): { mapping: Mapping; argument: string } | undefined {
-  const text = typed.trimStart();
-  // Only the start of the text can hold an alias's name and the space after it. A name's lowercase is at
-  // most twice as long as it and no text's is shorter, so that start is twice the longest alias name and
-  // one code unit, plus one for a surrogate pair the cut would split; only it is lowercased (see `searchList`).
-  const longest = mappings.reduce((most, { name, url }) => (isArgumentAlias(url) ? Math.max(most, name.length) : most), 0);
-  const lowered = text.slice(0, 2 * longest + 2).toLowerCase();
   let found: { mapping: Mapping; argument: string; length: number } | undefined;
   for (const mapping of mappings) {
     if (!isArgumentAlias(mapping.url)) continue;
-    const name = mapping.name.toLowerCase();
-    if (found && name.length <= found.length) continue;
-    if (!lowered.startsWith(name) || lowered.charCodeAt(name.length) !== 0x20) continue;
-    const argument = text.slice(typedLength(text, name.length) + 1).trim();
-    if (argument !== '') found = { mapping, argument, length: name.length };
+    const length = mapping.name.toLowerCase().length;
+    if (found && length <= found.length) continue;
+    const argument = typedArgument(typed, mapping.name);
+    if (argument !== undefined) found = { mapping, argument, length };
   }
   if (!found || fillArgument(found.mapping.url, found.argument) === undefined) return undefined;
   return { mapping: found.mapping, argument: found.argument };
+}
+
+/**
+ * The argument `typed` gives the alias named `name` (G1 (c)): when the text, after leading whitespace,
+ * starts with the name, regardless of case, and a space, U+0020, the remainder after that space, trimmed,
+ * its case kept; undefined when it does not, or when that remainder is empty. The address bar reads an
+ * argument row's argument again with this from the text its list was made for.
+ */
+export function typedArgument(typed: string, name: string): string | undefined {
+  const text = typed.trimStart();
+  const lowered = name.toLowerCase();
+  // Only the start of the text can hold the name and the space after it. A name's lowercase is at most
+  // twice as long as it and no text's is shorter, so that start is twice the name's length and one code
+  // unit, plus one for a surrogate pair the cut would split; only it is lowercased (see `searchList`).
+  const start = text.slice(0, 2 * name.length + 2).toLowerCase();
+  if (!start.startsWith(lowered) || start.charCodeAt(lowered.length) !== 0x20) return undefined;
+  const argument = text.slice(typedLength(text, lowered.length) + 1).trim();
+  return argument === '' ? undefined : argument;
 }
 
 /**

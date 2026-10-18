@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { fillArgument } from './argument';
 import type { Usage } from './score';
-import { searchList, type SearchOrder, type SearchRow } from './search';
+import { searchList, typedArgument, type SearchOrder, type SearchRow } from './search';
 
 const NOW = Date.UTC(2026, 9, 18, 12);
 const HOUR = 60 * 60 * 1000;
@@ -163,6 +163,38 @@ describe('the argument row (G1 c)', () => {
     test("when the longest alias's fill is too long, no shorter alias takes the text instead", () => {
       expect(groups(['g x:%s', `g s x:${'%s'.repeat(2_000)}`], `g s ${'a'.repeat(1_100)}`)).toEqual(['name']);
     });
+  });
+});
+
+describe('the argument typed for one alias (typedArgument)', () => {
+  test('is the trimmed text after the name, regardless of case, and a space, its case kept', () => {
+    expect(typedArgument('yt lo-fi beats', 'yt')).toBe('lo-fi beats');
+    expect(typedArgument('  YT   Lo  Fi  ', 'yt')).toBe('Lo  Fi');
+    expect(typedArgument('g s foo', 'g')).toBe('s foo');
+    expect(typedArgument('g s foo', 'g s')).toBe('foo');
+  });
+
+  test('is undefined without the name and a space at the start, or with nothing after them', () => {
+    for (const typed of ['yt', 'yt ', 'yt   ', 'yt\tlo', 'yt\u00A0lo', 'ytlo', 'my yt lo', '']) expect(typedArgument(typed, 'yt'), JSON.stringify(typed)).toBeUndefined();
+  });
+
+  test('cuts the typed text where a name whose lowercase is longer than it ends', () => {
+    for (const typed of ['İ Cat', 'i\u0307 Cat', '  İ  Cat ']) expect(typedArgument(typed, 'İ'), typed).toBe('Cat');
+    expect(typedArgument('İİ cat', 'İİ')).toBe('cat');
+  });
+
+  test("is the argument the list's argument row holds, for every alias and text", () => {
+    const aliases = ['y https://y/?q=%s', 'yt https://yt/?q=%s', 'g s https://gs/?q=%s', 'İ https://i/?q=%s'];
+    for (const typed of ['yt lo-fi', 'Y x', 'g s foo', 'İ Cat', '  i\u0307   dog ']) {
+      const row = rows(aliases, typed).find((found) => found.group === 'argument');
+      if (row?.group !== 'argument') throw new Error(`expected an argument row for ${typed}`);
+      expect(typedArgument(typed, row.mapping.name), typed).toBe(row.argument);
+    }
+  });
+
+  test('lowercases only the start of a text whose lowercase is longer than a string can be', () => {
+    expect(typedArgument('İ'.repeat(268_435_445), 'q')).toBeUndefined();
+    expect(typedArgument(`q ${'İ'.repeat(268_435_445)}`, 'q')).toHaveLength(268_435_445);
   });
 });
 
