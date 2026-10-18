@@ -63,12 +63,22 @@ export interface LoadedExtension {
   watchStorage(): Promise<() => Promise<Record<string, chrome.storage.StorageChange>[]>>;
   /** Sends `request` to the worker from a `popup.html` tab, as a page of the extension does, and resolves to the reply Chrome delivers. */
   sendRequest(request: Request): Promise<unknown>;
+  /** Opens one more `popup.html` tab to send requests from, as another popup or settings tab of the extension does (E1). */
+  openRequestPage(): Promise<RequestPage>;
   /**
    * Says this check causes a request from the extension's origin to `url`: a This tab jump it asks for, or
    * a request it plants. Every check fails when a request from the extension's origin reached Chrome's
    * network stack; with this, it fails unless the requests made went to exactly the URLs said.
    */
   expectExtensionRequest(url: string): void;
+}
+
+/** A page of the extension that sends requests to the worker. */
+export interface RequestPage {
+  /** Sends `request` and resolves to the reply Chrome delivers. */
+  send(request: Request): Promise<unknown>;
+  /** Sends `request` and closes the page without waiting for the reply, as Chrome closes a popup during a save (E4). */
+  sendAndClose(request: Request): Promise<void>;
 }
 
 export interface LocalSite {
@@ -132,6 +142,7 @@ export const test = base.extend<{ extension: LoadedExtension; site: LocalSite }>
         },
         ...storageAccess(worker),
         sendRequest: requestSender(context, url('popup.html')),
+        openRequestPage: () => openRequestPage(context, url('popup.html')),
         expectExtensionRequest: (requestUrl) => expectedRequests.add(requestUrl),
       });
     } finally {
@@ -289,13 +300,25 @@ function storageAccess(worker: Worker) {
 
 // Requests go from one popup.html tab, opened at the first request of a check.
 function requestSender(context: BrowserContext, popupUrl: string) {
-  let host: Promise<Page> | undefined;
+  let host: Promise<RequestPage> | undefined;
   return async (request: Request) => {
-    host ??= context.newPage().then(async (page) => {
-      await page.goto(popupUrl);
-      return page;
-    });
-    return (await host).evaluate((request) => chrome.runtime.sendMessage(request), request);
+    host ??= openRequestPage(context, popupUrl);
+    return (await host).send(request);
+  };
+}
+
+async function openRequestPage(context: BrowserContext, popupUrl: string): Promise<RequestPage> {
+  const page = await context.newPage();
+  await page.goto(popupUrl);
+  return {
+    send: (request) => page.evaluate((request) => chrome.runtime.sendMessage(request), request),
+    sendAndClose: async (request) => {
+      await page.evaluate((request) => {
+        // A reply to a closed page goes nowhere; nothing waits for it.
+        chrome.runtime.sendMessage(request).catch(() => undefined);
+      }, request);
+      await page.close();
+    },
   };
 }
 

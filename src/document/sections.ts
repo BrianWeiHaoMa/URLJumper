@@ -28,3 +28,31 @@ export function findSections(lines: readonly ReadLine[]): Section[] {
   }
   return sections;
 }
+
+/**
+ * A heading as a surface names it: the exact texts of its lines, and how many headings with exactly those
+ * texts come before it. A heading is found again by both, so lines added or removed elsewhere since it was
+ * named do not change which heading it is (G9).
+ */
+export interface HeadingIdentity {
+  texts: string[];
+  before: number;
+}
+
+/** Each section, in document order, with its heading's identity. */
+export function namedSections(lines: readonly ReadLine[]): (Section & { identity: HeadingIdentity })[] {
+  const seen = new Map<string, number>();
+  return findSections(lines).map((section) => {
+    const texts = lines.slice(section.heading.first - 1, section.heading.last).map((line) => line.text);
+    const textsKey = JSON.stringify(texts);
+    const before = seen.get(textsKey) ?? 0;
+    seen.set(textsKey, before + 1);
+    return { ...section, identity: { texts, before } };
+  });
+}
+
+/** The section whose heading has `identity`; undefined when no heading has it now. */
+export function findSection(lines: readonly ReadLine[], identity: HeadingIdentity): Section | undefined {
+  const textsKey = JSON.stringify(identity.texts);
+  return namedSections(lines).find((section) => JSON.stringify(section.identity.texts) === textsKey && section.identity.before === identity.before);
+}

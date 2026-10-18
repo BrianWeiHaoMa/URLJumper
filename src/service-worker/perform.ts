@@ -1,8 +1,12 @@
-// Every request runs on the worker's one queue, in the order it arrived, and gets exactly one reply.
+// Every request runs on the worker's one queue, in the order it arrived, and gets exactly one reply. An
+// operation that throws, as a refused `get` or `set` does, replies `storage-failed` with Chrome's message.
 import { chromeMessage, type ReplyTo, type Request } from '../requests';
+import { insert } from './insert';
 import { jump } from './jump';
+import { loadExampleDocument } from './load-example';
 import { removeHonoredIntent } from './open-popup';
 import { enqueue } from './queue';
+import { undo } from './undo';
 
 export function perform<R extends Request>(request: R): Promise<ReplyTo<R>> {
   return enqueue(() => operate(request)).catch(
@@ -16,5 +20,11 @@ function operate<R extends Request>(request: R): Promise<ReplyTo<R>> {
       return jump(request) as Promise<ReplyTo<R>>;
     case 'remove-intent':
       return removeHonoredIntent(request) as Promise<ReplyTo<R>>;
+    case 'insert':
+      return insert(request) as Promise<ReplyTo<R>>;
+    case 'undo':
+      return undo(request) as Promise<ReplyTo<R>>;
+    case 'load-example':
+      return loadExampleDocument() as Promise<ReplyTo<R>>;
   }
 }

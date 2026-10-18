@@ -1,5 +1,5 @@
-import { expect, test } from 'vitest';
-import { recordUse, useScoreLog2 } from './score';
+import { describe, expect, test } from 'vitest';
+import { recordUse, usageAfterWrite, useScoreLog2 } from './score';
 
 const NOW = Date.UTC(2026, 9, 18, 12);
 const DAY = 24 * 60 * 60 * 1000;
@@ -45,4 +45,27 @@ test('a mapping keeps its last ten uses, the oldest dropped first', () => {
   for (let time = 2; time <= 11; time++) usage = recordUse(usage, 'k', time);
   expect(usage).toEqual({ k: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11] });
   expect(recordUse({ k: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }, 'k', 13)).toEqual({ k: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13] });
+});
+
+describe('usage after a write of the document', () => {
+  const held = 'held\nhttps://h.example/';
+  const created = 'new\nhttps://n.example/';
+  const before = 'held  https://h.example/\n';
+  const after = 'held  https://h.example/\nnew   https://n.example/\n';
+
+  test('a mapping created by the write gets exactly one use at its time, replacing what its key held', () => {
+    const usage = { [held]: [1, 2, 3], [created]: [4, 5, 6, 7, 8], 'stray\nhttps://s.example/': [9] };
+    expect(usageAfterWrite(usage, before, after, 100)).toEqual({ [held]: [1, 2, 3], [created]: [100] });
+  });
+
+  test('creation is judged against the document before the write, not against the usage', () => {
+    expect(usageAfterWrite({}, before, after, 100)).toEqual({ [created]: [100] });
+    expect(usageAfterWrite(undefined, after, after, 100)).toEqual({});
+  });
+
+  test('taking the line away drops its entry, and a renamed mapping learns afresh', () => {
+    expect(usageAfterWrite({ [held]: [1], [created]: [100] }, after, before, 200)).toEqual({ [held]: [1] });
+    expect(usageAfterWrite({ [held]: [1] }, before, 'Held  https://h.example/\n', 200)).toEqual({ [held]: [1] });
+    expect(usageAfterWrite({ [held]: [1] }, before, 'kept  https://h.example/\n', 200)).toEqual({ 'kept\nhttps://h.example/': [200] });
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { mappingKey, readDocument, type ReadLine } from './grammar';
+import { comparableName, hasScheme, mappingKey, readDocument, type ReadLine } from './grammar';
 
 const read = (...lines: string[]) => readDocument(lines.join('\n')).lines;
 
@@ -72,6 +72,22 @@ describe('mapping lines', () => {
   test('the key is the lowercased name, a line feed, and the URL as written', () => {
     expect(mappingOf('Mail https://A.example').key).toBe('mail\nhttps://A.example');
     expect(mappingKey('Mail', 'https://A.example')).toBe('mail\nhttps://A.example');
+  });
+
+  test("a mapping line records where its URL starts in the line's exact text", () => {
+    const urlStart = (text: string) => {
+      const [line] = read(text);
+      return line?.kind === 'mapping' ? line.urlStart : undefined;
+    };
+    expect(urlStart('a https://x')).toBe(2);
+    expect(urlStart('  team  calendar\t https://c  \\ https://c')).toBe(18);
+    expect(urlStart('😀 https://x')).toBe(3);
+  });
+
+  test('the scheme rule and the name comparison are the ones validation shares', () => {
+    expect(hasScheme('a1+.-:x')).toBe(true);
+    expect(hasScheme('\u212A:x')).toBe(false);
+    expect(comparableName('\u212A')).toBe(comparableName('K'));
   });
 
   test('a mapping carries its line number', () => {

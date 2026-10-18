@@ -1,8 +1,12 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { isRequest, send, type JumpRequest, type RemoveIntentRequest } from './requests';
+import { isRequest, send, type InsertRequest, type JumpRequest, type LoadExampleRequest, type RemoveIntentRequest, type UndoRequest } from './requests';
 
 const JUMP: JumpRequest = { kind: 'jump', name: 'alpha', url: 'https://a.example/', argument: null, mode: 'new-tab', active: true };
 const REMOVE_INTENT: RemoveIntentRequest = { kind: 'remove-intent', windowId: 3, time: 1_700_000_000_000 };
+const INSERT: InsertRequest = { kind: 'insert', name: 'stocks', url: 'https://s.example/', note: '', heading: null };
+const UNDO: UndoRequest = { kind: 'undo', act: 'remove', line: 3, text: 'stocks               https://s.example/' };
+const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
+const NO_REPLY = { kind: 'storage-failed', message: "URLJumper's service worker did not reply." };
 
 // Chrome's transport, replaced; `send` is the product's.
 function chromeWhoseSendMessage(sendMessage: (message: unknown) => Promise<unknown>) {
@@ -83,5 +87,65 @@ test('the worker accepts only a request declared here', () => {
     { kind: 'jump', name: 'a', url: 'https://a.example/', argument: null, mode: 'this-tab' },
   ]) {
     expect(isRequest(value)).toBe(false);
+  }
+});
+
+test('the requests that write the document, each with the replies declared for it', async () => {
+  const replies: [InsertRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
+    [INSERT, [
+      { kind: 'applied', line: 3, text: 'stocks               https://s.example/', headingMissing: false },
+      { kind: 'invalid', field: 'url', rule: 'no-scheme' },
+      { kind: 'name-taken', line: 5 },
+      { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
+    ]],
+    [UNDO, [{ kind: 'applied', line: 3, text: UNDO.text }, { kind: 'stale', document: '' }]],
+    [LOAD_EXAMPLE, [{ kind: 'applied', text: '\\ Daily\n', first: 1, last: 12 }, { kind: 'not-empty' }]],
+  ];
+  for (const [request, declared] of replies) {
+    for (const reply of declared) {
+      const sent = chromeWhoseSendMessage(async () => reply);
+      expect(await send(request)).toEqual(reply);
+      expect(sent).toEqual([request]);
+    }
+  }
+});
+
+test('a reply declared for another request, or missing a field, is no reply', async () => {
+  const undeclared: [InsertRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
+    [INSERT, [{ kind: 'applied', line: 3, text: 'x' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }, { kind: 'invalid', field: 'url' }, { kind: 'stale', document: '' }, { kind: 'opened' }]],
+    [UNDO, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'not-empty' }, { kind: 'name-taken', line: 2 }]],
+    [LOAD_EXAMPLE, [{ kind: 'applied', text: 'x' }, { kind: 'done' }, { kind: 'stale', document: '' }]],
+  ];
+  for (const [request, replies] of undeclared) {
+    for (const reply of replies) {
+      chromeWhoseSendMessage(async () => reply);
+      expect(await send(request), JSON.stringify(reply)).toEqual(NO_REPLY);
+    }
+  }
+  chromeWhoseSendMessage(async () => ({ kind: 'not-empty' }));
+  expect(await send(JUMP)).toEqual(NO_REPLY);
+});
+
+test('the worker accepts the writing requests only with every field of its declared type', () => {
+  expect(isRequest(INSERT)).toBe(true);
+  expect(isRequest({ ...INSERT, note: 'see docs', heading: { texts: ['\\ Work', '\\ more'], before: 2 } })).toBe(true);
+  expect(isRequest(UNDO)).toBe(true);
+  expect(isRequest(LOAD_EXAMPLE)).toBe(true);
+  for (const value of [
+    { ...INSERT, name: undefined },
+    { ...INSERT, url: null },
+    { ...INSERT, note: undefined },
+    { ...INSERT, heading: undefined },
+    { ...INSERT, heading: { texts: '\\ Work', before: 0 } },
+    { ...INSERT, heading: { texts: [1], before: 0 } },
+    { ...INSERT, heading: { texts: ['\\ Work'], before: -1 } },
+    { ...INSERT, heading: { texts: ['\\ Work'], before: 0.5 } },
+    { ...UNDO, act: 'restore' },
+    { ...UNDO, line: 0 },
+    { ...UNDO, line: 2.5 },
+    { ...UNDO, text: undefined },
+    { kind: 'load-examples' },
+  ]) {
+    expect(isRequest(value), JSON.stringify(value)).toBe(false);
   }
 });

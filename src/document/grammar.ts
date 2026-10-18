@@ -21,7 +21,8 @@ export type ReadLine =
   | (Line & { kind: 'blank' })
   /** A line holding a comment and nothing else; runs of them are headings (see `findSections`). */
   | (Line & { kind: 'comment' })
-  | (Line & { kind: 'mapping'; mapping: Mapping })
+  /** `urlStart`: where the URL starts in the line's exact text, as an index of UTF-16 code units. */
+  | (Line & { kind: 'mapping'; mapping: Mapping; urlStart: number })
   | (Line & { kind: 'unreadable'; problem: UnreadableProblem });
 
 export interface ReadDocument {
@@ -34,9 +35,19 @@ export interface ReadDocument {
 const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const WHITESPACE = /\s/;
 
+/** Whether `url` begins with a scheme (F4). */
+export function hasScheme(url: string): boolean {
+  return SCHEME.test(url);
+}
+
+/** What names are compared by: two names are the same when these are equal (F4, as 1.x compared them). */
+export function comparableName(name: string): string {
+  return name.toLowerCase();
+}
+
 /** A mapping's key: its lowercased name, a line feed, and its URL as written. */
 export function mappingKey(name: string, url: string): string {
-  return `${name.toLowerCase()}\n${url}`;
+  return `${comparableName(name)}\n${url}`;
 }
 
 export function readDocument(document: string): ReadDocument {
@@ -54,7 +65,8 @@ export function readDocument(document: string): ReadDocument {
 
 function readLine(line: Line, namesSeen: Set<string>): ReadLine {
   const commentAt = line.text.indexOf('\\');
-  const content = (commentAt === -1 ? line.text : line.text.slice(0, commentAt)).trim();
+  const beforeComment = commentAt === -1 ? line.text : line.text.slice(0, commentAt);
+  const content = beforeComment.trim();
   if (content === '') return { ...line, kind: commentAt === -1 ? 'blank' : 'comment' };
 
   // Scanned by hand rather than by a regular expression anchored at the end, which backtracks
@@ -63,14 +75,20 @@ function readLine(line: Line, namesSeen: Set<string>): ReadLine {
   while (urlStart > 0 && !WHITESPACE.test(content.charAt(urlStart - 1))) urlStart--;
   if (urlStart === 0) return { ...line, kind: 'unreadable', problem: 'needs-name-and-url' };
   const url = content.slice(urlStart);
-  if (!SCHEME.test(url)) return { ...line, kind: 'unreadable', problem: 'no-scheme' };
+  if (!hasScheme(url)) return { ...line, kind: 'unreadable', problem: 'no-scheme' };
   let nameEnd = urlStart;
   while (WHITESPACE.test(content.charAt(nameEnd - 1))) nameEnd--;
   const name = content.slice(0, nameEnd);
 
-  const lowered = name.toLowerCase();
+  const lowered = comparableName(name);
   if (namesSeen.has(lowered)) return { ...line, kind: 'unreadable', problem: 'repeated-name' };
   namesSeen.add(lowered);
   const note = commentAt === -1 ? null : line.text.slice(commentAt + 1).trim();
-  return { ...line, kind: 'mapping', mapping: { line: line.number, name, url, note, key: mappingKey(name, url) } };
+  const contentStart = beforeComment.length - beforeComment.trimStart().length;
+  return {
+    ...line,
+    kind: 'mapping',
+    mapping: { line: line.number, name, url, note, key: mappingKey(name, url) },
+    urlStart: contentStart + urlStart,
+  };
 }
