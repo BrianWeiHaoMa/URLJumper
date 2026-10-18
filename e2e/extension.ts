@@ -6,10 +6,13 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { Request } from '../src/requests.ts';
+import { checkAccessibilityInBothSchemes } from './accessibility.ts';
+import { checkFit } from './popup-fit.ts';
 
 export { expect } from '@playwright/test';
 export { addressBar, type AddressBar, type AddressBarInput, type Disposition } from './address-bar.ts';
-export { checkAccessibility, checkAccessibilityInBothSchemes } from './accessibility.ts';
+export { checkAccessibility } from './accessibility.ts';
+export { checkFit } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
 export { restartWorker } from './worker-restart.ts';
 
@@ -376,6 +379,15 @@ export async function slowWorkerReads(worker: Worker, key: string, ms: number): 
     },
     [key, ms] as const,
   );
+}
+
+/**
+ * What every popup state a check reaches is held to: it fits Chrome's popup with nothing of its own cut off
+ * (G7), and it passes the accessibility pass in the light and the dark scheme (G32).
+ */
+export async function checkFitAndAccessibility(popup: Page): Promise<void> {
+  await checkFit(popup);
+  await checkAccessibilityInBothSchemes(popup);
 }
 
 /** Opens a page of `site` titled `title` and clicks the toolbar button on it: that page, and the real popup opened on it. */

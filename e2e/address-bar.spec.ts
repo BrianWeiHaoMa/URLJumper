@@ -6,7 +6,7 @@
 import type { Page } from '@playwright/test';
 import {
   addressBar,
-  checkAccessibilityInBothSchemes,
+  checkFitAndAccessibility,
   expect,
   popupOnNewPage,
   restartWorker,
@@ -160,7 +160,7 @@ test("the suggestions are the popup's rows for the same text, in its order, unde
   const { popup } = await popupOnNewPage(extension, site);
   expect(await popupRows(popup, 'mail')).toEqual(mail);
   expect(await popupRows(popup, 'st go')).toEqual(stGo);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.getByRole('combobox').fill('zzz');
   await expect(popup.getByRole('option')).toHaveCount(1);
   await expect(popup.getByRole('option')).toHaveAccessibleName('Name "zzz" for this page');
@@ -394,7 +394,7 @@ test('a page named with Alt+Shift+N opens from the address bar in the tab in fro
   await popup.keyboard.type('stocks');
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('status')).toHaveText('Saved "stocks" as line 2');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.close();
 
   const other = await extension.context.newPage();

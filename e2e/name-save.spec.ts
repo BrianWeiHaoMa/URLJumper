@@ -4,7 +4,7 @@
 // reply, until the user's next action or ten seconds.
 import type { Page } from '@playwright/test';
 import type { InsertRequest } from '../src/requests.ts';
-import { checkAccessibilityInBothSchemes, closingPopup, expect, popupOnNewPage, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
@@ -53,7 +53,7 @@ test('typed zz, Enter on the Name row, Enter again: one line after the last, per
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
   expect(await pageTabs(extension)).toEqual(tabs);
   expect(page.url()).toBe(address);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   // The name now opens the page in a new tab.
   await popup.keyboard.type('zz');
@@ -103,7 +103,19 @@ test('while it saves the footer says Enter does nothing; a long name is confirme
     };
   });
   expect(shown).toEqual({ whole: true, footerInView: true, noPageOverflow: true });
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
+});
+
+test('while the save awaits the worker, the form fits and passes the accessibility pass', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'a  https://a.example/\n' });
+  const { popup } = await formOnNewPage(extension, site, 'pending');
+  // The insert reads the document first; held there, the save stays in flight for the rest of the check.
+  await slowWorkerReads(extension.worker, 'mappings', 60_000);
+  await popup.keyboard.press('Enter');
+  await expect(footer(popup)).toHaveText('Saving · Enter does nothing until it is stored');
+  await expect(popup.getByRole('button', { name: 'Save' })).toHaveAttribute('aria-disabled', 'true');
+  await checkFitAndAccessibility(popup);
+  await expect(footer(popup)).toHaveText('Saving · Enter does nothing until it is stored');
 });
 
 test('the chosen heading is found again by its identity: a heading and a line added above it leave the line in its section', async ({ extension, site }) => {
@@ -134,7 +146,7 @@ test('a chosen heading no longer found sends the line to the end, and the previe
   await extension.seedStorage({ mappings: shorter });
   await expect(where(popup)).toHaveText('Line 4, at the end of the document: the heading you chose is no longer there');
   await expect(popup.getByRole('option', { selected: true })).toHaveCount(0);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.keyboard.press('Enter');
   await expect(confirmation(popup)).toHaveText('Saved "gone" as line 4, at the end of the document: the heading you chose was not found');
   expect(await storedDocument(extension)).toBe(`${shorter}gone ${page.url()}\n`);
@@ -151,7 +163,7 @@ test("another window's insert of the typed name makes it taken with its line; on
   await other.send(insertOf('Shared', 'https://s.example/'));
   await expect(problem(popup)).toHaveText('Line 7 already has the name "Shared".');
   await expect(footer(popup)).toHaveText('Enter does nothing · Line 7 already has this name.');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await expect(nameField(popup)).toHaveValue('shared');
 });
 
@@ -185,7 +197,7 @@ test("a save Chrome refuses to store says so with Chrome's message and keeps eve
   await expect(urlField(popup)).toHaveValue(page.url());
   await expect(popup.getByRole('option', { selected: true })).toHaveText('Work');
   expect(await storedDocument(extension)).toBe(doc);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test('Enter pressed twice at once stores one line and shows one confirmation and no refusal', async ({ extension, site }) => {
@@ -222,7 +234,7 @@ test('the confirmation stays across Tab, Shift+Tab, and the accessibility pass, 
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Shift+Tab');
   await popup.keyboard.press('Shift');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await expect(confirmation(popup)).toHaveText('Saved "one" as line 10');
   await popup.keyboard.type('o');
   await expect(confirmation(popup)).toHaveCount(0);

@@ -4,7 +4,7 @@
 // and every outcome fits the popup (G7) and passes the accessibility pass (G32).
 import type { Page } from '@playwright/test';
 import type { InsertRequest } from '../src/requests.ts';
-import { checkAccessibilityInBothSchemes, expect, popupOnNewPage, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, expect, popupOnNewPage, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const searchBox = (popup: Page) => popup.getByRole('combobox');
@@ -49,7 +49,7 @@ test('keyboard alone: Undo of a save, its Undo, and Undo again leave the documen
   await expect(undo(popup)).toBeFocused();
   await expect(undo(popup)).toHaveAccessibleName('Undo saving "stocks"');
   await expect(footer(popup)).toHaveText('Enter undoes the save, removing its line');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   // Every text the footer shows from here on, in order.
   await popup.evaluate(() => {
@@ -70,14 +70,14 @@ test('keyboard alone: Undo of a save, its Undo, and Undo again leave the documen
   await expect(undo(popup)).toBeFocused();
   await expect(undo(popup)).toHaveAccessibleName('Undo removing "stocks"');
   await expect(footer(popup)).toHaveText('Enter undoes the removal, putting the line back');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   await popup.keyboard.press('Enter');
   await expect(confirmation(popup)).toHaveText('Put "stocks" back as line 3');
   expect(await storedDocument(extension)).toBe(saved);
   await expect(undo(popup)).toHaveAccessibleName('Undo putting back "stocks"');
   await expect(footer(popup)).toHaveText('Enter undoes putting the line back, removing it again');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   await popup.keyboard.press('Enter');
   await expect(confirmation(popup)).toHaveText('Removed "stocks" from line 3');
@@ -102,6 +102,19 @@ test('the offer stays across Shift+Tab round to Undo; a key typed there goes to 
   await expect(searchBox(popup)).toHaveValue('m');
   await expect(popup.locator('[role=option] .row-name')).toHaveText(['mail']);
   expect(await storedDocument(extension)).toBe(saved);
+});
+
+test('while an Undo awaits the worker, the popup fits and passes the accessibility pass', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const { popup } = await savedOnNewPage(extension, site, 'pending');
+  // The Undo reads the document first; held there, it stays in flight for the rest of the check.
+  await slowWorkerReads(extension.worker, 'mappings', 60_000);
+  await undo(popup).focus();
+  await popup.keyboard.press('Enter');
+  await expect(footer(popup)).toHaveText('Undoing · Enter does nothing until it is stored');
+  await expect(undo(popup)).toHaveAttribute('aria-disabled', 'true');
+  await checkFitAndAccessibility(popup);
+  await expect(footer(popup)).toHaveText('Undoing · Enter does nothing until it is stored');
 });
 
 test('a held Enter on Undo undoes once', async ({ extension, site }) => {
@@ -171,7 +184,7 @@ test('an Undo whose line another window changed stores nothing and says it was n
   await expect(searchBox(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
   expect(await extension.readStorage()).toEqual(before);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test("an Undo's Undo after another window took the name stores nothing and names the line that has it", async ({ extension, site }) => {
@@ -186,7 +199,7 @@ test("an Undo's Undo after another window took the name stores nothing and names
   await expect(confirmation(popup)).toHaveText('Not undone: line 3 already has the name "stocks". Nothing was stored.');
   await expect(undo(popup)).toHaveCount(0);
   expect(await extension.readStorage()).toEqual(before);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test("an Undo's Undo Chrome refuses to store says so with Chrome's message, and the document stays as the Undo left it", async ({ extension, site }) => {
@@ -199,7 +212,7 @@ test("an Undo's Undo Chrome refuses to store says so with Chrome's message, and 
   await expect(confirmation(popup)).toHaveText('Not undone: nothing was stored. Chrome said: Resource::kQuotaBytes quota exceeded');
   await expect(undo(popup)).toHaveCount(0);
   expect(await storedDocument(extension)).toBe(DOC);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test('a long name: every outcome and refusal is shown whole beside Undo, the footer in view', async ({ extension, site }) => {
@@ -221,10 +234,10 @@ test('a long name: every outcome and refusal is shown whole beside Undo, the foo
   await undo(popup).click();
   await expect(confirmation(popup)).toHaveText(`Removed "${name}" from line 3`);
   expect(await fits()).toEqual(whole);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   expect(await other.send(insertOf(name.toUpperCase(), 'https://other.example/'))).toMatchObject({ kind: 'applied', line: 3 });
   await undo(popup).click();
   await expect(confirmation(popup)).toHaveText(`Not undone: line 3 already has the name "${name}". Nothing was stored.`);
   expect(await fits()).toEqual(whole);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });

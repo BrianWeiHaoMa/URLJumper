@@ -1,7 +1,7 @@
 // What the popup lists, as the user types and as storage changes: groups and order (G1, G2), selection and
 // the seven-row window (G3, F13), the cue and footer (L2), the theme (F3, F15), and the fit (G7).
 import type { Locator, Page } from '@playwright/test';
-import { checkAccessibilityInBothSchemes, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
 
 // Mappings named m1 … m<count>, one per line, each at the address `url` gives it.
 const mappings = (count: number, url = (i: number) => `https://m${i}.example/`) =>
@@ -24,7 +24,7 @@ test('a blank box lists the first seven mappings in line order with nothing sele
   expect(await names(popup)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7']);
   await expect(selected(popup)).toHaveCount(0);
   await expect(cue(popup)).toHaveText('13 more below');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   const tabs = await pageTabs(extension);
   await popup.keyboard.press('Enter');
@@ -32,11 +32,29 @@ test('a blank box lists the first seven mappings in line order with nothing sele
   expect(await pageTabs(extension)).toEqual(tabs);
   expect('usage' in (await extension.readStorage())).toBe(false);
   expect(await extension.openPopups()).toBe(1);
+  // Up selects nothing: only Down does.
+  await popup.keyboard.press('ArrowUp');
+  await expect(selected(popup)).toHaveCount(0);
+  await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
 
   await popup.keyboard.press('ArrowDown');
   await expect(selected(popup).locator('.row-name')).toHaveText('m1');
   await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
+
+  // The blank list holds every mapping, in line order: Down walks all twenty, then wraps to the first.
+  const walked = [await selected(popup).locator('.row-name').textContent()];
+  for (let i = 2; i <= 21; i++) {
+    await popup.keyboard.press('ArrowDown');
+    await expect(selected(popup)).toHaveAttribute('aria-posinset', String(i > 20 ? 1 : i));
+    walked.push(await selected(popup).locator('.row-name').textContent());
+    if (i === 10) {
+      // The window off both ends of the list.
+      await expect(cue(popup)).toHaveText('3 more above · 10 more below');
+      await checkFitAndAccessibility(popup);
+    }
+  }
+  expect(walked).toEqual([...Array.from({ length: 20 }, (_, i) => `m${i + 1}`), 'm1']);
 });
 
 test('each new list selects its first row: typed s, Down twice, then t', async ({ extension, site }) => {
@@ -128,7 +146,7 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
   for (let i = 0; i < 6; i++) await popup.keyboard.press('ArrowDown');
   await expect(selected(popup).locator('.row-name')).toHaveText(/^n7w/);
   expect(await shown()).toMatchObject(whole);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   // Content taller than the viewport Chrome allows, as at a larger zoom: the root takes the viewport's
   // height, the footer stays in view, and the view scrolls to keep the selected row visible.
@@ -225,7 +243,7 @@ test('a mapping found only by its address is listed as an address match, visibly
   await expect(popup.getByRole('option').locator('.row-tag')).toHaveText('address match');
   await expect(popup.getByRole('option', { name: 'dev address match http://localhost:5173/', exact: true })).toBeVisible();
   await expect(selected(popup).locator('.row-name')).toHaveText('dev');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test('an argument alias without an argument shows its %s marked and the hint; the argument row shows the filled URL', async ({ extension, site }) => {
@@ -238,14 +256,33 @@ test('an argument alias without an argument shows its %s marked and the hint; th
   await expect(alias.locator('.row-tag')).toHaveText('Space and text fill %s');
   await expect(popup.getByRole('option', { name: /^yard / }).locator('.row-tag')).toHaveCount(0);
   await expect(footer(popup)).toHaveText('Enter opens it with %s empty in a new tab · Shift+Enter in this tab');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
-  await popup.keyboard.type('t lo-fi beats');
+  // `yt` itself, the alias alone: still marked and hinted.
+  await popup.keyboard.type('t');
+  await expect(popup.getByRole('option')).toHaveCount(1);
+  await expect(alias.locator('.row-url')).toHaveText('https://www.youtube.com/results?search_query=%s');
+  await expect(alias.locator('mark')).toHaveText('%s');
+  await expect(alias.locator('.row-tag')).toHaveText('Space and text fill %s');
+  await expect(footer(popup)).toHaveText('Enter opens it with %s empty in a new tab · Shift+Enter in this tab');
+
+  await popup.keyboard.type(' lo-fi beats');
   await expect(popup.getByRole('option')).toHaveCount(1);
   await expect(popup.getByRole('option').locator('.row-url')).toHaveText('https://www.youtube.com/results?search_query=lo-fi%20beats');
   await expect(popup.getByRole('option').locator('mark, .row-tag')).toHaveCount(0);
   await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
+});
+
+test("a row's tag stays whole beside a name or URL long enough to be cut", async ({ extension, site }) => {
+  const long = 'w'.repeat(300);
+  await extension.seedStorage({ mappings: `q${long}  https://q.example/${long}?q=%s\nother${long}  https://x.example/q${long}\n` });
+  const { popup } = await popupOnNewPage(extension, site);
+  await popup.keyboard.type('q');
+  await expect(popup.getByRole('option').locator('.row-tag')).toHaveText(['Space and text fill %s', 'address match']);
+  const cut = await popup.locator('.row-name, .row-url').evaluateAll((texts) => texts.map((text) => text.scrollWidth > text.clientWidth));
+  expect(cut).toEqual([true, true, true, true]);
+  await checkFitAndAccessibility(popup);
 });
 
 // An empty document shows the first run instead (G30).
@@ -261,7 +298,7 @@ test('a document without a mapping line, with nothing typed, lists no row: no cu
     await popup.waitForTimeout(300);
     expect(await pageTabs(extension)).toEqual(tabs);
     expect(await extension.openPopups()).toBe(1);
-    await checkAccessibilityInBothSchemes(popup);
+    await checkFitAndAccessibility(popup);
     await popup.close();
   }
 });
@@ -278,7 +315,7 @@ test('text that matches no mapping lists only the Name row, selected: no cue, an
     await expect(popup.getByRole('option')).toHaveCount(1);
     await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
     await expect(cue(popup)).toHaveCount(0);
-    await checkAccessibilityInBothSchemes(popup);
+    await checkFitAndAccessibility(popup);
     const tabs = await pageTabs(extension);
     await popup.keyboard.press('Enter');
     await expect(popup.getByRole('textbox', { name: 'Name' })).toHaveValue(typed);
@@ -382,7 +419,7 @@ test('focus on the chip makes the footer say Enter flips it, and Enter does', as
   const chip = popup.getByRole('button', { name: /^New tab mode/ });
   await expect(chip).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter or Space switches to This tab');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('button', { name: /^This tab mode/ })).toHaveText('This tab');
   await expect(footer(popup)).toHaveText('Enter or Space switches to New tab');

@@ -3,7 +3,7 @@
 // what the page is already called (G10), the Section choice (G9, P2), a preview of the exact line, and why
 // Save is blocked (G8, L2), and it fits the popup (G7) and passes the accessibility pass (G32).
 import type { Page } from '@playwright/test';
-import { checkAccessibilityInBothSchemes, closingPopup, expect, popupOnNewPage, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const selected = (popup: Page) => popup.locator('[role=option][aria-selected=true]');
@@ -41,7 +41,7 @@ test('text that matches no name lists the Name row, selected; Enter opens the fo
   await expect(popup.getByRole('option')).toHaveCount(1);
   await expect(selected(popup)).toHaveAccessibleName('Name "zz" for this page');
   await expect(footer(popup)).toHaveText('Enter opens the Name form');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   const tabs = await pageTabs(extension);
   await popup.keyboard.press('Enter');
@@ -56,7 +56,7 @@ test('text that matches no name lists the Name row, selected; Enter opens the fo
   await expect(previewLine(popup)).toHaveText(`zz ${page.url()}`);
   await expect(footer(popup)).toHaveText('Enter saves it as line 2');
   expect(await pageTabs(extension)).toEqual(tabs);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test('address matches come first and the Name row last, reached with Down and counted in the cue; text that starts a name lists none', async ({ extension, site }) => {
@@ -104,7 +104,7 @@ test('the Name this page button opens the form with an empty, focused name field
   await expect(popup.locator('.subject-title')).toHaveText('Stock prices');
   await expect(problem(popup)).toHaveText('Line 2 needs a name.');
   await expect(footer(popup)).toHaveText('Enter does nothing · Line 2 needs a name.');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   // Cancel goes back to search as it was.
   await popup.getByRole('button', { name: 'Cancel' }).focus();
   await expect(footer(popup)).toHaveText('Enter returns to search');
@@ -131,10 +131,21 @@ test('a name another line holds, in any case, is refused with that line, and Sav
     expect((await extension.readStorage()).mappings).toBe(doc);
     await expect(nameField(popup)).toHaveValue(typed);
   }
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   // Escape closes the popup from the form too, storing nothing.
   await closingPopup(popup, () => popup.keyboard.press('Escape'));
   expect((await extension.readStorage()).mappings).toBe(doc);
+});
+
+test('a long name another line holds is named whole in the refusal, and the form still fits', async ({ extension, site }) => {
+  const taken = `taken ${'n'.repeat(300)}`;
+  await extension.seedStorage({ mappings: `${taken}  https://t.example/\n` });
+  const { popup } = await formOnNewPage(extension, site);
+  // Typed in another case: the refusal names the line's own name.
+  await nameField(popup).fill(taken.toUpperCase());
+  await expect(problem(popup)).toHaveText(`Line 1 already has the name "${taken}".`);
+  await expect(footer(popup)).toHaveText('Enter does nothing · Line 1 already has this name.');
+  await checkFitAndAccessibility(popup);
 });
 
 test('a backslash in the name, a URL without a scheme or with whitespace are refused naming the line, and kept as typed; any other URL saves', async ({ extension, site }) => {
@@ -178,9 +189,10 @@ test('a page whose address a mapping has says what it is called, in search and i
   await extension.seedStorage({ mappings: doc });
   let { page, popup } = await popupOn(extension, address);
   await expect(popup.locator('.view-content > .this-page')).toHaveText('This page is "stocks"');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.getByRole('button', { name: 'Name this page' }).click();
   await expect(popup.locator('.subject .this-page')).toHaveText('This page is "stocks"');
+  await checkFitAndAccessibility(popup);
   await nameField(popup).fill('portfolio');
   await expect(problem(popup)).toHaveText('');
   await popup.keyboard.press('Enter');
@@ -216,7 +228,7 @@ test('a long typed name is cut in the Name row with the words around it whole; a
       };
     });
   expect(await shown()).toEqual({ nameCut: true, wordsWhole: true, footerInView: true, noPageOverflow: true, viewScrolls: false });
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   // A name nearly as long as a document can be: the view scrolls to it, the footer and button stay in view.
   // (Text partly scrolled out of the view is where axe cannot judge contrast, so the pass ran above.)
@@ -239,7 +251,7 @@ test('without the toolbar grant the form shows no title or host, says Chrome gav
   await expect(urlField(popup)).toHaveValue('');
   await popup.keyboard.type('later');
   await expect(footer(popup)).toHaveText('Enter does nothing · Line 2 needs a URL.');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.keyboard.press('Enter');
   await popup.waitForTimeout(200);
   expect((await extension.readStorage()).mappings).toBe('a  https://a.example/\n');
@@ -267,7 +279,7 @@ test('the Section choice is offered only with headings, starts at End of documen
   await expect(where(popup)).toHaveText('Line 4, at the end of the section "Work more"');
   await expect(previewLine(popup)).toHaveText(`new ${page.url()}`);
   await expect(footer(popup)).toHaveText('Enter saves it as line 4');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   // A click chooses too.
   await popup.getByRole('option', { name: 'Heading at line 5' }).click();
   await expect(where(popup)).toHaveText('Line 8, at the end of the section "Heading at line 5"');
@@ -314,5 +326,5 @@ test('a long title and URL wrap: the form keeps its footer in view, nothing of i
     };
   });
   expect(shown).toEqual({ footerInView: true, headerInView: true, noPageOverflow: true, viewScrolls: true, uncut: true, titleWhole: title });
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });

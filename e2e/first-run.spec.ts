@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   assignedShortcuts,
   assignShortcut,
-  checkAccessibilityInBothSchemes,
+  checkFitAndAccessibility,
   closingPopup,
   distDir,
   exampleFromSpecification,
@@ -67,7 +67,7 @@ test('with the focus on nothing, Enter still starts Name this page', async ({ ex
 test("Load example mappings stores F11's text, and search lists its mappings in place of the first run, which is not offered again", async ({ extension, site }) => {
   await extension.seedStorage({});
   const { popup } = await popupOnNewPage(extension, site);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await popup.keyboard.press('Tab');
   await expect(loadExample(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter loads the example mappings');
@@ -83,6 +83,19 @@ test("Load example mappings stores F11's text, and search lists its mappings in 
   const next = await popupOnNewPage(extension, site, 'With the example');
   await expect(next.popup.getByRole('option')).toHaveCount(7);
   await expect(loadExample(next.popup)).toHaveCount(0);
+});
+
+test('while the load awaits the worker, the first run fits and passes the accessibility pass', async ({ extension, site }) => {
+  await extension.seedStorage({});
+  const { popup } = await popupOnNewPage(extension, site);
+  // The load reads the document first; held there, it stays in flight for the rest of the check.
+  await slowWorkerReads(extension.worker, 'mappings', 60_000);
+  await loadExample(popup).focus();
+  await popup.keyboard.press('Enter');
+  await expect(footer(popup)).toHaveText('Loading · Enter does nothing until it is stored');
+  await expect(loadExample(popup)).toHaveAttribute('aria-disabled', 'true');
+  await checkFitAndAccessibility(popup);
+  await expect(footer(popup)).toHaveText('Loading · Enter does nothing until it is stored');
 });
 
 test("another window's line replaces the first run with the list without a keystroke; a load it beat says nothing was loaded", async ({ extension, site }) => {
@@ -121,7 +134,7 @@ test("a load Chrome refuses to store says so with Chrome's message; the document
   expect('mappings' in (await extension.readStorage())).toBe(false);
   await expect(firstRun(popup)).toBeVisible();
   await expect(loadExample(popup)).toBeVisible();
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test('Undo of the first save brings the first run back with the Undo confirmed and its own Undo still offered, which puts the line back', async ({ extension, site }) => {
@@ -140,7 +153,7 @@ test('Undo of the first save brings the first run back with the Undo confirmed a
   await expect(undo).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter undoes the removal, putting the line back');
   expect((await extension.readStorage()).mappings).toBe('');
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
   await expect(undo).toBeVisible();
 
   await undo.focus();

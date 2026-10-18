@@ -2,7 +2,7 @@
 // Shift in the other, the chip starts as the popup's opening asked, and when nothing opens the popup stays
 // and says why.
 import type { Page } from '@playwright/test';
-import { checkAccessibilityInBothSchemes, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
 
 const chip = (popup: Page) => popup.locator('.chip');
 const footer = (popup: Page) => popup.locator('footer');
@@ -14,6 +14,19 @@ const tabsSince = (extension: LoadedExtension, before: ReadonlySet<Page>) =>
 
 // Presses `key` in the popup and waits for the popup to close, as it does once the jump opened.
 const jumpWith = (popup: Page, key: string) => closingPopup(popup, () => popup.keyboard.press(key));
+
+// The address of every open tab but the extension's own pages, sorted.
+const pageTabs = async (extension: LoadedExtension) => (await extension.tabUrls()).filter((url) => !url.startsWith(extension.url(''))).sort();
+
+/** Runs `jump`, which opens `target` in the tab `opener` shows, and fails unless that tab alone changed and none was added. */
+async function opensInOpener(extension: LoadedExtension, opener: Page, target: string, jump: () => Promise<unknown>) {
+  const before = await pageTabs(extension);
+  const from = opener.url();
+  await jump();
+  await expect(opener).toHaveURL(target);
+  before.splice(before.indexOf(from), 1, target);
+  expect(await pageTabs(extension)).toEqual(before.sort());
+}
 
 test('whichever way the popup opens, typing goes straight into its search box', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
@@ -60,10 +73,7 @@ test('from the toolbar the chip reads New tab: Enter and a click open a new tab,
   extension.expectExtensionRequest(target);
   ({ page, popup } = await popupOnNewPage(extension, site, 'Opener for Shift+Enter'));
   await popup.keyboard.type('go');
-  before = new Set(extension.context.pages());
-  await jumpWith(popup, 'Shift+Enter');
-  await expect(page).toHaveURL(target);
-  expect(tabsSince(extension, before)).toEqual([]);
+  await opensInOpener(extension, page, target, () => jumpWith(popup, 'Shift+Enter'));
 
   ({ page, popup } = await popupOnNewPage(extension, site, 'Opener for a click'));
   await popup.keyboard.type('go');
@@ -74,14 +84,11 @@ test('from the toolbar the chip reads New tab: Enter and a click open a new tab,
 
   ({ page, popup } = await popupOnNewPage(extension, site, 'Opener for Shift+click'));
   await popup.keyboard.type('go');
-  before = new Set(extension.context.pages());
-  await closingPopup(popup, () => popup.getByRole('option').click({ modifiers: ['Shift'] }));
-  await expect(page).toHaveURL(target);
-  expect(tabsSince(extension, before)).toEqual([]);
+  await opensInOpener(extension, page, target, () => closingPopup(popup, () => popup.getByRole('option').click({ modifiers: ['Shift'] })));
   expect(((await extension.readStorage()).usage as Record<string, number[]>)[`go\n${target}`]).toHaveLength(4);
 });
 
-test('opened by open-same-tab the chip reads This tab and the record is removed; Enter opens in the page, Shift+Enter in a new tab', async ({ extension, site }) => {
+test('opened by open-same-tab the chip reads This tab and the record is removed; Enter and a click open in the page, Shift+Enter and Shift+click in a new tab', async ({ extension, site }) => {
   const target = site.pageUrl('Target');
   await extension.seedStorage({ mappings: `go                   ${target}\n` });
   extension.expectExtensionRequest(target);
@@ -93,21 +100,38 @@ test('opened by open-same-tab the chip reads This tab and the record is removed;
   await expect.poll(async () => 'openIntent' in (await extension.readStorage())).toBe(false);
   await popup.keyboard.type('go');
   await expect(footer(popup)).toHaveText('Enter opens it in this tab · Shift+Enter in a new tab');
-  await checkAccessibilityInBothSchemes(popup);
-  let before = new Set(extension.context.pages());
-  await jumpWith(popup, 'Enter');
-  await expect(page).toHaveURL(target);
-  expect(tabsSince(extension, before)).toEqual([]);
+  await checkFitAndAccessibility(popup);
+  await opensInOpener(extension, page, target, () => jumpWith(popup, 'Enter'));
 
   const second = await extension.context.newPage();
   const secondUrl = site.pageUrl('Alt+M, then Shift+Enter');
   await second.goto(secondUrl);
   popup = await extension.popupByCommand('open-same-tab', second);
   await popup.keyboard.type('go');
-  before = new Set(extension.context.pages());
+  let before = new Set(extension.context.pages());
   await jumpWith(popup, 'Shift+Enter');
   await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([target]);
   expect(second.url()).toBe(secondUrl);
+
+  // A click opens in the page as Enter does, and Shift+click in a new tab.
+  const third = await extension.context.newPage();
+  await third.goto(site.pageUrl('Alt+M, then a click'));
+  popup = await extension.popupByCommand('open-same-tab', third);
+  await popup.keyboard.type('go');
+  await opensInOpener(extension, third, target, () => closingPopup(popup, () => popup.getByRole('option').click()));
+
+  const fourth = await extension.context.newPage();
+  const fourthUrl = site.pageUrl('Alt+M, then Shift+click');
+  await fourth.goto(fourthUrl);
+  popup = await extension.popupByCommand('open-same-tab', fourth);
+  await popup.keyboard.type('go');
+  before = new Set(extension.context.pages());
+  await closingPopup(popup, () => popup.getByRole('option').click({ modifiers: ['Shift'] }));
+  await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([target]);
+  expect(fourth.url()).toBe(fourthUrl);
+  // Each opening was one use, under the mapping's key.
+  expect(Object.keys((await extension.readStorage()).usage as object)).toEqual([`go\n${target}`]);
+  expect(((await extension.readStorage()).usage as Record<string, number[]>)[`go\n${target}`]).toHaveLength(4);
 });
 
 test('opened by open-new-tab the chip reads New tab; a chip click flips it for that popup only', async ({ extension, site }) => {
@@ -136,6 +160,9 @@ test('opened by open-new-tab the chip reads New tab; a chip click flips it for t
   await jumpWith(popup, 'Enter');
   await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([target]);
   expect(page.url()).toBe(pageUrl);
+  // Each opening was one use, under the mapping's key.
+  expect(Object.keys((await extension.readStorage()).usage as object)).toEqual([`go\n${target}`]);
+  expect(((await extension.readStorage()).usage as Record<string, number[]>)[`go\n${target}`]).toHaveLength(2);
 
   // The next popup starts in its own opening's mode again.
   popup = await extension.popupByCommand('open-same-tab', page);
@@ -188,7 +215,7 @@ for (const order of ['document', 'smart'] as const) {
     await expect(message).toHaveText("Not opened. Chrome said: I'm sorry. I'm afraid I can't do that.");
     expect(await extension.tabUrls()).toEqual(tabs);
     expect(await extension.openPopups()).toBe(1);
-    await checkAccessibilityInBothSchemes(popup);
+    await checkFitAndAccessibility(popup);
 
     // Typing again clears the message.
     await popup.keyboard.type('a');
@@ -213,7 +240,7 @@ test('a long refusal never hides the selected row, and Enter opens the selected 
       return row.top >= view.top - 0.5 && row.bottom <= view.bottom + 0.5;
     });
   expect(await selectedInView()).toBe(true);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   // Tab past the chip reaches the view, which Chrome lets take focus to scroll; Enter there still opens.
   await popup.keyboard.press('ArrowUp');
@@ -251,7 +278,7 @@ test('a jump whose use Chrome refuses to store keeps the popup open, says why, a
   await expect(popup.getByRole('combobox')).toHaveValue('full');
   expect(await extension.tabUrls()).toEqual(tabs);
   expect('usage' in (await extension.readStorage())).toBe(false);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 });
 
 test('yt with text opens the filled address, and yt alone the address with %s removed', async ({ extension, site }) => {

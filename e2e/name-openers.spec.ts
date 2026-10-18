@@ -5,7 +5,7 @@
 // and every start (S13), after the install's storage write (G24, R5).
 import type { Page } from '@playwright/test';
 import {
-  checkAccessibilityInBothSchemes,
+  checkFitAndAccessibility,
   closingPopup,
   createMenuItemAgain,
   expect,
@@ -117,6 +117,18 @@ test('keys typed before the popup knows it opened for naming go to the name fiel
   }
 });
 
+test('until the popup knows why it opened, it lists the mappings, says Enter does nothing, fits, and passes the accessibility pass', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'st  https://st.example/\n' });
+  // The popup knows only once the worker has removed the record, which reads it first; held there, for the rest of the check.
+  await slowWorkerReads(extension.worker, 'openIntent', 60_000);
+  const page = await grantedPage(extension, site, 'Not known yet');
+  const popup = await extension.popupByCommand('name-this-page', page);
+  await expect(footer(popup)).toHaveText('Enter does nothing until the popup is ready');
+  await expect(popup.locator('[role=option] .row-name')).toHaveText(['st']);
+  await checkFitAndAccessibility(popup);
+  await expect(footer(popup)).toHaveText('Enter does nothing until the popup is ready');
+});
+
 test('name-this-page on a page Chrome granted nothing opens the form without an address; Cancel shows the first run of an empty document', async ({ extension, site }) => {
   await extension.seedStorage({});
   const page = await extension.context.newPage();
@@ -127,7 +139,7 @@ test('name-this-page on a page Chrome granted nothing opens the form without an 
   await expect(popup.locator('.subject-title, .subject-host')).toHaveCount(0);
   await expect(urlField(popup)).toHaveValue('');
   await expect(footer(popup)).toHaveText(/^Enter does nothing · /);
-  await checkAccessibilityInBothSchemes(popup);
+  await checkFitAndAccessibility(popup);
 
   await popup.getByRole('button', { name: 'Cancel' }).click();
   await expect(popup.getByRole('heading', { name: 'No mappings yet' })).toBeVisible();
@@ -165,7 +177,7 @@ test('Name this page in URLJumper opens the form for the page; Name this link op
   expect((await changes())[seen]).toEqual({
     openIntent: { newValue: { kind: 'name-link', windowId: tab.windowId, time: expect.any(Number), linkUrl: link, pageUrl: page.url(), pageTitle: 'Where the link is' } },
   });
-  await checkAccessibilityInBothSchemes(linkPopup);
+  await checkFitAndAccessibility(linkPopup);
 
   await linkPopup.keyboard.type('article');
   await linkPopup.keyboard.press('Enter');
