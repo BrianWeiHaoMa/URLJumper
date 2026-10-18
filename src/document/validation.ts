@@ -35,10 +35,15 @@ export function validateMapping(fields: MappingFields, mappings: readonly Mappin
   const note = fields.note.toWellFormed();
   const problem = nameProblem(name) ?? urlProblem(url) ?? noteProblem(note);
   if (problem) return { kind: 'invalid', ...problem };
-  const wanted = comparableName(name);
-  const holder = mappings.find((mapping) => comparableName(mapping.name) === wanted);
+  const holder = holderOfName(mappings, name);
   if (holder) return { kind: 'name-taken', line: holder.line };
   return { kind: 'valid', fields: { name, url, note: note.trim() } };
+}
+
+/** The mapping of `mappings` that already has `name`, compared as the grammar compares names; undefined when the name is free. */
+export function holderOfName(mappings: readonly Mapping[], name: string): Mapping | undefined {
+  const wanted = comparableName(name);
+  return mappings.find((mapping) => comparableName(mapping.name) === wanted);
 }
 
 function nameProblem(name: string): FieldProblem | undefined {

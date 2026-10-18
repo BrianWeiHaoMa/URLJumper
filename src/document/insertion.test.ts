@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { readDocument } from './grammar';
 import { documentLineEnding } from './line-edits';
 import { splitLines } from './lines';
-import { insertMapping, undoInsert, type InsertResult } from './insertion';
+import { insertMapping, reinsertLine, undoInsert, type InsertResult } from './insertion';
 import type { HeadingIdentity } from './sections';
 
 interface Case {
@@ -364,5 +364,60 @@ describe('an insert is refused, writing nothing, when the values break a rule or
     expect(insert({ document: '', name: 'a', url: 'https://x y' })).toEqual({ kind: 'invalid', field: 'url', rule: 'whitespace' });
     expect(insert({ document: '', name: 'a', url: 'https://x', note: 'a\nb' })).toEqual({ kind: 'invalid', field: 'note', rule: 'line-break' });
     expect(insert({ document: '', name: 'a', url: 'https://x', note: '\nhello\r\n' })).toEqual({ kind: 'invalid', field: 'note', rule: 'line-break' });
+  });
+});
+
+describe("an Undo's Undo puts the line back as the insert left the document, and its own Undo takes it away again", () => {
+  for (const [title, c] of Object.entries(CASES)) {
+    test(title, () => {
+      const inserted = insert(c);
+      if (inserted.kind !== 'applied') throw new Error(inserted.kind);
+      const undone = undoInsert(inserted.document, inserted.line, inserted.text);
+      if (undone.kind !== 'applied') throw new Error(undone.kind);
+      expect(reinsertLine(undone.document, undone.line, undone.text)).toEqual({ kind: 'applied', document: c.inserted, line: c.line, text: inserted.text });
+      expect(undoInsert(c.inserted, c.line, inserted.text)).toMatchObject({ kind: 'applied', document: c.document });
+    });
+  }
+
+  test('the text goes back as it was, its columns and note kept, not formatted again', () => {
+    expect(reinsertLine('a  x:1\nc  z:3\n', 2, '  b\ty:2    \\  its note ')).toEqual({
+      kind: 'applied',
+      document: 'a  x:1\n  b\ty:2    \\  its note \nc  z:3\n',
+      line: 2,
+      text: '  b\ty:2    \\  its note ',
+    });
+  });
+
+  test('into a document now shorter than the line before it: after the last line, the empty one a final break leaves included', () => {
+    expect(reinsertLine('a  x:1', 5, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\nb  y:2', line: 2, text: 'b  y:2' });
+    expect(reinsertLine('a  x:1\r\nc  z:3', 9, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\r\nc  z:3\r\nb  y:2', line: 3, text: 'b  y:2' });
+    expect(reinsertLine('a  x:1\n', 9, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\n\nb  y:2', line: 3, text: 'b  y:2' });
+    expect(reinsertLine('', 3, 'b  y:2')).toEqual({ kind: 'applied', document: '\nb  y:2', line: 2, text: 'b  y:2' });
+    // With exactly line − 1 lines it is the new last line, still at its number.
+    expect(reinsertLine('a  x:1\nc  z:3', 3, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\nc  z:3\nb  y:2', line: 3, text: 'b  y:2' });
+  });
+
+  test("a name another mapping line now has, in any case, is taken: that line's number, nothing written", () => {
+    expect(reinsertLine('z  q:0\nnot a mapping\nSTOCKS  https://t.example/\n', 2, STOCKS)).toEqual({ kind: 'name-taken', line: 3 });
+    // A later line with the name counts as much as an earlier one: putting the text back would make it unreadable.
+    expect(reinsertLine('z  q:0\nStocks  https://t.example/\n', 1, STOCKS)).toEqual({ kind: 'name-taken', line: 2 });
+    // A lone surrogate is checked as the U+FFFD it is stored as.
+    expect(reinsertLine('a\uFFFD  y:2\n', 2, 'a\uD800  x:1')).toEqual({ kind: 'name-taken', line: 1 });
+    expect(reinsertLine('', 1, 'a\uD800  x:1')).toEqual({ kind: 'applied', document: 'a\uFFFD  x:1\n', line: 1, text: 'a\uFFFD  x:1' });
+  });
+
+  test('a name only an unreadable line has is free, and that line stays as it was', () => {
+    expect(reinsertLine('stocks notaurl\n', 1, STOCKS)).toEqual({ kind: 'applied', document: `${STOCKS}\nstocks notaurl\n`, line: 1, text: STOCKS });
+  });
+
+  test('a text that is not one mapping line where it lands is refused: a comment, a blank, two lines, an unreadable line', () => {
+    for (const text of ['\\ Work', '', '   ', 'a  x:1\nb  y:2', 'a  x:1\r\n', 'what  is  this', 'stocks', 'b  y:2\r\nc  z:3']) {
+      expect(reinsertLine('a  x:1\nc  z:3\n', 2, text), JSON.stringify(text)).toEqual({ kind: 'unreadable' });
+    }
+  });
+
+  test('a text ending in a lone CR stands only as the last line: before another it would read with the ending as CRLF', () => {
+    expect(reinsertLine('a  x:1\nc  z:3\n', 2, 'b  y:2\r')).toEqual({ kind: 'unreadable' });
+    expect(reinsertLine('a  x:1', 2, 'b  y:2\r')).toEqual({ kind: 'applied', document: 'a  x:1\nb  y:2\r', line: 2, text: 'b  y:2\r' });
   });
 });

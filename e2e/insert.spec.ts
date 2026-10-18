@@ -9,6 +9,7 @@ const insertOf = (name: string, url: string, heading: InsertRequest['heading'] =
   heading,
 });
 const undoOf = (line: number, text: string): UndoRequest => ({ kind: 'undo', act: 'remove', line, text });
+const reinsertOf = (line: number, text: string): UndoRequest => ({ kind: 'undo', act: 'reinsert', line, text });
 
 const DAILY = '\\ Daily\nmail                 https://mail.google.com/\n';
 const STOCKS = 'stocks               https://s.example/';
@@ -228,4 +229,72 @@ test('lone surrogates are stored as U+FFFD, and the line replied is the line sto
   expect(await extension.sendRequest(insertOf('a�', 'https://f.example/'))).toEqual({ kind: 'name-taken', line: 1 });
   expect(await extension.sendRequest(undoOf(1, text))).toEqual({ kind: 'applied', line: 1, text });
   expect(await storedDocument(extension)).toBe('');
+});
+
+test("an undo's undo puts the line back byte for byte in one change with the usage, a creation again; its undo takes it away", async ({ extension }) => {
+  const mail = 'mail\nhttps://mail.google.com/';
+  const stocks = 'stocks\nhttps://s.example/';
+  await extension.seedStorage({ mappings: DAILY, usage: { [mail]: [1_700_000_000_001] } });
+  const changes = await extension.watchStorage();
+
+  expect(await extension.sendRequest(insertOf('stocks', 'https://s.example/'))).toMatchObject({ kind: 'applied', line: 3, text: STOCKS });
+  expect(await extension.sendRequest(undoOf(3, STOCKS))).toEqual({ kind: 'applied', line: 3, text: STOCKS });
+  expect(await extension.readStorage()).toEqual({ mappings: DAILY, usage: { [mail]: [1_700_000_000_001] } });
+  const before = Date.now();
+  expect(await extension.sendRequest(reinsertOf(3, STOCKS))).toEqual({ kind: 'applied', line: 3, text: STOCKS });
+  const after = Date.now();
+  const stored = await extension.readStorage();
+  expect(stored.mappings).toBe(`${DAILY}${STOCKS}\n`);
+  const { [stocks]: created, ...others } = stored.usage as Record<string, number[]>;
+  expect(others).toEqual({ [mail]: [1_700_000_000_001] });
+  expect(created).toHaveLength(1);
+  expect(created![0]).toBeGreaterThanOrEqual(before);
+  expect(created![0]).toBeLessThanOrEqual(after);
+
+  expect(await extension.sendRequest(undoOf(3, STOCKS))).toEqual({ kind: 'applied', line: 3, text: STOCKS });
+  expect(await extension.readStorage()).toEqual({ mappings: DAILY, usage: { [mail]: [1_700_000_000_001] } });
+  const recorded = await changesWhen(changes, 4);
+  expect(recorded.map((change) => Object.keys(change).sort())).toEqual(Array.from({ length: 4 }, () => ['mappings', 'usage']));
+});
+
+test("through an insert, its undo, and the undo's undo, a CRLF document without a final break and a lone CR last line keep every byte", async ({ extension }) => {
+  for (const [document, inserted] of [
+    ['z    q:0\r\na    x:1', 'z    q:0\r\na    x:1\r\nb    y:2'],
+    ['a    x:1\r', 'a    x:1\r\nb    y:2'],
+  ]) {
+    await extension.seedStorage({ mappings: document });
+    const { line, text } = (await extension.sendRequest(insertOf('b', 'y:2'))) as { line: number; text: string };
+    expect(await extension.sendRequest(undoOf(line, text))).toMatchObject({ kind: 'applied' });
+    expect(await extension.sendRequest(reinsertOf(line, text))).toEqual({ kind: 'applied', line, text });
+    expect(await storedDocument(extension)).toBe(inserted);
+    expect(await extension.sendRequest(undoOf(line, text))).toMatchObject({ kind: 'applied' });
+    expect(await storedDocument(extension)).toBe(document);
+  }
+});
+
+test("an undo's undo writes nothing when another line has the name, or the text would not stand there as one mapping line", async ({ extension }) => {
+  const document = 'z  q:0\nSTOCKS  https://t.example/\n';
+  await extension.seedStorage({ mappings: document, usage: { 'stocks\nhttps://t.example/': [1_700_000_000_000] } });
+  const before = await extension.readStorage();
+  const changes = await extension.watchStorage();
+
+  expect(await extension.sendRequest(reinsertOf(1, STOCKS))).toEqual({ kind: 'name-taken', line: 2 });
+  for (const text of ['\\ Work', '', 'a  x:1\nb  y:2', 'what  is  this', 'b  y:2\r']) {
+    expect(await extension.sendRequest(reinsertOf(2, text)), JSON.stringify(text)).toEqual({ kind: 'stale', document });
+  }
+  expect(await extension.readStorage()).toEqual(before);
+
+  // Events arrive in order: if any refusal had written, its change would come before this one.
+  expect(await extension.sendRequest(insertOf('fence', 'https://f.example/'))).toMatchObject({ kind: 'applied', line: 3 });
+  const [change] = await changesWhen(changes, 1);
+  expect(change!.mappings!.newValue).toBe(`${document}fence   https://f.example/\n`);
+});
+
+test("an undo's undo Chrome refuses to store replies with Chrome's message and leaves the document and usage as they were", async ({ extension }) => {
+  const usage = { 'mail\nhttps://mail.google.com/': [1_700_000_000_000] };
+  await extension.seedStorage({ mappings: DAILY, usage });
+  await extension.fillStorage(16);
+
+  expect(await extension.sendRequest(reinsertOf(3, STOCKS))).toEqual({ kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' });
+  expect(await extension.readStorage()).toMatchObject({ mappings: DAILY, usage });
 });

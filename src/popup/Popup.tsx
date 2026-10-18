@@ -1,8 +1,9 @@
 // The popup (In use, "Jump", "Name this page", "Name from a search"): search, with the search box and the
-// mode chip, the list seven rows at a time with a cue for the rest, what the page is called (G10), and the
-// *Name this page* button; or the Name form. A footer says what Enter does. Everything shown derives from
-// storage, read when the popup opens and again after every change; a mapping opens only through the
-// worker's jump, sent from the popup's Enter handler or a row's click handler (R4), never from anything else.
+// mode chip, the confirmation of the last change with its Undo, the list seven rows at a time with a cue for
+// the rest, what the page is called (G10), and the *Name this page* button; or the Name form. A footer says
+// what Enter does. Everything shown derives from storage, read when the popup opens and again after every
+// change; a mapping opens only through the worker's jump, sent from the popup's Enter handler or a row's
+// click handler (R4), never from anything else.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { isArgumentAlias } from '../document/argument';
 import { readDocument } from '../document/grammar';
@@ -12,7 +13,7 @@ import type { Usage } from '../document/score';
 import { intentFor, startMode, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme, type Theme } from '../preferences';
 import { send, type JumpReply, type JumpRequest } from '../requests';
-import { Confirmation, useConfirmationLifetime, type Confirmed } from './Confirmation';
+import { Confirmation, offersUndo, undoFooter, useConfirmationLifetime, useUndo, type Confirmed, type Outcome } from './Confirmation';
 import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
 import { NameForm, type NameSubject, type Saved } from './NameForm';
 import { Row, rowId } from './Row';
@@ -46,10 +47,10 @@ interface State {
   list: ListState;
   mode: OpenMode;
   /** The control in search whose focus changes what Enter does, if one has it. */
-  focused: 'chip' | 'name-page' | null;
+  focused: 'chip' | 'name-page' | 'undo' | null;
   /** Why the last jump did not open; kept until the user types or jumps again. */
   message: string | null;
-  /** The last save's confirmation, until its lifetime ends (G15). */
+  /** The last change's confirmation, a save's or an Undo's, until its lifetime ends (G15). */
   confirmed: Confirmed | null;
   /** How many confirmations and form openings there have been. */
   count: number;
@@ -69,6 +70,7 @@ type Action =
   | { kind: 'name'; name: string }
   | { kind: 'cancel' }
   | { kind: 'saved'; saved: Saved; now: number }
+  | { kind: 'undone'; outcome: Outcome }
   | { kind: 'confirmation-ended'; id: number };
 
 const STORED_KEYS = ['mappings', 'usage', 'searchOrder', 'themePref'];
@@ -81,9 +83,17 @@ export function Popup() {
   const [state, dispatch] = useReducer(reduce, undefined, initialState);
   const wheel = useRef(0);
   const layout = useFitToViewport();
-  const confirmation = useRef<HTMLParagraphElement>(null);
+  const searchBox = useRef<HTMLInputElement>(null);
+  const confirmation = useRef<HTMLDivElement>(null);
   const endConfirmation = useCallback((id: number) => dispatch({ kind: 'confirmation-ended', id }), []);
   useConfirmationLifetime(state.confirmed, endConfirmation, confirmation);
+  const { undo, undoing } = useUndo(state.confirmed, (outcome) => dispatch({ kind: 'undone', outcome }));
+
+  // Undo going while it has the focus, with its confirmation or for a refusal, gives the focus back to the
+  // search box instead of to nothing (G32).
+  useLayoutEffect(() => {
+    if (document.activeElement === document.body) searchBox.current?.focus();
+  }, [state.confirmed]);
 
   useEffect(() => {
     // Every read asks for the keys again, and Chrome answers reads in the order they were made, so the last
@@ -196,6 +206,7 @@ export function Popup() {
     <main className="popup" ref={layout.root}>
       <header className="search-bar">
         <input
+          ref={searchBox}
           className="search-box"
           type="text"
           role="combobox"
@@ -226,7 +237,16 @@ export function Popup() {
       </header>
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
-          {state.confirmed !== null && <Confirmation confirmed={state.confirmed} own={confirmation} />}
+          {state.confirmed !== null && (
+            <Confirmation
+              confirmed={state.confirmed}
+              own={confirmation}
+              undoing={undoing}
+              onUndo={() => void undo()}
+              onUndoFocus={(focused) => dispatch({ kind: 'focused', focused: focused ? 'undo' : null })}
+              onTyping={() => searchBox.current?.focus()}
+            />
+          )}
           {state.message !== null && (
             <p className="message" role="alert">
               {state.message}
@@ -264,7 +284,7 @@ export function Popup() {
         </button>
       </div>
       <footer className="footer">
-        {footer(state, ready)}
+        {footer(state, ready, undoing)}
       </footer>
     </main>
   );
@@ -286,6 +306,12 @@ function initialState(): State {
 }
 
 function reduce(state: State, action: Action): State {
+  const next = reduceAction(state, action);
+  // Undo has gone once its confirmation has, whether or not Chrome said the focus left it.
+  return next.focused === 'undo' && !offersUndo(next.confirmed) ? { ...next, focused: null } : next;
+}
+
+function reduceAction(state: State, action: Action): State {
   switch (action.kind) {
     case 'stored': {
       const input = { ...searchInputs(action.stored), typed: state.typed, now: action.now };
@@ -317,7 +343,8 @@ function reduce(state: State, action: Action): State {
     }
     case 'cancel':
       return { ...state, view: { kind: 'search' } };
-    case 'saved':
+    case 'saved': {
+      const { headingMissing, ...changed } = action.saved;
       // Back to a blank search box, where an Enter left over from the save opens nothing (G3).
       return {
         ...state,
@@ -325,9 +352,13 @@ function reduce(state: State, action: Action): State {
         typed: '',
         list: listFor(state, '', action.now),
         message: null,
-        confirmed: { id: state.count + 1, saved: action.saved },
+        confirmed: { id: state.count + 1, outcome: { kind: 'saved', changed, headingMissing } },
         count: state.count + 1,
       };
+    }
+    case 'undone':
+      // An Undo is a change of its own: its outcome replaces the confirmation and starts its own lifetime (G15).
+      return { ...state, confirmed: { id: state.count + 1, outcome: action.outcome }, count: state.count + 1 };
     case 'confirmation-ended':
       return state.confirmed?.id === action.id ? { ...state, confirmed: null } : state;
   }
@@ -388,9 +419,10 @@ function otherMode(mode: OpenMode): OpenMode {
 }
 
 /** What Enter does now (L2). */
-function footer(state: State, ready: boolean): string {
+function footer(state: State, ready: boolean, undoing: boolean): string {
   const { list, mode } = state;
   if (state.focused === 'chip') return `Enter or Space switches to ${MODE_LABEL[otherMode(mode)]}`;
+  if (state.focused === 'undo' && state.confirmed !== null) return undoFooter(state.confirmed.outcome, undoing);
   if (!ready) return 'Enter does nothing until the popup is ready';
   if (state.focused === 'name-page') return 'Enter opens the Name form';
   // Typed text always lists a row, the Name row at least.

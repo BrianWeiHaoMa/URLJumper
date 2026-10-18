@@ -5,6 +5,7 @@ const JUMP: JumpRequest = { kind: 'jump', name: 'alpha', url: 'https://a.example
 const REMOVE_INTENT: RemoveIntentRequest = { kind: 'remove-intent', windowId: 3, time: 1_700_000_000_000 };
 const INSERT: InsertRequest = { kind: 'insert', name: 'stocks', url: 'https://s.example/', note: '', heading: null };
 const UNDO: UndoRequest = { kind: 'undo', act: 'remove', line: 3, text: 'stocks               https://s.example/' };
+const REINSERT: UndoRequest = { ...UNDO, act: 'reinsert' };
 const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
 const NO_REPLY = { kind: 'storage-failed', message: "URLJumper's service worker did not reply." };
 
@@ -99,6 +100,12 @@ test('the requests that write the document, each with the replies declared for i
       { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
     ]],
     [UNDO, [{ kind: 'applied', line: 3, text: UNDO.text }, { kind: 'stale', document: '' }]],
+    [REINSERT, [
+      { kind: 'applied', line: 3, text: UNDO.text },
+      { kind: 'stale', document: 'a  x:1\n' },
+      { kind: 'name-taken', line: 2 },
+      { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
+    ]],
     [LOAD_EXAMPLE, [{ kind: 'applied', text: '\\ Daily\n', first: 1, last: 12 }, { kind: 'not-empty' }]],
   ];
   for (const [request, declared] of replies) {
@@ -113,7 +120,8 @@ test('the requests that write the document, each with the replies declared for i
 test('a reply declared for another request, or missing a field, is no reply', async () => {
   const undeclared: [InsertRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
     [INSERT, [{ kind: 'applied', line: 3, text: 'x' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }, { kind: 'invalid', field: 'url' }, { kind: 'stale', document: '' }, { kind: 'opened' }]],
-    [UNDO, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'not-empty' }, { kind: 'name-taken', line: 2 }]],
+    [UNDO, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'not-empty' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }]],
+    [REINSERT, [{ kind: 'applied', text: 'x' }, { kind: 'invalid', field: 'name', rule: 'empty' }, { kind: 'done' }]],
     [LOAD_EXAMPLE, [{ kind: 'applied', text: 'x' }, { kind: 'done' }, { kind: 'stale', document: '' }]],
   ];
   for (const [request, replies] of undeclared) {
@@ -130,6 +138,7 @@ test('the worker accepts the writing requests only with every field of its decla
   expect(isRequest(INSERT)).toBe(true);
   expect(isRequest({ ...INSERT, note: 'see docs', heading: { texts: ['\\ Work', '\\ more'], before: 2 } })).toBe(true);
   expect(isRequest(UNDO)).toBe(true);
+  expect(isRequest(REINSERT)).toBe(true);
   expect(isRequest(LOAD_EXAMPLE)).toBe(true);
   for (const value of [
     { ...INSERT, name: undefined },
@@ -144,6 +153,9 @@ test('the worker accepts the writing requests only with every field of its decla
     { ...UNDO, line: 0 },
     { ...UNDO, line: 2.5 },
     { ...UNDO, text: undefined },
+    { ...REINSERT, act: 'Reinsert' },
+    { ...REINSERT, line: 0 },
+    { ...REINSERT, text: 3 },
     { kind: 'load-examples' },
   ]) {
     expect(isRequest(value), JSON.stringify(value)).toBe(false);

@@ -32,11 +32,14 @@ export type RemoveIntentRequest = { kind: 'remove-intent'; windowId: number; tim
 export type InsertRequest = { kind: 'insert'; name: string; url: string; /** Empty for no note. */ note: string; heading: HeadingIdentity | null };
 
 /**
- * Reverses a change (G15) by its act: `remove` takes away the line an insert added, named by the line number
- * and exact text the insert replied, found again as the mapping line with that text at that number, else as
- * the single mapping line with that text.
+ * Reverses a change (G15) by its act. `remove` takes away the line an insert or a `reinsert` added, named by
+ * the line number and exact text its reply gave, found again as the mapping line with that text at that
+ * number, else as the single mapping line with that text. `reinsert` puts back the exact text of a line a
+ * change took away as line `line`, its former number, or after the last line when the document now has fewer
+ * than `line` − 1 lines, once no other mapping line has its name; a text that would not read there as one
+ * mapping line is `stale`.
  */
-export type UndoRequest = { kind: 'undo'; act: 'remove'; line: number; text: string };
+export type UndoRequest = { kind: 'undo'; act: 'remove' | 'reinsert'; line: number; text: string };
 
 /** Stores the example document (F11), only into a document that is absent or holds only whitespace (G30). */
 export type LoadExampleRequest = { kind: 'load-example' };
@@ -65,10 +68,12 @@ export type InsertReply =
   | StorageFailed;
 
 export type UndoReply =
-  /** Stored: the number and exact text of the line taken away. */
+  /** Stored: the number and exact text of the line taken away or put back. */
   | { kind: 'applied'; line: number; text: string }
   /** The line no longer stands as the change left it; nothing was stored. `document` is the stored text, empty when absent. */
   | { kind: 'stale'; document: string }
+  /** Another mapping line has the name of the line to put back: `line` is its number. Nothing was stored. */
+  | { kind: 'name-taken'; line: number }
   | StorageFailed;
 
 export type LoadExampleReply =
@@ -116,7 +121,7 @@ export function isRequest(value: unknown): value is Request {
     case 'insert':
       return typeof value.name === 'string' && typeof value.url === 'string' && typeof value.note === 'string' && (value.heading === null || isHeading(value.heading));
     case 'undo':
-      return value.act === 'remove' && isLineNumber(value.line) && typeof value.text === 'string';
+      return (value.act === 'remove' || value.act === 'reinsert') && isLineNumber(value.line) && typeof value.text === 'string';
     case 'load-example':
       return true;
     case 'jump':
@@ -151,6 +156,7 @@ function isReplyTo(request: Request, value: unknown): boolean {
       return value.kind === 'name-taken' && isLineNumber(value.line);
     case 'undo':
       if (value.kind === 'applied') return isLineNumber(value.line) && typeof value.text === 'string';
+      if (value.kind === 'name-taken') return isLineNumber(value.line);
       return value.kind === 'stale' && typeof value.document === 'string';
     case 'load-example':
       if (value.kind === 'applied') return typeof value.text === 'string' && isLineNumber(value.first) && isLineNumber(value.last);
