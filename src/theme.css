@@ -1,0 +1,49 @@
+/* The one theme stylesheet: every color the extension's pages use is a token here, its light value first
+   and its dark value second. The page follows the system's color scheme unless its root names a theme
+   (`applyTheme` in src/preferences.ts). Token names say what a color is for: `--text-*` is drawn as text,
+   `--bg-*` behind text, `--line-*` as borders, `--focus` as the focus ring. src/theme.test.ts checks every
+   text token against every background token, in both themes. */
+:root {
+  color-scheme: light dark;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-primary: light-dark(#18181d, #ececf1);
+  --text-muted: light-dark(#565662, #a9a9b5);
+  --text-argument: light-dark(#9c2560, #f592c1);
+  --text-alert: light-dark(#a32418, #f5948b);
+
+  --bg-page: light-dark(#ffffff, #1a1a1f);
+  --bg-footer: light-dark(#f6f6f8, #141418);
+  --bg-control: light-dark(#f1f1f4, #24242b);
+  --bg-hover: light-dark(#f1f1f4, #24242b);
+  --bg-selected: light-dark(#eceefd, #262a4e);
+  --bg-argument: light-dark(#fbeaf2, #3a1f2d);
+  --bg-alert: light-dark(#fdeceb, #3a1c1b);
+
+  --line-separator: light-dark(#e7e7ec, #2d2d35);
+  --line-control: light-dark(#d3d3db, #3c3c46);
+
+  --focus: light-dark(#4b55d1, #8e98ff);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  color: var(--text-primary);
+  background: var(--bg-page);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}

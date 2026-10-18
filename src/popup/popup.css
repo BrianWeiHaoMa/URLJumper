@@ -1,0 +1,162 @@
+/* The popup's layout (G7): a fixed width, the search bar and footer fixed, and the view between them
+   scrolling, the whole at most 600 pixels tall; src/popup/fit-to-viewport.ts lowers that to the viewport.
+   Every color is a token of src/theme.css. */
+.popup {
+  box-sizing: border-box;
+  width: 460px;
+  max-height: 600px;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  /* Whole-pixel line heights keep the content's height whole: Chrome sizes the popup in whole pixels, and a
+     fraction above it would make the view scroll by less than a pixel. */
+  line-height: 18px;
+}
+
+.search-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-separator);
+}
+
+.search-box {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  line-height: 22px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.search-box::placeholder {
+  color: var(--text-muted);
+}
+
+.search-box:focus-visible {
+  outline-offset: 0;
+}
+
+.chip {
+  flex: none;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.view {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.view:focus-visible {
+  outline-offset: -2px;
+}
+
+.view-content {
+  padding: 6px;
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  box-sizing: border-box;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--bg-hover);
+}
+
+.row[aria-selected="true"] {
+  background: var(--bg-selected);
+}
+
+.row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* A name or URL longer than the row is shown from its start and cut with an ellipsis; nothing else is cut. */
+.row-name,
+.row-url {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.row-name {
+  font-weight: 600;
+}
+
+.row-url {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+
+.row-tag {
+  flex: none;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.slot {
+  color: var(--text-argument);
+  background: var(--bg-argument);
+  border-radius: 3px;
+}
+
+.cue {
+  margin: 4px 8px 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.message {
+  margin: 2px 2px 6px;
+  padding: 6px 8px;
+  color: var(--text-alert);
+  background: var(--bg-alert);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  flex: none;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-footer);
+  border-top: 1px solid var(--line-separator);
+}

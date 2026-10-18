@@ -1,7 +1,7 @@
 // Opening the popup for a command (G5): the intent record first, so the popup knows why it opened, then
 // Chrome's openPopup. Refused for an inactive window, the record stays and the popup opens when that window
 // next takes focus while the record is fresh; refused for any other reason, the record goes and nothing opens.
-import { isFresh, isOpenIntent, type OpenIntent, type OpenIntentKind } from '../open-intent';
+import { isFresh, isOpenIntent, sameIntent, type OpenIntent, type OpenIntentKind } from '../open-intent';
 import { chromeMessage } from '../requests';
 import { enqueue } from './queue';
 
@@ -43,7 +43,7 @@ async function showPopup(intent: OpenIntent): Promise<void> {
 // the queue, so no jump waits on Chrome's popup.
 async function removeIntent(intent: OpenIntent): Promise<void> {
   const { openIntent } = await chrome.storage.local.get('openIntent');
-  if (isOpenIntent(openIntent) && openIntent.time === intent.time && openIntent.windowId === intent.windowId) {
+  if (isOpenIntent(openIntent) && sameIntent(openIntent, intent)) {
     await chrome.storage.local.remove('openIntent');
   }
 }

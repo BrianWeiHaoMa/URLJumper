@@ -1,10 +1,16 @@
 import { expect, test } from 'vitest';
-import { fillArgument, isArgumentAlias } from './argument';
+import { argumentPieces, fillArgument, isArgumentAlias } from './argument';
 
 test('a URL holding %s is an argument alias', () => {
   expect(isArgumentAlias('https://e/?q=%s')).toBe(true);
   expect(isArgumentAlias('https://e/?q=%S')).toBe(false);
   expect(isArgumentAlias('https://e/')).toBe(false);
+});
+
+test('the pieces around %s are the text before, between, and after each mark', () => {
+  expect(argumentPieces('https://e/?q=%s&r=%s')).toEqual(['https://e/?q=', '&r=', '']);
+  expect(argumentPieces('%s%s')).toEqual(['', '', '']);
+  expect(argumentPieces('https://e/?q=%25s')).toEqual(['https://e/?q=%25s']);
 });
 
 test('every %s takes the argument encoded as a URI component, a space as %20', () => {

@@ -113,19 +113,31 @@ test("a refused command's cleanup never removes the intent a later command wrote
   const refused = await extension.frontTab(await opened);
 
   // Chrome's storage answers a read of the intent 300 ms late, as it may under load, so the later command's
-  // record lands between the refused command's read of its own record and its removal.
+  // record lands between the refused command's read of its own record and its removal. Each removal the
+  // worker makes is recorded with the record it removed; the popup's own removal of the record it honors is
+  // the popup's, not the worker's.
   await extension.worker.evaluate(() => {
     const local = chrome.storage.local;
     const get = local.get.bind(local) as (keys: unknown) => Promise<Record<string, unknown>>;
+    const remove = local.remove.bind(local) as (keys: unknown) => Promise<void>;
+    const removed: unknown[] = [];
+    (globalThis as Record<string, unknown>).intentsRemoved = removed;
     (local as unknown as { get: unknown }).get = async (keys: unknown) => {
       const items = await get(keys);
       if (keys === 'openIntent') await new Promise((resolve) => setTimeout(resolve, 300));
       return items;
     };
+    (local as unknown as { remove: unknown }).remove = async (keys: unknown) => {
+      if (keys === 'openIntent') removed.push((await get('openIntent')).openIntent);
+      return remove(keys);
+    };
   });
   await extension.dispatchEvent('commands.onCommand', 'open-new-tab', refused);
   await new Promise((resolve) => setTimeout(resolve, 100));
-  await extension.popupOpenedBy(() => extension.dispatchEvent('commands.onCommand', 'open-same-tab', later));
+  const popup = await extension.popupOpenedBy(() => extension.dispatchEvent('commands.onCommand', 'open-same-tab', later));
   await settle();
-  expect((await extension.readStorage()).openIntent).toMatchObject({ kind: 'this-tab', windowId: later.windowId });
+  const removed = await extension.worker.evaluate(() => (globalThis as Record<string, unknown>).intentsRemoved);
+  expect(removed).toEqual([{ kind: 'new-tab', windowId: refused.windowId, time: expect.any(Number) }]);
+  // The later command's popup found its record and starts in its mode.
+  await expect(popup.locator('.chip')).toHaveText('This tab');
 });

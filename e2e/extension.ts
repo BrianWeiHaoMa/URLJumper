@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { Request } from '../src/requests.ts';
 
 export { expect } from '@playwright/test';
+export { checkAccessibility, checkAccessibilityInBothSchemes } from './accessibility.ts';
 
 export const distDir = path.resolve(import.meta.dirname, '..', 'dist');
 
@@ -313,6 +314,21 @@ export async function watchPolicy(page: Page, extension: LoadedExtension) {
       return seen;
     },
   };
+}
+
+/** Opens a page of `site` titled `title` and clicks the toolbar button on it: that page, and the real popup opened on it. */
+export async function popupOnNewPage(extension: LoadedExtension, site: LocalSite, title = 'Where the popup opens') {
+  const page = await extension.context.newPage();
+  await page.goto(site.pageUrl(title));
+  return { page, popup: await extension.clickToolbarButton(page) };
+}
+
+/** Whether `page` is drawn in a dark or a light theme, from its background's luminance. */
+export function shownTheme(page: Page): Promise<'dark' | 'light'> {
+  return page.evaluate(() => {
+    const [r, g, b] = getComputedStyle(document.body).backgroundColor.match(/\d+/g)!.map(Number) as [number, number, number];
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128 ? 'dark' : 'light';
+  });
 }
 
 /**

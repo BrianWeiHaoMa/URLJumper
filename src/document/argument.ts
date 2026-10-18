@@ -4,6 +4,11 @@ export function isArgumentAlias(url: string): boolean {
   return url.includes('%s');
 }
 
+/** The URL's text before, between, and after its `%s` marks, in order: one piece more than it has marks. */
+export function argumentPieces(url: string): string[] {
+  return url.split('%s');
+}
+
 /** The longest URL Chrome navigates to (E7), in UTF-16 code units as `String.prototype.length` counts them. */
 const LONGEST_URL = 2_097_152;
 
@@ -16,7 +21,7 @@ const LONGEST_URL = 2_097_152;
  * and a long argument reach far past what a string can hold inside E3.
  */
 export function fillArgument(url: string, argument: string): string | undefined {
-  const pieces = url.split('%s');
+  const pieces = argumentPieces(url);
   const slots = pieces.length - 1;
   if (slots === 0) return url.length > LONGEST_URL ? undefined : url;
   // Encoding never shortens the argument, so one longer than the limit is too long before it is encoded.

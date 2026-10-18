@@ -9,8 +9,12 @@ test('an extension page renders under the CSP with no violation and no request o
   });
   page.on('pageerror', (error) => errors.push(error.message));
 
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\nyt  https://www.youtube.com/results?search_query=%s\n' });
   await page.goto(extension.url('popup.html'));
-  await expect(page.locator('#root main')).toBeVisible();
+  // A blank list, then a typed search with an argument row.
+  await expect(page.locator('#root main').getByRole('option')).toHaveCount(2);
+  await page.getByRole('combobox').fill('yt lo-fi');
+  await expect(page.getByRole('option')).toHaveCount(1);
   expect(await policy.violations()).toEqual([]);
   expect(policy.offPackage).toEqual([]);
   expect(errors).toEqual([]);
