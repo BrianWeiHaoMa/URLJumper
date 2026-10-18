@@ -1,7 +1,7 @@
 // What the popup lists, as the user types and as storage changes: groups and order (G1, G2), selection and
 // the seven-row window (G3, F13), the cue and footer (L2), the theme (F3, F15), and the fit (G7).
-import type { Page } from '@playwright/test';
-import { checkAccessibilityInBothSchemes, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
+import type { Locator, Page } from '@playwright/test';
+import { checkAccessibilityInBothSchemes, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
 
 // Mappings named m1 … m<count>, one per line, each at the address `url` gives it.
 const mappings = (count: number, url = (i: number) => `https://m${i}.example/`) =>
@@ -84,9 +84,7 @@ test('Up and Down wrap through every match and the window follows; the wheel mov
   await expect(cue(popup)).toHaveText('13 more above');
   await expect(selected(popup)).toBeInViewport({ ratio: 1 });
   const before = new Set(extension.context.pages());
-  const closed = popup.waitForEvent('close');
-  await popup.getByRole('option', { name: /^m20 / }).click();
-  await closed;
+  await closingPopup(popup, () => popup.getByRole('option', { name: /^m20 / }).click());
   await expect.poll(() => extension.context.pages().filter((page) => !before.has(page)).map((page) => page.url())).toEqual([urls[19]]);
 });
 
@@ -174,6 +172,33 @@ test('a name or URL that fits its row is shown whole, however many code units it
     [name, false],
     [url, false],
   ]);
+});
+
+test('a name or URL in a script whose marks rise above or fall below the line is shown whole, and so is the same text typed', async ({ extension, site }) => {
+  // Thai stacks tone marks above its letters and gives ฎ and ฏ tails below them; Vietnamese stacks marks on capitals.
+  const texts = ['ปั้นฎฏ', 'Ỗộở Ữ'];
+  await extension.seedStorage({ mappings: texts.map((text, i) => `${text}  https://${text.replace(' ', '')}.example/${i}\n`).join('') });
+  const { popup } = await popupOnNewPage(extension, site);
+  await expect(popup.getByRole('option')).toHaveCount(2);
+  // Each text as the popup draws it, against the same text with nothing around it allowed to cut it.
+  // `inset` leaves out a box's rounded corners, which can draw a pixel apart once its style changes.
+  const drawnWhole = async (target: Locator, uncut: (element: HTMLElement) => void, inset = 0) => {
+    const box = (await target.boundingBox())!;
+    const clip = { x: box.x + inset, y: box.y - 12, width: box.width - 2 * inset, height: box.height + 24 };
+    const drawn = await popup.screenshot({ clip, caret: 'hide' });
+    await target.evaluate(uncut);
+    const whole = await popup.screenshot({ clip, caret: 'hide' });
+    await target.evaluate((element) => element.removeAttribute('style'));
+    return drawn.equals(whole);
+  };
+  for (const text of await popup.locator('[role=option] .row-name, [role=option] .row-url').all()) {
+    expect(await drawnWhole(text, (element) => (element.style.overflow = 'visible')), (await text.textContent()) ?? '').toBe(true);
+  }
+  for (const typed of texts) {
+    await popup.getByRole('combobox').fill(typed);
+    // A taller line box, in a box of the same height, leaves the typed text the same room as anything drawn around it.
+    expect(await drawnWhole(popup.getByRole('combobox'), (element) => (element.style.cssText = 'line-height: 32px; padding-block: 0'), 6), typed).toBe(true);
+  }
 });
 
 test('a popup opened on one row grows to show seven when the list grows', async ({ extension, site }) => {

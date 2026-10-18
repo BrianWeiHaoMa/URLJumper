@@ -25,7 +25,7 @@ export function isFresh(intent: OpenIntent, now: number): boolean {
 }
 
 /** Whether `a` and `b` are the same record: the same window, written at the same time. */
-export function sameIntent(a: OpenIntent, b: OpenIntent): boolean {
+export function sameIntent(a: Pick<OpenIntent, 'windowId' | 'time'>, b: OpenIntent): boolean {
   return a.windowId === b.windowId && a.time === b.time;
 }
 

@@ -2,7 +2,7 @@
 // Shift in the other, the chip starts as the popup's opening asked, and when nothing opens the popup stays
 // and says why.
 import type { Page } from '@playwright/test';
-import { checkAccessibilityInBothSchemes, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
+import { checkAccessibilityInBothSchemes, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
 
 const chip = (popup: Page) => popup.locator('.chip');
 const footer = (popup: Page) => popup.locator('footer');
@@ -13,11 +13,7 @@ const tabsSince = (extension: LoadedExtension, before: ReadonlySet<Page>) =>
   extension.context.pages().filter((page) => !before.has(page) && !page.url().startsWith(extension.url('')));
 
 // Presses `key` in the popup and waits for the popup to close, as it does once the jump opened.
-async function jumpWith(popup: Page, key: string) {
-  const closed = popup.waitForEvent('close');
-  await popup.keyboard.press(key);
-  await closed;
-}
+const jumpWith = (popup: Page, key: string) => closingPopup(popup, () => popup.keyboard.press(key));
 
 test('whichever way the popup opens, typing goes straight into its search box', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
@@ -35,6 +31,16 @@ test('whichever way the popup opens, typing goes straight into its search box', 
     await popup.close();
     await expect.poll(() => extension.openPopups()).toBe(0);
   }
+});
+
+test('the search box has the focus by the time Chrome shows the popup, so a key typed at once goes into it', async ({ extension, site }) => {
+  // Chrome shows the popup and gives it the keyboard once its load completes (DocumentOnLoadCompletedInPrimaryMainFrame).
+  const { popup } = await popupOnNewPage(extension, site);
+  await popup.addInitScript(() =>
+    addEventListener('load', () => Object.defineProperty(window, 'focusedAtLoad', { value: document.activeElement?.getAttribute('role') ?? null })),
+  );
+  await popup.reload();
+  expect(await popup.evaluate(() => (window as { focusedAtLoad?: string | null }).focusedAtLoad)).toBe('combobox');
 });
 
 test('from the toolbar the chip reads New tab: Enter and a click open a new tab, Shift+Enter and Shift+click the page', async ({ extension, site }) => {
@@ -62,18 +68,14 @@ test('from the toolbar the chip reads New tab: Enter and a click open a new tab,
   ({ page, popup } = await popupOnNewPage(extension, site, 'Opener for a click'));
   await popup.keyboard.type('go');
   before = new Set(extension.context.pages());
-  let closed = popup.waitForEvent('close');
-  await popup.getByRole('option').click();
-  await closed;
+  await closingPopup(popup, () => popup.getByRole('option').click());
   await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([target]);
   expect(page.url()).not.toBe(target);
 
   ({ page, popup } = await popupOnNewPage(extension, site, 'Opener for Shift+click'));
   await popup.keyboard.type('go');
   before = new Set(extension.context.pages());
-  closed = popup.waitForEvent('close');
-  await popup.getByRole('option').click({ modifiers: ['Shift'] });
-  await closed;
+  await closingPopup(popup, () => popup.getByRole('option').click({ modifiers: ['Shift'] }));
   await expect(page).toHaveURL(target);
   expect(tabsSince(extension, before)).toEqual([]);
   expect(((await extension.readStorage()).usage as Record<string, number[]>)[`go\n${target}`]).toHaveLength(4);
@@ -249,6 +251,7 @@ test('a jump whose use Chrome refuses to store keeps the popup open, says why, a
   await expect(popup.getByRole('combobox')).toHaveValue('full');
   expect(await extension.tabUrls()).toEqual(tabs);
   expect('usage' in (await extension.readStorage())).toBe(false);
+  await checkAccessibilityInBothSchemes(popup);
 });
 
 test('yt with text opens the filled address, and yt alone the address with %s removed', async ({ extension, site }) => {

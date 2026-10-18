@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useReducer, useRef, type MouseEvent, type W
 import { isArgumentAlias } from '../document/argument';
 import type { SearchOrder } from '../document/search';
 import type { Usage } from '../document/score';
-import { intentFor, isOpenIntent, sameIntent, startMode, type OpenMode } from '../open-intent';
+import { intentFor, startMode, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme, type Theme } from '../preferences';
 import { send, type JumpReply, type JumpRequest } from '../requests';
 import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListedRow, type ListState } from './list-state';
@@ -247,11 +247,10 @@ async function findOpener(): Promise<{ tabId: number | undefined; mode: OpenMode
   try {
     const [[tab], { openIntent }] = await Promise.all([chrome.tabs.query({ active: true, currentWindow: true }), chrome.storage.local.get('openIntent')]);
     const intent = intentFor(openIntent, tab?.windowId, Date.now());
-    if (intent !== undefined) {
-      // Removed only while it is still the record honored: one written since belongs to a later opening.
-      const { openIntent: current } = await chrome.storage.local.get('openIntent');
-      if (isOpenIntent(current) && sameIntent(current, intent)) await chrome.storage.local.remove('openIntent');
-    }
+    // Through the worker, never with a page's own read and removal: a record written between those two calls,
+    // for another window, would go too. Awaited, so the popup shows the mode it honored only once no later
+    // popup in this window, the toolbar's included, can honor the record again.
+    if (intent !== undefined) await send({ kind: 'remove-intent', windowId: intent.windowId, time: intent.time });
     return { tabId: tab?.id, mode: startMode(intent) };
   } catch {
     return { tabId: undefined, mode: startMode(undefined) };

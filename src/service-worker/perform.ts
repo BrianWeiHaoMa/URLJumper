@@ -1,6 +1,7 @@
 // Every request runs on the worker's one queue, in the order it arrived, and gets exactly one reply.
 import { chromeMessage, type ReplyTo, type Request } from '../requests';
 import { jump } from './jump';
+import { removeHonoredIntent } from './open-popup';
 import { enqueue } from './queue';
 
 export function perform<R extends Request>(request: R): Promise<ReplyTo<R>> {
@@ -13,5 +14,7 @@ function operate<R extends Request>(request: R): Promise<ReplyTo<R>> {
   switch (request.kind) {
     case 'jump':
       return jump(request) as Promise<ReplyTo<R>>;
+    case 'remove-intent':
+      return removeHonoredIntent(request) as Promise<ReplyTo<R>>;
   }
 }

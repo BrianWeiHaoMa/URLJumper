@@ -2,7 +2,7 @@
 // Chrome's openPopup. Refused for an inactive window, the record stays and the popup opens when that window
 // next takes focus while the record is fresh; refused for any other reason, the record goes and nothing opens.
 import { isFresh, isOpenIntent, sameIntent, type OpenIntent, type OpenIntentKind } from '../open-intent';
-import { chromeMessage } from '../requests';
+import { chromeMessage, type RemoveIntentReply, type RemoveIntentRequest } from '../requests';
 import { enqueue } from './queue';
 
 // Chrome's kOpenPopupInactiveWindow, the same from Chrome 127 on.
@@ -38,12 +38,18 @@ async function showPopup(intent: OpenIntent): Promise<void> {
   }
 }
 
-// Removes the record only while it is still this one. The record's write and this read-then-remove both run
-// on the worker's queue, so a later command's record cannot land between them; the opening itself stays off
-// the queue, so no jump waits on Chrome's popup.
-async function removeIntent(intent: OpenIntent): Promise<void> {
+/** The popup's removal of the record it honored, run on the worker's queue (`perform`). */
+export async function removeHonoredIntent(request: RemoveIntentRequest): Promise<RemoveIntentReply> {
+  await removeIntent(request);
+  return { kind: 'done' };
+}
+
+// Removes the record only while it is still this one. The record's write and every read-then-remove run on
+// the worker's queue, so a later command's record cannot land between them; the opening itself stays off the
+// queue, so no jump waits on Chrome's popup.
+async function removeIntent(intent: Pick<OpenIntent, 'windowId' | 'time'>): Promise<void> {
   const { openIntent } = await chrome.storage.local.get('openIntent');
-  if (isOpenIntent(openIntent) && sameIntent(openIntent, intent)) {
+  if (isOpenIntent(openIntent) && sameIntent(intent, openIntent)) {
     await chrome.storage.local.remove('openIntent');
   }
 }

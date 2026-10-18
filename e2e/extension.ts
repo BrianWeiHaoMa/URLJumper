@@ -35,7 +35,10 @@ export interface LoadedExtension {
    * listeners with `args`, the arguments Chrome passes. Waits for nothing the listeners do.
    */
   dispatchEvent(event: string, ...args: unknown[]): Promise<void>;
-  /** Runs `action` and returns the real action popup it opened; fails when none opened within ten seconds. */
+  /**
+   * Runs `action` and returns the real action popup it opened, once Chrome has shown it and given it the
+   * keyboard (as every popup opener here does); fails when none opened within ten seconds.
+   */
   popupOpenedBy(action: () => Promise<unknown>): Promise<Page>;
   /** How many action popups are open now. */
   openPopups(): Promise<number>;
@@ -205,7 +208,11 @@ function popupOpeners(context: BrowserContext, id: string, debuggingPort: number
         const session = await page.context().newCDPSession(page);
         const { targetInfo } = await session.send('Target.getTargetInfo');
         await session.detach();
-        if (targetInfo.targetId === opened) return page;
+        if (targetInfo.targetId !== opened) continue;
+        // The target exists before the page has loaded; Chrome shows the popup and gives it the keyboard only
+        // once its load completes. From then on a key a check types is one a user could have typed.
+        await page.waitForFunction(() => document.hasFocus(), undefined, { polling: 20, timeout: 10_000 });
+        return page;
       }
       throw new Error('the popup Chrome opened is not reachable over CDP');
     } finally {
@@ -321,6 +328,19 @@ export async function popupOnNewPage(extension: LoadedExtension, site: LocalSite
   const page = await extension.context.newPage();
   await page.goto(site.pageUrl(title));
   return { page, popup: await extension.clickToolbarButton(page) };
+}
+
+/**
+ * Runs `action`, which closes `popup` as a jump that opened does, and waits for the close. The popup can close
+ * before Chrome acknowledges the action's last event (a key or mouse button coming up): only that close
+ * excuses the action's failure.
+ */
+export async function closingPopup(popup: Page, action: () => Promise<unknown>) {
+  const closed = popup.waitForEvent('close');
+  await action().catch(async (error: unknown) => {
+    if (!(await closed.then(() => true, () => false))) throw error;
+  });
+  await closed;
 }
 
 /** Whether `page` is drawn in a dark or a light theme, from its background's luminance. */

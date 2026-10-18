@@ -1,11 +1,23 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './extension.ts';
+import { expect, test, type LoadedExtension } from './extension.ts';
 
 // The window a popup belongs to, as the popup itself sees it.
 const windowOf = (popup: Page) => popup.evaluate(async () => (await chrome.windows.getCurrent()).id);
 
 // A listener that would act runs within milliseconds of its dispatch; this waits long past it.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 1_000));
+
+// Chrome's storage answers the worker's reads of the intent `ms` late, as it may under load.
+const slowIntentReads = (extension: LoadedExtension, ms: number) =>
+  extension.worker.evaluate((ms) => {
+    const local = chrome.storage.local;
+    const get = local.get.bind(local) as (keys: unknown) => Promise<Record<string, unknown>>;
+    (local as unknown as { get: unknown }).get = async (keys: unknown) => {
+      const items = await get(keys);
+      if (keys === 'openIntent') await new Promise((resolve) => setTimeout(resolve, ms));
+      return items;
+    };
+  }, ms);
 
 for (const [command, kind] of [
   ['open-same-tab', 'this-tab'],
@@ -68,6 +80,9 @@ test('refused for an inactive window, the intent waits and opens the popup when 
   await page.goto(site.pageUrl('Popup already open'));
   const tab = await extension.frontTab(page);
   const shown = await extension.clickToolbarButton(page);
+  // Its opening read of the intent is done: a record written during it would be honored, as for any fresh
+  // record naming its window, and removed.
+  await expect(shown.locator('footer')).not.toHaveText(/until the popup is ready/);
 
   // Chrome refuses openPopup while the window's popup is open.
   const changes = await extension.watchStorage();
@@ -114,8 +129,8 @@ test("a refused command's cleanup never removes the intent a later command wrote
 
   // Chrome's storage answers a read of the intent 300 ms late, as it may under load, so the later command's
   // record lands between the refused command's read of its own record and its removal. Each removal the
-  // worker makes is recorded with the record it removed; the popup's own removal of the record it honors is
-  // the popup's, not the worker's.
+  // worker makes is recorded with the record it removed: the refused command's, then, for the popup that
+  // honored it, the later command's.
   await extension.worker.evaluate(() => {
     const local = chrome.storage.local;
     const get = local.get.bind(local) as (keys: unknown) => Promise<Record<string, unknown>>;
@@ -137,7 +152,63 @@ test("a refused command's cleanup never removes the intent a later command wrote
   const popup = await extension.popupOpenedBy(() => extension.dispatchEvent('commands.onCommand', 'open-same-tab', later));
   await settle();
   const removed = await extension.worker.evaluate(() => (globalThis as Record<string, unknown>).intentsRemoved);
-  expect(removed).toEqual([{ kind: 'new-tab', windowId: refused.windowId, time: expect.any(Number) }]);
+  expect(removed).toEqual([
+    { kind: 'new-tab', windowId: refused.windowId, time: expect.any(Number) },
+    { kind: 'this-tab', windowId: later.windowId, time: expect.any(Number) },
+  ]);
   // The later command's popup found its record and starts in its mode.
   await expect(popup.locator('.chip')).toHaveText('This tab');
+});
+
+test('the record a popup honored is removed only while it is still that record', async ({ extension, site }) => {
+  const page = await extension.context.newPage();
+  await page.goto(site.pageUrl('Honored'));
+  const { windowId } = await extension.frontTab(page);
+  const honored = { kind: 'this-tab', windowId: windowId!, time: Date.now() };
+  // Written since the popup read it: for another window, or for the same one by a later command.
+  for (const since of [
+    { ...honored, windowId: windowId! + 1 },
+    { ...honored, time: honored.time + 1 },
+  ]) {
+    await extension.seedStorage({ openIntent: since });
+    expect(await extension.sendRequest({ kind: 'remove-intent', windowId: honored.windowId, time: honored.time })).toEqual({ kind: 'done' });
+    expect((await extension.readStorage()).openIntent).toEqual(since);
+  }
+  await extension.seedStorage({ openIntent: honored });
+  expect(await extension.sendRequest({ kind: 'remove-intent', windowId: honored.windowId, time: honored.time })).toEqual({ kind: 'done' });
+  expect(await extension.readStorage()).toEqual({});
+});
+
+test('a record a command writes while a popup is having its own removed stays', async ({ extension, site }) => {
+  const page = await extension.context.newPage();
+  await page.goto(site.pageUrl('Popup open while a removal runs'));
+  // The tab requests are sent from opens first, so it takes no focus from the popup later.
+  await extension.sendRequest({ kind: 'remove-intent', windowId: 0, time: 0 });
+  const tab = await extension.frontTab(page);
+  const shown = await extension.clickToolbarButton(page);
+  await expect(shown.locator('footer')).not.toHaveText(/until the popup is ready/);
+
+  const honored = { kind: 'this-tab', windowId: tab.windowId! + 1, time: Date.now() };
+  await extension.seedStorage({ openIntent: honored });
+  await slowIntentReads(extension, 300);
+  const removal = extension.sendRequest({ kind: 'remove-intent', windowId: honored.windowId, time: honored.time });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  // Refused, since the window's popup is open: its record stays for that window.
+  await extension.dispatchEvent('commands.onCommand', 'open-same-tab', tab);
+  expect(await removal).toEqual({ kind: 'done' });
+  await settle();
+  expect((await extension.readStorage()).openIntent).toEqual({ kind: 'this-tab', windowId: tab.windowId, time: expect.any(Number) });
+});
+
+test('a popup shows the mode it honored only once its record is gone, so the toolbar opens the next one in New tab', async ({ extension, site }) => {
+  const page = await extension.context.newPage();
+  await page.goto(site.pageUrl('Slow storage'));
+  await slowIntentReads(extension, 300);
+  const first = await extension.popupByCommand('open-same-tab', page);
+  await expect(first.locator('.chip')).toHaveText('This tab');
+  expect('openIntent' in (await extension.readStorage())).toBe(false);
+  await first.close();
+  const second = await extension.clickToolbarButton(page);
+  await expect(second.locator('footer')).not.toHaveText(/until the popup is ready/);
+  await expect(second.locator('.chip')).toHaveText('New tab');
 });
