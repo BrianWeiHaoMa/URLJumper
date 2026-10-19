@@ -75,7 +75,10 @@ function NameRowText({ name }: { name: string }) {
   return (
     <span className="row-line name-row-line">
       <span className="name-row-words">Name "</span>
-      <span className="name-row-name">{name}</span>
+      {/* Its own direction, as a mapping row's name has, so right-to-left text is cut at its end, not its start. */}
+      <span className="name-row-name" dir="auto">
+        {name}
+      </span>
       <span className="name-row-words">" for this page</span>
     </span>
   );

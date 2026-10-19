@@ -188,6 +188,16 @@ test('a long name in a right-to-left script is shown from its start, in its row 
   await checkFitAndAccessibility(popup);
 });
 
+test('text in a right-to-left script that names no mapping is shown in the Name row whole when it fits, else from its start', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'a  https://a.example/\n' });
+  const { popup } = await popupOnNewPage(extension, site);
+  for (const typed of ['مرحبا', `يس${'س'.repeat(300)}`]) {
+    await popup.getByRole('combobox').fill(typed);
+    await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
+    await checkFitAndAccessibility(popup);
+  }
+});
+
 test('a name or URL that fits its row is shown whole, however many code units it holds', async ({ extension, site }) => {
   // Zero-width joiners take code units and no width.
   const joiners = '\u200d'.repeat(1100);

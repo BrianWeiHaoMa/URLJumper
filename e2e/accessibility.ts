@@ -46,7 +46,13 @@ async function axeProblems(page: Page): Promise<string[]> {
     }
     type Results = Record<'violations' | 'incomplete' | 'passes', Result[]>;
     const axe = (window as unknown as { axe: { run(context: Document | Element, options: object): Promise<Results> } }).axe;
-    const results = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } });
+    // Label in name counts every text as shown. Axe leaves out text it takes for an icon font's ligature, which
+    // the product never draws, and takes joined right-to-left text (the Name row's, E8) for one; a threshold
+    // above 1 turns that comparison off.
+    const results = await axe.run(document, {
+      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+      checks: { 'label-content-name-mismatch': { options: { pixelThreshold: 2 } } },
+    });
     const where = (node: Node) => node.target.join(' ');
     const contrast = (results: Result[]) => results.filter((result) => result.id === 'color-contrast').flatMap((result) => result.nodes);
     // Text axe cannot judge where it stands, partly or wholly scrolled out of a scrolling view, it judges again
