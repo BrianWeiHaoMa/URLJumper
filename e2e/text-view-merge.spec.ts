@@ -147,6 +147,29 @@ test('a document changed again after the change was brought in is refused again,
   await broughtInAndSaved(extension, view, `${second}mine  https://mine/\n`);
 });
 
+test('a document changed while the offer stands leaves the text and the offer as they were; the Save after the change is brought in is refused again, nothing overwritten', async ({ extension }) => {
+  const original = 'a  https://a/\n';
+  await extension.seedStorage({ mappings: original });
+  const view = await textViewOnOptionsPage(extension);
+  await typeAtEnd(view, 'mine  https://mine/\n');
+  expect(await extension.sendRequest({ ...INSERT, name: 'first' })).toMatchObject({ kind: 'applied' });
+  const first = (await storedDocument(extension)) as string;
+  await refused(extension, view, first);
+
+  expect(await extension.sendRequest({ ...INSERT, name: 'second' })).toMatchObject({ kind: 'applied' });
+  const second = (await storedDocument(extension)) as string;
+  // A read made now is answered after the one the view made on hearing of the change.
+  await view.page.evaluate(() => chrome.storage.local.get('mappings'));
+  await expect(view.area).toHaveValue(`${original}mine  https://mine/\n`);
+  await expect(view.offer).toBeVisible();
+  await expect(view.status).toHaveText(CHANGED);
+  // What is brought in is the change the offer showed, and the base the text it merged, not the document now.
+  await view.bringIn.click();
+  await expect(view.area).toHaveValue(`${first}mine  https://mine/\n`);
+  await refused(extension, view, second);
+  await broughtInAndSaved(extension, view, `${second}mine  https://mine/\n`);
+});
+
 test('on a CRLF document whose other change is an insert, which keeps CRLF, the Save after the change is brought in stores', async ({ extension }) => {
   const original = 'a  https://a/\r\nb  https://b/\r\n';
   await extension.seedStorage({ mappings: original });
@@ -240,6 +263,38 @@ test('in the popup, the keyboard alone goes from Save through the offer to the s
   await popup.keyboard.press('Enter');
   await expect(view.status).toHaveText('Saved');
   expect(await storedDocument(extension)).toBe('a  https://a/\nb  https://stored/\nmine  https://mine/\n');
+});
+
+test('in the popup, the keyboard alone chooses a version of each part changed in both and brings the change in', async ({ extension, site }) => {
+  const original = 'a  https://a/\nb  https://b/\nc  https://c/\n';
+  await extension.seedStorage({ mappings: original });
+  const other = await extension.openRequestPage();
+  const { popup } = await popupOnNewPage(extension, site);
+  const view = await textViewInPopup(popup);
+  await retypeLine(view, 1, 'a  https://draft-a/');
+  await retypeLine(view, 3, 'c  https://draft-c/');
+  const stored = 'a  https://stored-a/\nb  https://b/\nc  https://stored-c/\n';
+  expect(await other.send({ kind: 'replace', text: stored, base: original })).toMatchObject({ kind: 'applied' });
+  await refused(extension, view, stored);
+  const [first, second] = [view.conflicts.nth(0), view.conflicts.nth(1)];
+  await expect(version(first, 'stored')).toBeFocused();
+  // Space chooses the first part's stored version, Enter the second part's draft.
+  await popup.keyboard.press('Space');
+  await expect(version(first, 'stored')).toHaveAttribute('aria-pressed', 'true');
+  await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
+  await expect(version(second, 'yours')).toBeFocused();
+  await expect(footer(popup)).toHaveText('Enter keeps your version');
+  await popup.keyboard.press('Enter');
+  await expect(version(second, 'yours')).toHaveAttribute('aria-pressed', 'true');
+  await popup.keyboard.press('Tab');
+  await expect(view.bringIn).toBeFocused();
+  await expect(footer(popup)).toHaveText('Enter brings the change into your text');
+  await popup.keyboard.press('Enter');
+  await expect(view.area).toBeFocused();
+  await expect(view.area).toHaveValue('a  https://stored-a/\nb  https://b/\nc  https://draft-c/\n');
+  expect(await storedDocument(extension)).toBe(stored);
 });
 
 test('after the change is brought in, the text area is editable, the status says the text is not stored until Save, and a change landing then leaves the text alone', async ({ extension }) => {

@@ -4,15 +4,18 @@
 // and each side is paired with the base by the exact line diff (`line-diff.ts`), which gives that side's
 // changes: runs of base lines, possibly none, replaced by the side's lines.
 //
-// Two changes, one from each side, conflict when they share a base line, when one inserts at a gap strictly
-// inside the other's run, or when both insert at the same gap and a line of one shares a name (F4) with a line
-// of the other. Changes that only touch do not: an insertion where the other side's run starts goes before it,
-// one where it ends goes after it, and changes to neighbouring lines are both kept. Conflicts that chain form
-// one region, and each side's version of it is that side's whole text for the region's base lines, the lines
-// it left alone included, so choosing a version drops nothing of that side. A region whose two versions hold
-// the same lines, and the same lines inserted by both at one gap, are a change both sides made alike, brought
-// in once. Insertions at one gap that are neither are both kept, the stored side's first. Every other region
-// is offered in both versions, none chosen in advance, for the user's choice.
+// Two changes, one from each side, meet when they share a base line, when one inserts at a gap strictly inside
+// the other's run, or when both insert at the same gap. Changes that only touch do not: an insertion where the
+// other side's run starts goes before it, one where it ends goes after it, and changes to neighbouring lines are
+// both kept. Changes that meet in a chain form one region, and each side's version of it is that side's whole
+// text for the region's base lines, the lines it left alone included, so choosing a version drops nothing of
+// that side. A region whose two versions hold the same lines is a change both sides made alike, brought in
+// once. Two insertions at one gap are brought in together: the stored side's lines, then those of the submitted
+// text the line diff of the two leaves unpaired, so the lines it pairs, which both inserted, are there once (a
+// Save that landed without its reply comes back once however much was typed after it) and every other line of
+// both is kept, the stored side's first; unless a line only one side inserted shares a name (F4) with a line
+// only the other inserted, which makes the two insertions a conflict. Every other region is offered in both
+// versions, none chosen in advance, for the user's choice.
 import { comparableLineName } from './grammar';
 import { lineChanges, type LineChange } from './line-diff';
 import { splitLines } from './lines';
@@ -80,7 +83,8 @@ export function mergeTexts(base: string, submitted: string, stored: string): Mer
     else {
       const version = (side: MergeSide): MergeVersion => ({ lines: sideText(baseLines, region, side, start, end), line: start + shift[side] + 1 });
       const [stored, submitted] = [version('stored'), version('submitted')];
-      if (sameLines(stored.lines, submitted.lines)) settle(stored.lines);
+      const together = start === end ? bothInserted(stored.lines, submitted.lines) : sameLines(stored.lines, submitted.lines) ? stored.lines : null;
+      if (together !== null) settle(together);
       else parts.push({ kind: 'conflict', stored, submitted });
     }
     for (const change of region) shift[change.side] += change.lines.length - (change.end - change.start);
@@ -114,22 +118,32 @@ function contents(text: string): string[] {
 }
 
 /**
- * Whether `next`, the change next in base order, conflicts with the region of changes merged so far, whose base
- * lines run from `start` to `end`. Every base line and every gap strictly inside such a run lies within one of
- * the region's changes, and a side's own changes never meet, so a change that meets the run meets one of the
- * other side's. A region without base lines is one insertion, which an insertion at its gap from the other
- * side joins when the two share a name or hold the same lines.
+ * Whether `next`, the change next in base order, meets the region of changes merged so far, whose base lines run
+ * from `start` to `end`. Every base line and every gap strictly inside such a run lies within one of the
+ * region's changes, and a side's own changes never meet, so a change that meets the run meets one of the other
+ * side's. A region without base lines is one insertion, which an insertion at its gap from the other side joins.
  */
 function joins(region: readonly SideChange[], start: number, end: number, next: SideChange): boolean {
   if (start < end) return next.start < next.end ? next.start < end : start < next.start && next.start < end;
   const [only] = region;
-  return (
-    region.length === 1 &&
-    only!.side !== next.side &&
-    next.start === start &&
-    next.end === start &&
-    (sameLines(only!.lines, next.lines) || shareName(only!.lines, next.lines))
-  );
+  return region.length === 1 && only!.side !== next.side && next.start === start && next.end === start;
+}
+
+/**
+ * The lines the stored side and the submitted text inserted at one gap, brought in together: the stored side's,
+ * then the submitted text's that the line diff of the two leaves unpaired, so the lines it pairs are there once
+ * and the other lines of both are kept, the stored side's first, as *How* orders lines inserted at one gap
+ * even where the submitted text put one of its own before a line both inserted; null when a line only one side
+ * inserted shares a name with a line only the other inserted.
+ */
+function bothInserted(stored: readonly string[], submitted: readonly string[]): string[] | null {
+  const changes = lineChanges(stored, submitted);
+  const storedOnly = changes.flatMap((change) => stored.slice(change.start, change.end));
+  const submittedOnly = changes.flatMap((change) => change.lines);
+  if (shareName(storedOnly, submittedOnly)) return null;
+  const lines = stored.slice();
+  for (const line of submittedOnly) lines.push(line);
+  return lines;
 }
 
 /** `side`'s lines for base lines `start` to `end`: its changes in the region, and the base lines it left alone. */

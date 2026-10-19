@@ -72,3 +72,55 @@ test('the pass fails on an unnamed control, on text below 4.5:1 at any size, on 
   await popup.keyboard.type('il');
   await expect(popup.getByRole('combobox')).toHaveValue('mail');
 });
+
+/**
+ * Plants a text styled `style` at the foot of the popup's view, out of sight until the view scrolls, where axe
+ * cannot judge it; returns the pass's outcome and the view's scroll after it, then removes the text.
+ */
+async function plantedOutOfView(popup: Page, style: Record<string, string>) {
+  await popup.evaluate((style) => {
+    const planted = document.createElement('div');
+    planted.id = 'planted';
+    const spacer = document.createElement('div');
+    spacer.style.height = '1500px';
+    const text = document.createElement('p');
+    text.id = 'planted-text';
+    text.textContent = 'Out of view';
+    Object.assign(text.style, style);
+    planted.append(spacer, text);
+    document.querySelector('.view-content')!.append(planted);
+  }, style);
+  // The view, scrolling now, becomes a Tab stop once the popup sees its content grow.
+  await expect(popup.locator('.view')).toHaveAttribute('tabindex', '0');
+  try {
+    const outcome = await checkAccessibility(popup).then(
+      () => 'passed',
+      (error: Error) => error.message,
+    );
+    return { outcome, scrollTop: await popup.locator('.view').evaluate((view) => view.scrollTop) };
+  } finally {
+    await popup.evaluate(() => document.getElementById('planted')?.remove());
+    await expect(popup.locator('.view')).toHaveAttribute('tabindex', '-1');
+  }
+}
+
+test('text scrolled out of view is judged scrolled into view: below 4.5:1 or still undecided there, it fails the pass, and the view keeps its scroll', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
+  const { popup } = await popupOnNewPage(extension, site);
+  await expect(popup.getByRole('option')).toHaveCount(1);
+
+  expect(await plantedOutOfView(popup, {})).toEqual({ outcome: 'passed', scrollTop: 0 });
+  expect(await plantedOutOfView(popup, { color: 'rgb(160, 160, 160)' })).toEqual({
+    outcome: expect.stringMatching(/^accessibility problems:\ncolor-contrast: #planted-text: [^\n]*insufficient color contrast of 2\.\d+[^\n]*$/),
+    scrollTop: 0,
+  });
+  expect(await plantedOutOfView(popup, { color: 'rgb(130, 130, 130)', fontSize: '32px' })).toEqual({
+    outcome: expect.stringMatching(/^accessibility problems:\ncolor-contrast: #planted-text: 3\.\d+:1 is below 4\.5:1$/),
+    scrollTop: 0,
+  });
+  // A background axe cannot read in view either: still undecided, which is not contrast shown to hold.
+  expect(await plantedOutOfView(popup, { backgroundImage: 'linear-gradient(white, black)' })).toEqual({
+    outcome: expect.stringMatching(/^accessibility problems:\ncolor-contrast undecided: #planted-text: [^\n]*gradient[^\n]*$/),
+    scrollTop: 0,
+  });
+});

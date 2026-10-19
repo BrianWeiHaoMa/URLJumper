@@ -214,7 +214,7 @@ test('after a store Chrome refuses, a change that lands before the view reads th
   await expect(view.area).toHaveValue(stored + long);
 });
 
-test('a Save that gets no reply says so and keeps the text: stopped before its write, the next Save stores; stopped after it, what landed stays and a change made since is not overwritten', async ({ extension, site }) => {
+test('a Save that gets no reply says so and keeps the text: stopped before its write, the next Save stores; stopped after it, what landed stays, a change made since is not overwritten, and bringing that change in gives back what landed once', async ({ extension, site }) => {
   const stored = 'a  https://a/\n';
   await extension.seedStorage({ mappings: stored });
   // Wakes the worker after it is stopped; refused, as the document is not empty, so it writes nothing.
@@ -256,6 +256,14 @@ test('a Save that gets no reply says so and keeps the text: stopped before its w
   expect(await storedDocument(extension)).toBe(inserted);
   await expect(view.area).toHaveValue(`${second}d  https://d/\n`);
   await checkFitAndAccessibility(popup);
+  // Brought in, what landed is in the text once, with the line the other page added and the line typed since.
+  await expect(view.conflicts).toHaveCount(0);
+  await view.bringIn.click();
+  const merged = `${inserted}d  https://d/\n`;
+  await expect(view.area).toHaveValue(merged);
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  expect(await storedDocument(extension)).toBe(merged);
 });
 
 test('a popup closed during a Save leaves the text stored, and the next popup\'s Text view shows it', async ({ extension, site }) => {

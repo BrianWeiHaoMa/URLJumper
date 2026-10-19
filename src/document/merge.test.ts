@@ -150,8 +150,23 @@ describe('a change both sides made alike is brought in once', () => {
     expect(settled(base, landed, landed)).toBe(landed);
   });
 
-  test('insertions at one gap that are not the same lines and share no name are another side\'s lines, both kept', () => {
-    expect(settled('a  https://a/\nb  https://b/\n', 'a  https://a/\n\\ h\n\\ i\nb  https://b/\n', 'a  https://a/\n\\ h\nb  https://b/\n')).toBe('a  https://a/\n\\ h\n\\ h\n\\ i\nb  https://b/\n');
+  test('insertions at one gap that hold some of the same lines: those lines once, and the other lines of both kept, the stored side\'s first', () => {
+    expect(settled('a  https://a/\nb  https://b/\n', 'a  https://a/\n\\ h\n\\ i\nb  https://b/\n', 'a  https://a/\n\\ h\nb  https://b/\n')).toBe('a  https://a/\n\\ h\n\\ i\nb  https://b/\n');
+    // Before a line both inserted, the draft's own line still follows the stored side's lines.
+    expect(settled('a  https://a/\n', 'a  https://a/\nd  https://d/\nh  https://h/\n', 'a  https://a/\nh  https://h/\ns  https://s/\n')).toBe('a  https://a/\nh  https://h/\ns  https://s/\nd  https://d/\n');
+  });
+
+  test('a Save that landed though its reply was lost, then a line typed below what it added and a line another page added: nothing offered, what landed once, both new lines kept, the stored first', () => {
+    const first = 'a  https://a/\nb  https://b/\n';
+    const landed = `${first}c  https://c/\n`;
+    expect(settled(first, `${landed}d  https://d/\n`, `${landed}other https://other.example/\n`)).toBe(`${landed}other https://other.example/\nd  https://d/\n`);
+    expect(settled('a  https://a/\n', 'a  https://a/\n\\ Work\n\\ Home\n', 'a  https://a/\n\\ Work\n')).toBe('a  https://a/\n\\ Work\n\\ Home\n');
+  });
+
+  test('insertions at one gap holding some of the same lines, a line only one inserted sharing a name with a line only the other inserted: a conflict of the two insertions whole', () => {
+    const parts = mergeTexts('a  https://a/\n', 'a  https://a/\nc  https://c/\nx  https://d/\n', 'a  https://a/\nc  https://c/\nX  https://s/\n');
+    expect(versionsOf(parts)).toEqual([[['c  https://c/', 'X  https://s/'], ['c  https://c/', 'x  https://d/']]]);
+    expect(mergedText(parts, ['submitted'])).toBe('a  https://a/\nc  https://c/\nx  https://d/\n');
   });
 });
 
@@ -220,6 +235,17 @@ describe('within E3, 10,000 lines a side', () => {
     const parts = mergeTexts(base, submitted, stored);
     const took = Date.now() - started;
     expect(conflictsOf(parts).length).toBeGreaterThan(0);
+    expect(took).toBeLessThan(3_000);
+  });
+
+  test('an empty base, both sides inserting every line at its one gap, ordered differently: under 3 seconds', () => {
+    const submitted = `${baseLines.slice().reverse().join('\n')}\n`;
+    const stored = `${Array.from({ length: N }, (_, i) => baseLines[(i * 7_919) % N]).join('\n')}\n`;
+    const started = Date.now();
+    const parts = mergeTexts('', submitted, stored);
+    const took = Date.now() - started;
+    // A line both inserted in another order is left unpaired on each side, its name on both: a conflict.
+    expect(conflictsOf(parts)).toHaveLength(1);
     expect(took).toBeLessThan(3_000);
   });
 });
