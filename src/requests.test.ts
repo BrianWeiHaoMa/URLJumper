@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { isRequest, send, type InsertRequest, type JumpRequest, type LoadExampleRequest, type RemoveIntentRequest, type UndoRequest } from './requests';
+import { isRequest, send, type InsertRequest, type JumpRequest, type LoadExampleRequest, type RemoveIntentRequest, type ResetUsageRequest, type UndoRequest } from './requests';
 
 const JUMP: JumpRequest = { kind: 'jump', name: 'alpha', url: 'https://a.example/', argument: null, mode: 'new-tab', active: true };
 const REMOVE_INTENT: RemoveIntentRequest = { kind: 'remove-intent', windowId: 3, time: 1_700_000_000_000 };
@@ -7,6 +7,7 @@ const INSERT: InsertRequest = { kind: 'insert', name: 'stocks', url: 'https://s.
 const UNDO: UndoRequest = { kind: 'undo', act: 'remove', line: 3, text: 'stocks               https://s.example/' };
 const REINSERT: UndoRequest = { ...UNDO, act: 'reinsert' };
 const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
+const RESET_USAGE: ResetUsageRequest = { kind: 'reset-usage' };
 const NO_REPLY = { kind: 'storage-failed', message: "URLJumper's service worker did not reply." };
 
 // Chrome's transport, replaced; `send` is the product's.
@@ -163,4 +164,20 @@ test('the worker accepts the writing requests only with every field of its decla
   ]) {
     expect(isRequest(value), JSON.stringify(value)).toBe(false);
   }
+});
+
+test("a request to reset the learned order resolves to the worker's reply for it, and to no other", async () => {
+  expect(isRequest(RESET_USAGE)).toBe(true);
+  expect(isRequest({ kind: 'reset' })).toBe(false);
+  for (const reply of [{ kind: 'done' }, { kind: 'storage-failed', message: 'IO error' }]) {
+    const sent = chromeWhoseSendMessage(async () => reply);
+    expect(await send(RESET_USAGE)).toEqual(reply);
+    expect(sent).toEqual([RESET_USAGE]);
+  }
+  for (const reply of [undefined, { kind: 'applied' }, { kind: 'opened' }, { kind: 'storage-failed' }]) {
+    chromeWhoseSendMessage(async () => reply);
+    expect(await send(RESET_USAGE), JSON.stringify(reply)).toEqual(NO_REPLY);
+  }
+  chromeWhoseSendMessage(() => Promise.reject(new Error('Could not establish connection. Receiving end does not exist.')));
+  expect(await send(RESET_USAGE)).toEqual({ kind: 'storage-failed', message: 'Could not establish connection. Receiving end does not exist.' });
 });

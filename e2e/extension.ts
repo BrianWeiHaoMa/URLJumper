@@ -11,7 +11,7 @@ import { checkFit } from './popup-fit.ts';
 
 export { expect } from '@playwright/test';
 export { addressBar, chromeShows, type AddressBar, type AddressBarInput, type ChromeRow, type Disposition } from './address-bar.ts';
-export { checkAccessibility } from './accessibility.ts';
+export { checkAccessibility, checkAccessibilityInBothSchemes } from './accessibility.ts';
 export { checkFit } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
 export { restartWorker } from './worker-restart.ts';
@@ -378,6 +378,16 @@ export async function slowWorkerReads(worker: Worker, key: string, ms: number): 
       };
     },
     [key, ms] as const,
+  );
+}
+
+/** Makes Chrome's storage refuse the worker's calls of `method`, such as `remove`, with `message`, as it refuses a write it cannot make. */
+export async function refuseWorkerStorage(worker: Worker, method: 'set' | 'remove', message: string): Promise<void> {
+  await worker.evaluate(
+    ([method, message]) => {
+      (chrome.storage.local as unknown as Record<string, unknown>)[method] = () => Promise.reject(new Error(message));
+    },
+    [method, message] as const,
   );
 }
 

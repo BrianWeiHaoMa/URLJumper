@@ -61,8 +61,11 @@ test('a mapping keeps the times of its last ten uses, newest last', async ({ ext
   const spans: [number, number][] = [];
   for (let i = 0; i < 11; i++) {
     const before = Date.now();
+    // Chrome refuses a navigation the same as one the tab is still loading, so each jump's page loads before the next.
+    const loaded = tab.waitForEvent('load');
     expect(await extension.sendRequest({ kind: 'jump', name: 'often', url: page, argument: null, mode: 'this-tab', tabId: tabId! })).toEqual({ kind: 'opened' });
     spans.push([before, Date.now()]);
+    await loaded;
     await tab.waitForTimeout(5);
   }
   const times = ((await extension.readStorage()).usage as Record<string, number[]>)[`often\n${page}`]!;

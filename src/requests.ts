@@ -50,7 +50,13 @@ export type UndoRequest = { kind: 'undo'; act: 'remove' | 'reinsert'; line: numb
 /** Stores the example document (F11), only into a document that is absent or holds only whitespace (G30). */
 export type LoadExampleRequest = { kind: 'load-example' };
 
-export type Request = JumpRequest | RemoveIntentRequest | InsertRequest | UndoRequest | LoadExampleRequest;
+/**
+ * *Reset learned order* (G27): removes `usage`, the learned usage, on the worker's queue, so a jump queued
+ * before it is removed with the rest and one queued after it records only its own use.
+ */
+export type ResetUsageRequest = { kind: 'reset-usage' };
+
+export type Request = JumpRequest | RemoveIntentRequest | InsertRequest | UndoRequest | LoadExampleRequest | ResetUsageRequest;
 
 /** Chrome refused to store; nothing of the request was stored. */
 export type StorageFailed = { kind: 'storage-failed'; message: string };
@@ -89,6 +95,9 @@ export type LoadExampleReply =
   | { kind: 'not-empty' }
   | StorageFailed;
 
+/** `done` once no learned usage is stored, whether or not there was any. */
+export type ResetUsageReply = { kind: 'done' } | StorageFailed;
+
 export type ReplyTo<R extends Request> = R extends JumpRequest
   ? JumpReply
   : R extends RemoveIntentRequest
@@ -99,7 +108,9 @@ export type ReplyTo<R extends Request> = R extends JumpRequest
         ? UndoReply
         : R extends LoadExampleRequest
           ? LoadExampleReply
-          : never;
+          : R extends ResetUsageRequest
+            ? ResetUsageReply
+            : never;
 
 /** What a page shows when the worker gave no reply and Chrome no reason. */
 const NO_REPLY = "URLJumper's service worker did not reply.";
@@ -129,6 +140,7 @@ export function isRequest(value: unknown): value is Request {
     case 'undo':
       return (value.act === 'remove' || value.act === 'reinsert') && isLineNumber(value.line) && typeof value.text === 'string';
     case 'load-example':
+    case 'reset-usage':
       return true;
     case 'jump':
       break;
@@ -155,6 +167,7 @@ function isReplyTo(request: Request, value: unknown): boolean {
   if (value.kind === 'storage-failed') return typeof value.message === 'string';
   switch (request.kind) {
     case 'remove-intent':
+    case 'reset-usage':
       return value.kind === 'done';
     case 'insert':
       if (value.kind === 'applied') return isLineNumber(value.line) && typeof value.text === 'string' && typeof value.headingMissing === 'boolean';

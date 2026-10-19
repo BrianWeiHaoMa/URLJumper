@@ -30,6 +30,27 @@ test('an extension page renders under the CSP with no violation and no request o
   expect(policy.offPackage).toEqual([outside]);
 });
 
+test('the options page renders, follows a theme, and exports under the CSP with no violation and no request outside the package', async ({ extension }) => {
+  const page = await extension.context.newPage();
+  const policy = await watchPolicy(page, extension);
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
+  await page.goto(extension.url('options.html'));
+  await page.getByRole('listbox', { name: 'Theme' }).getByRole('option', { name: 'Dark' }).click();
+  await expect(page.getByRole('listbox', { name: 'Theme' }).getByRole('option', { selected: true })).toHaveText('Dark');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export…' }).click();
+  await download;
+  expect(await policy.violations()).toEqual([]);
+  expect(policy.offPackage).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 // The CSP does not govern an extension page's own navigation, so this plant reaches the network.
 async function plantNavigation(extension: LoadedExtension, url: string) {
   const page = await extension.context.newPage();

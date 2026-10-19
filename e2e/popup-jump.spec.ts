@@ -242,9 +242,10 @@ test('a long refusal never hides the selected row, and Enter opens the selected 
   expect(await selectedInView()).toBe(true);
   await checkFitAndAccessibility(popup);
 
-  // Tab past the chip reaches the view, which Chrome lets take focus to scroll; Enter there still opens.
+  // Tab past the chip and the gear reaches the view, which Chrome lets take focus to scroll; Enter there still opens.
   await popup.keyboard.press('ArrowUp');
   expect(await selectedInView()).toBe(true);
+  await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   expect(await popup.evaluate(() => document.activeElement?.className)).toBe('view');

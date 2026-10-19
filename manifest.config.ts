@@ -18,6 +18,8 @@ export default defineManifest({
     default_popup: 'popup.html',
     default_title: 'URLJumper',
   },
+  // The full settings page, in a tab of its own (G31).
+  options_ui: { page: 'options.html', open_in_tab: true },
   background: {
     service_worker: 'src/service-worker/index.ts',
     type: 'module',

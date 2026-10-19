@@ -12,11 +12,17 @@ export function useFitToViewport() {
   const fit = useCallback(() => {
     const main = root.current;
     if (main === null) return;
+    // Unset, the root's height lets the view grow to its content, which drops the view's scroll: a redraw, as
+    // the focus moving to a control the view scrolled to makes, would scroll that control out of sight.
+    const scrolled = view.current?.scrollTop ?? 0;
     // Measured at the content's own height: reading layout lets Chrome size the popup to the content, up to
     // its limit, before the viewport is compared, so a popup that can still grow does.
     main.style.height = '';
     if (document.documentElement.scrollHeight > window.innerHeight) main.style.height = `${window.innerHeight}px`;
-    if (view.current) view.current.tabIndex = view.current.scrollHeight > view.current.clientHeight ? 0 : -1;
+    if (view.current) {
+      view.current.tabIndex = view.current.scrollHeight > view.current.clientHeight ? 0 : -1;
+      view.current.scrollTop = scrolled;
+    }
   }, []);
 
   // After every render, and whenever the viewport or the view's content changes size without one.

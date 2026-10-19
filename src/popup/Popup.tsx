@@ -1,10 +1,11 @@
 // The popup (In use, "Jump", "Name this page", "Name from a search", "Name a link", "First run"): search,
-// with the search box and the mode chip, the confirmation of the last change with its Undo, the list seven
-// rows at a time with a cue for the rest, what the page is called (G10), and the *Name this page* button; the
-// Name form, also opened for a command or a menu item that asked for it; or, while the document is empty,
-// the first-run state in search's place (G30). A footer says what Enter does. Everything shown derives from
-// storage, read when the popup opens and again after every change; a mapping opens only through the worker's
-// jump, sent from the popup's Enter handler or a row's click handler (R4), never from anything else.
+// with the search box, the mode chip, and the gear, the confirmation of the last change with its Undo, the
+// list seven rows at a time with a cue for the rest, what the page is called (G10), and the *Name this page*
+// button; the Name form, also opened for a command or a menu item that asked for it; the settings, opened by
+// the gear (G31); or, while the document is empty, the first-run state in search's place (G30). A footer says
+// what Enter does. Everything shown derives from storage, read when the popup opens and again after every
+// change; a mapping opens only through the worker's jump, sent from the popup's Enter handler or a row's click
+// handler (R4), never from anything else.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { isArgumentAlias } from '../document/argument';
@@ -20,6 +21,7 @@ import { Confirmation, offersUndo, undoFooter, useConfirmationLifetime, useUndo,
 import { FirstRun } from './FirstRun';
 import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
 import { NameForm, type NameSubject, type Saved } from './NameForm';
+import { PopupSettings, SettingsGear } from './PopupSettings';
 import { Row, rowId } from './Row';
 import { useFitToViewport } from './fit-to-viewport';
 
@@ -41,8 +43,8 @@ interface Opener {
   asks: NameSubject | undefined;
 }
 
-/** Search, or the Name form opened with a name to start with; `opened` counts the openings, so each starts afresh. */
-type View = { kind: 'search' } | { kind: 'name'; name: string; subject: NameSubject; opened: number };
+/** Search, the Name form opened with a name to start with (`opened` counts the openings, so each starts afresh), or settings. */
+type View = { kind: 'search' } | { kind: 'name'; name: string; subject: NameSubject; opened: number } | { kind: 'settings' };
 
 interface State {
   /** What storage held at the last read; undefined until the first read. */
@@ -54,7 +56,7 @@ interface State {
   list: ListState;
   mode: OpenMode;
   /** The control in search whose focus changes what Enter does, if one has it. */
-  focused: 'chip' | 'name-page' | 'undo' | null;
+  focused: 'chip' | 'settings' | 'name-page' | 'undo' | null;
   /** Why the last jump did not open, or the example mappings were not loaded; kept until the user types or tries again. */
   message: string | null;
   /** The last change's confirmation, a save's or an Undo's, until its lifetime ends (G15). */
@@ -76,6 +78,7 @@ type Action =
   | { kind: 'message'; message: string | null }
   | { kind: 'name'; name: string }
   | { kind: 'cancel' }
+  | { kind: 'settings' }
   | { kind: 'saved'; saved: Saved; now: number }
   | { kind: 'undone'; outcome: Outcome }
   | { kind: 'confirmation-ended'; id: number };
@@ -153,13 +156,17 @@ export function Popup() {
   const openForm = (name: string) => {
     if (ready) dispatch({ kind: 'name', name });
   };
+  // Settings open, like the form, only once the popup knows whether its opening asked for the form instead.
+  const openSettings = () => {
+    if (ready) dispatch({ kind: 'settings' });
+  };
   // The Name row opens the form with its text, whatever the mode (G4); every other row opens its mapping.
   const act = (row: SearchRow, mode: OpenMode) => (row.group === 'name' ? openForm(row.name) : void jump(row, mode));
 
   // Search's keys, wherever the focus is (the search box, the view when Chrome lets it take focus to scroll,
   // or nothing), so the footer is true for all of them; on a button, Enter and Space activate it instead.
-  // In the first run, Enter starts *Name this page* (G30). The Name form has its own Enter; Escape closes the
-  // popup from every view.
+  // In the first run, Enter starts *Name this page* (G30). The Name form has its own Enter, and settings have
+  // their controls'; Escape closes the popup from every view.
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
   onKey.current = (event: KeyboardEvent) => {
     // A key that ends an input method's composition belongs to the composition.
@@ -217,6 +224,9 @@ export function Popup() {
     );
   }
 
+  // Back to search as it was left, its list redrawn for any change made meanwhile (G27).
+  if (state.view.kind === 'settings') return <PopupSettings onBack={() => dispatch({ kind: 'cancel' })} />;
+
   const shownConfirmation = state.confirmed !== null && (
     <Confirmation
       confirmed={state.confirmed}
@@ -237,6 +247,7 @@ export function Popup() {
         message={state.message}
         namePage={namePage}
         onNamePage={() => openForm('')}
+        onSettings={openSettings}
         onMessage={(message) => dispatch({ kind: 'message', message })}
       />
     );
@@ -279,6 +290,7 @@ export function Popup() {
         >
           {MODE_LABEL[state.mode]}
         </button>
+        <SettingsGear onClick={openSettings} onFocusChange={(focused) => dispatch({ kind: 'focused', focused: focused ? 'settings' : null })} />
       </header>
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
@@ -377,6 +389,9 @@ function reduceAction(state: State, action: Action): State {
       return withForm(state, action.name, { kind: 'page', url: state.opener?.url, title: state.opener?.title });
     case 'cancel':
       return { ...state, view: { kind: 'search' } };
+    case 'settings':
+      // Opening settings is the user's next action: the confirmation and its Undo end (G15).
+      return { ...state, view: { kind: 'settings' }, focused: null, message: null, confirmed: null };
     case 'saved': {
       const { headingMissing, ...changed } = action.saved;
       // Back to a blank search box, where an Enter left over from the save opens nothing (G3).
@@ -483,6 +498,7 @@ function footer(state: State, ready: boolean, undoing: boolean): string {
   if (state.focused === 'undo' && state.confirmed !== null) return undoFooter(state.confirmed.outcome, undoing);
   if (!ready) return 'Enter does nothing until the popup is ready';
   if (state.focused === 'name-page') return 'Enter opens the Name form';
+  if (state.focused === 'settings') return 'Enter opens settings';
   // Typed text always lists a row, the Name row at least.
   if (list.rows.length === 0) return 'No mappings to list · Enter does nothing';
   const selected = list.selected === null ? undefined : list.rows[list.selected];

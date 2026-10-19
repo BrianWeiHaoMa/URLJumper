@@ -1,0 +1,26 @@
+/* The full settings page's layout: a column of readable width with the page's title and the list of views
+   above the view shown. Every color is a token of src/theme.css. */
+.options-page {
+  box-sizing: border-box;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.options-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line-separator);
+}
+
+.options-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}

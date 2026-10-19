@@ -1,0 +1,162 @@
+/* The settings views, as both hosts show them: sections with a heading, choices drawn as a row of options,
+   buttons, the shortcuts, and what a view says when something was or was not stored. Sized by the host's
+   font and width; nothing here is cut off, text wraps. Every color is a token of src/theme.css, and every
+   line height a whole number of pixels, which keeps the popup's height whole. */
+.preferences {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 6px 6px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.settings-heading {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.settings-text {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.settings-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-button {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.settings-button[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.settings-status,
+.settings-alert {
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.settings-status {
+  color: var(--text-primary);
+  background: var(--bg-confirmation);
+}
+
+.settings-alert {
+  color: var(--text-alert);
+  background: var(--bg-alert);
+}
+
+/* A choice: its options side by side in one bordered row, the chosen one marked. */
+.choice {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+}
+
+.choice:focus-visible {
+  outline-offset: 1px;
+}
+
+.choice-option {
+  padding: 3px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.choice-option:hover {
+  background: var(--bg-hover);
+}
+
+.choice-option[aria-selected="true"] {
+  font-weight: 600;
+  background: var(--bg-selected);
+}
+
+.keyword {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+.shortcuts {
+  align-self: stretch;
+  margin: 0;
+}
+
+.shortcut {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.shortcut dt,
+.shortcut dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.shortcut dd {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* The list of views, one button each; the one shown is marked. */
+.settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-nav-view {
+  font: inherit;
+  color: var(--text-primary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.settings-nav-view:hover {
+  background: var(--bg-hover);
+}
+
+.settings-nav-view[aria-current="page"] {
+  font-weight: 600;
+  background: var(--bg-selected);
+}

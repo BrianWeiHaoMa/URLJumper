@@ -6,6 +6,7 @@ import { jump } from './jump';
 import { loadExampleDocument } from './load-example';
 import { removeHonoredIntent } from './open-popup';
 import { enqueue } from './queue';
+import { resetUsage } from './reset-usage';
 import { undo } from './undo';
 
 export function perform<R extends Request>(request: R): Promise<ReplyTo<R>> {
@@ -26,5 +27,7 @@ function operate<R extends Request>(request: R): Promise<ReplyTo<R>> {
       return undo(request) as Promise<ReplyTo<R>>;
     case 'load-example':
       return loadExampleDocument() as Promise<ReplyTo<R>>;
+    case 'reset-usage':
+      return resetUsage() as Promise<ReplyTo<R>>;
   }
 }

@@ -1,16 +1,14 @@
 // The first-run state (In use, "First run"; G30): while the document is absent or holds only whitespace, the
 // popup shows it in place of search: *Name this page*, selected so Enter starts it, *Load example mappings*,
 // which has the worker store F11's example document, and the shortcuts as Chrome reports them now, with the
-// way to Chrome's page for changing them (E6). A footer says what Enter does.
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { chromeMessage, send, type LoadExampleReply } from '../requests';
+// way to Chrome's page for changing them (E6). Its header has the gear to settings, never focused first. A
+// footer says what Enter does.
+import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { send, type LoadExampleReply } from '../requests';
+import { Shortcuts } from '../settings/Shortcuts';
 import { useFitToViewport } from './fit-to-viewport';
+import { SettingsGear } from './PopupSettings';
 import './first-run.css';
-
-/** Chrome's page for changing extensions' shortcuts. An extension page's link to it opens nothing, so a button opens it in a tab. */
-const SHORTCUTS_PAGE = 'chrome://extensions/shortcuts';
-/** F5's commands, in its order. */
-const COMMANDS = ['open-new-tab', 'open-same-tab', 'name-this-page'];
 
 interface FirstRunProps {
   /** Whether the popup knows the page it names yet, so that *Name this page* opens the form. */
@@ -24,20 +22,15 @@ interface FirstRunProps {
   /** The *Name this page* button, which the popup focuses when nothing else has the focus. */
   namePage: RefObject<HTMLButtonElement | null>;
   onNamePage(): void;
+  onSettings(): void;
   onMessage(message: string | null): void;
 }
 
-export function FirstRun({ ready, confirmation, undoFooter, message, namePage, onNamePage, onMessage }: FirstRunProps) {
+export function FirstRun({ ready, confirmation, undoFooter, message, namePage, onNamePage, onSettings, onMessage }: FirstRunProps) {
   const layout = useFitToViewport();
-  const [shortcuts, setShortcuts] = useState<chrome.commands.Command[]>([]);
   const [loading, setLoading] = useState(false);
   const inFlight = useRef(false);
-  const [focused, setFocused] = useState<'load' | 'shortcuts' | null>(null);
-
-  // The keys Chrome has assigned now, never the suggested ones, which Chrome may have left unassigned (E6).
-  useEffect(() => {
-    void chrome.commands.getAll().then((all) => setShortcuts(COMMANDS.flatMap((name) => all.filter((command) => command.name === name))));
-  }, []);
+  const [focused, setFocused] = useState<'settings' | 'load' | 'shortcuts' | null>(null);
 
   const loadExample = async () => {
     if (inFlight.current) return;
@@ -51,10 +44,6 @@ export function FirstRun({ ready, confirmation, undoFooter, message, namePage, o
     if (reply.kind !== 'applied') onMessage(notLoaded(reply));
   };
 
-  const openShortcutsPage = () => {
-    chrome.tabs.create({ url: SHORTCUTS_PAGE }).catch((error: unknown) => onMessage(`Chrome's shortcuts page did not open. Chrome said: ${chromeMessage(error)}`));
-  };
-
   const footer =
     undoFooter ??
     (focused === 'load'
@@ -63,7 +52,9 @@ export function FirstRun({ ready, confirmation, undoFooter, message, namePage, o
         : 'Enter loads the example mappings'
       : focused === 'shortcuts'
         ? "Enter opens Chrome's shortcuts page"
-        : ready
+        : focused === 'settings'
+          ? 'Enter opens settings'
+          : ready
           ? 'Enter opens the Name form'
           : 'Enter does nothing until the popup is ready');
 
@@ -71,6 +62,7 @@ export function FirstRun({ ready, confirmation, undoFooter, message, namePage, o
     <main className="popup" ref={layout.root}>
       <header className="form-header">
         <h1 className="form-title">No mappings yet</h1>
+        <SettingsGear onClick={onSettings} onFocusChange={(on) => setFocused(on ? 'settings' : null)} />
       </header>
       <div className="view" ref={layout.view} role="region" aria-label="Getting started">
         <div className="view-content" ref={layout.content}>
@@ -97,23 +89,9 @@ export function FirstRun({ ready, confirmation, undoFooter, message, namePage, o
             </button>
           </div>
           <h2 className="first-run-heading">Shortcuts</h2>
-          <dl className="shortcuts">
-            {shortcuts.map((command) => (
-              <div key={command.name} className="shortcut">
-                <dt>{command.description}</dt>
-                <dd>{command.shortcut || 'Not set'}</dd>
-              </div>
-            ))}
-          </dl>
-          <button
-            type="button"
-            className="first-run-action"
-            onClick={openShortcutsPage}
-            onFocus={() => setFocused('shortcuts')}
-            onBlur={() => setFocused(null)}
-          >
-            Change shortcuts in Chrome
-          </button>
+          <div className="first-run-shortcuts">
+            <Shortcuts onFocusChange={(on) => setFocused(on ? 'shortcuts' : null)} onMessage={onMessage} />
+          </div>
         </div>
       </div>
       <footer className="footer">{footer}</footer>

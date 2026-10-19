@@ -44,6 +44,8 @@ test('keyboard alone: Undo of a save, its Undo, and Undo again leave the documen
   await expect(searchBox(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
 
+  // Past the chip and the gear.
+  await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await expect(undo(popup)).toBeFocused();

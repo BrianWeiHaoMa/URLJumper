@@ -66,6 +66,7 @@ test("the upload's manifest declares exactly URLJumper 2.0's keys and values", (
       'minimum_chrome_version',
       'name',
       'omnibox',
+      'options_ui',
       'permissions',
       'version',
     ].sort(),
@@ -88,6 +89,7 @@ test("the upload's manifest declares exactly URLJumper 2.0's keys and values", (
   expect(manifest.content_security_policy).toEqual({ extension_pages: "default-src 'self'" });
   expect(manifest.background).toEqual({ service_worker: expect.stringMatching(/\.js$/), type: 'module' });
   expect(manifest.action).toEqual({ default_popup: 'popup.html', default_title: 'URLJumper' });
+  expect(manifest.options_ui).toEqual({ page: 'options.html', open_in_tab: true });
   // F1: the product is URLJumper in every string; 1.x wrote "URL Jumper".
   expect(JSON.stringify(manifest)).not.toMatch(/URL\s+Jumper/i);
 });
