@@ -22,8 +22,16 @@ test('in the popup, the keyboard alone reaches the Text view and each of its con
   await expect(popup.getByRole('button', { name: 'Settings' })).toBeFocused();
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('listbox', { name: 'Search order' })).toBeFocused();
-  // Back past *Open in tab* to the view's button; the view takes a stop of its own only while it scrolls.
-  for (let i = 0; i < 3 && !(await nav(popup, 'Text').evaluate((button) => button === document.activeElement)); i++) await popup.keyboard.press('Shift+Tab');
+  // Back past *Open in tab* to the view's button, one stop each. Preferences is whole once its shortcuts are
+  // shown, and its view then takes a stop of its own, before its first control, exactly when it scrolls.
+  await expect(popup.locator('.shortcut')).toHaveCount(3);
+  if (await popup.locator('.view').evaluate((view) => view.scrollHeight > view.clientHeight)) {
+    await popup.keyboard.press('Shift+Tab');
+    await expect(popup.locator('.view')).toBeFocused();
+  }
+  await popup.keyboard.press('Shift+Tab');
+  await expect(popup.getByRole('button', { name: 'Open in tab' })).toBeFocused();
+  await popup.keyboard.press('Shift+Tab');
   await expect(nav(popup, 'Text')).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter shows Text');
   await popup.keyboard.press('Enter');
@@ -82,9 +90,12 @@ test('a list of errors longer than the popup scrolls its view; activating the la
   expect(await caret(view.area)).toEqual({ focused: true, line: 14, atLineStart: true, inView: true });
   await expect(view.area).toBeInViewport({ ratio: 1 });
   await expect(view.area).toHaveValue(draft);
-  // The hint above the text area is now partly scrolled out of the view, where axe cannot judge contrast, so
-  // the accessibility pass ran above, with the view at its top.
   await checkFit(popup);
+  // The hint above the text area is now scrolled out under the header, where axe cannot judge its contrast:
+  // the accessibility pass runs on this state with the view back at its top, as above.
+  await popup.locator('.view').evaluate((scroller) => (scroller.scrollTop = 0));
+  await checkFitAndAccessibility(popup);
+  expect(await caret(view.area)).toEqual({ focused: true, line: 14, atLineStart: true, inView: true });
 });
 
 test('on the options page, the keyboard alone reaches the Text view, the text area, Save, and each error, and the focus is never left on nothing', async ({ extension }) => {
@@ -93,7 +104,10 @@ test('on the options page, the keyboard alone reaches the Text view, the text ar
   await page.goto(extension.url('options.html'));
   const view = textView(page);
   await expect(page.getByRole('listbox', { name: 'Search order' })).toBeVisible();
-  for (let i = 0; i < 4 && !(await nav(page, 'Text').evaluate((button) => button === document.activeElement)); i++) await page.keyboard.press('Tab');
+  // From the page's start, one stop each: the list of views, Preferences then Text.
+  await page.keyboard.press('Tab');
+  await expect(nav(page, 'Preferences')).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(nav(page, 'Text')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(view.area).toBeEditable();

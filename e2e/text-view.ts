@@ -1,7 +1,7 @@
 // The Text view as a check reaches it, re-exported by e2e/extension.ts: its parts found by their names, the
 // view opened in the popup's settings or on the options page once its text area holds the stored document,
-// typing into a line as a user does, where the caret is, the requests the worker receives, and the clipboard,
-// which *Copy tab URL* writes, read back from a web page.
+// typing into a line as a user does, where the caret is, the requests the worker receives, a page's reads of
+// storage answered late, and the clipboard, which *Copy tab URL* writes, read back from a web page.
 import { expect, type BrowserContext, type Locator, type Page, type Worker } from '@playwright/test';
 
 /** The Text view's parts in `page`, a popup or an options page that shows it. */
@@ -93,6 +93,30 @@ export async function watchRequests(worker: Worker, kind: string): Promise<() =>
     [name, kind] as const,
   );
   return () => worker.evaluate((name) => (globalThis as Record<string, unknown>)[name] as unknown[], name);
+}
+
+/**
+ * Makes every read of `chrome.storage.local` that `page` makes from now wait `ms` before it is made, as a busy
+ * profile may answer it late, so a change that lands meanwhile is in what the read gives. The function
+ * returned gives how many of those reads are still unanswered.
+ */
+export async function delayPageReads(page: Page, ms: number): Promise<() => Promise<number>> {
+  await page.evaluate((ms) => {
+    const local = chrome.storage.local;
+    const get = local.get.bind(local) as (keys?: unknown) => Promise<Record<string, unknown>>;
+    const unanswered = { count: 0 };
+    (globalThis as Record<string, unknown>).delayedReads = unanswered;
+    (local as unknown as { get: unknown }).get = async (keys?: unknown) => {
+      unanswered.count++;
+      try {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+        return await get(keys);
+      } finally {
+        unanswered.count--;
+      }
+    };
+  }, ms);
+  return () => page.evaluate(() => ((globalThis as Record<string, unknown>).delayedReads as { count: number }).count);
 }
 
 /**

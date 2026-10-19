@@ -1,15 +1,19 @@
 // What the Text view's Save keeps when it cannot store (G18, G21; Composition, *replace*, "Settings views";
 // State): a view with nothing typed takes in every change to the stored document, while a change that lands
 // under typing is never overwritten, before or after the view hears of it, so Save stores nothing and says so;
-// the text area is read-only while a Save is under way and sends one; a store Chrome refuses says so and keeps
-// the text and the base it was loaded with; and a popup closed during a Save leaves its outcome stored.
+// the text area is read-only while a Save is under way and sends one; a store Chrome refuses, or a Save that gets
+// no reply, says so and keeps the text and the base it was loaded with; and a popup closed during a Save leaves
+// its outcome stored.
 import type { Page } from '@playwright/test';
 import {
   checkAccessibilityInBothSchemes,
   checkFitAndAccessibility,
+  delayPageReads,
   expect,
   popupOnNewPage,
+  restartWorker,
   slowWorkerReads,
+  stallWorkerAfterWriting,
   test,
   textViewInPopup,
   textViewOnOptionsPage,
@@ -175,6 +179,73 @@ test('a store Chrome refuses says so and keeps the text and its base: once there
   await expect(view.status).toHaveText(CHANGED);
   expect(await storedDocument(extension)).toBe(inserted);
   await expect(view.area).toHaveValue(stored + long + long.replace('long', 'longer'));
+});
+
+test('after a store Chrome refuses, a change that lands before the view reads the document again is not overwritten', async ({ extension, site }) => {
+  const stored = 'a  https://a/\n';
+  await extension.seedStorage({ mappings: stored });
+  const other = await extension.openRequestPage();
+  const { popup } = await popupOnNewPage(extension, site);
+  const view = await textViewInPopup(popup);
+  const long = `long  https://long.example/${'x'.repeat(2_000)}\n`;
+  await typeAtEnd(view, long);
+  await extension.fillStorage(100);
+  // The read the view makes on the reply is made after the other page's change has landed.
+  const unanswered = await delayPageReads(popup, 2_000);
+  await view.save.click();
+  await expect(view.status).toHaveText(/^Not saved: your text is kept as you typed it\. Chrome said: .*quota/i);
+  await extension.worker.evaluate(() => chrome.storage.local.remove('storageFiller'));
+  expect(await other.send(INSERT)).toMatchObject({ kind: 'applied' });
+  const inserted = await storedDocument(extension);
+  await expect.poll(unanswered, { timeout: 10_000 }).toBe(0);
+  await view.save.click();
+  await expect(view.status).toHaveText(CHANGED);
+  expect(await storedDocument(extension)).toBe(inserted);
+  await expect(view.area).toHaveValue(stored + long);
+});
+
+test('a Save that gets no reply says so and keeps the text: stopped before its write, the next Save stores; stopped after it, what landed stays and a change made since is not overwritten', async ({ extension, site }) => {
+  const stored = 'a  https://a/\n';
+  await extension.seedStorage({ mappings: stored });
+  // Wakes the worker after it is stopped; refused, as the document is not empty, so it writes nothing.
+  const other = await extension.openRequestPage();
+  const wake = () => other.send({ kind: 'load-example' });
+  const { popup } = await popupOnNewPage(extension, site);
+  const view = await textViewInPopup(popup);
+  const noReply = /^Not saved: your text is kept as you typed it\. Chrome said: /;
+
+  await typeAtEnd(view, 'b  https://b/\n');
+  const first = `${stored}b  https://b/\n`;
+  await slowWorkerReads(extension.worker, 'mappings', 10_000);
+  await view.save.click();
+  await expect(view.status).toHaveText('Saving…');
+  await restartWorker(extension.context, extension.worker, wake);
+  await expect(view.status).toHaveText(noReply);
+  expect(await storedDocument(extension)).toBe(stored);
+  await expect(view.area).toHaveValue(first);
+  await expect(view.area).toBeEditable();
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  expect(await storedDocument(extension)).toBe(first);
+
+  await typeAtEnd(view, 'c  https://c/\n');
+  const second = `${first}c  https://c/\n`;
+  await stallWorkerAfterWriting(extension.worker, 'mappings');
+  await view.save.click();
+  await expect.poll(() => storedDocument(extension)).toBe(second);
+  await expect(view.status).toHaveText('Saving…');
+  await restartWorker(extension.context, extension.worker, wake);
+  await expect(view.status).toHaveText(noReply);
+  await expect(view.area).toHaveValue(second);
+  expect(await storedDocument(extension)).toBe(second);
+  expect(await other.send(INSERT)).toMatchObject({ kind: 'applied' });
+  const inserted = await storedDocument(extension);
+  await typeAtEnd(view, 'd  https://d/\n');
+  await view.save.click();
+  await expect(view.status).toHaveText(CHANGED);
+  expect(await storedDocument(extension)).toBe(inserted);
+  await expect(view.area).toHaveValue(`${second}d  https://d/\n`);
+  await checkFitAndAccessibility(popup);
 });
 
 test('a popup closed during a Save leaves the text stored, and the next popup\'s Text view shows it', async ({ extension, site }) => {

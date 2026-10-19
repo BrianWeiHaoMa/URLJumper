@@ -121,6 +121,27 @@ test("F4 is the rule, not the Name form's: a note holding a backslash, a tab in 
   await expect(view.errors).toHaveCount(0);
 });
 
+test('any Unicode text is stored as the text area holds it, and saves again from the text it stored', async ({ extension }) => {
+  await extension.seedStorage({ mappings: 'x  https://x/\n' });
+  const view = await textViewOnOptionsPage(extension);
+  // What a Save that normalized, trimmed, or dropped characters would change (E3, E8): U+FEFF where a
+  // byte-order mark would be, a character outside the Basic Multilingual Plane, an accent left as a combining
+  // mark, right-to-left and CJK names, U+2028 and NUL inside notes, and whitespace at both ends.
+  const draft = '\uFEFF  \n😀  https://e.example/\ncafe\u0301  https://c.example/ \\ a\u2028b\nשלום  https://s.example/\n東京\u3000駅  https://t.example/ \\ x\u0000y\n  last  https://l.example/  ';
+  await view.area.fill(draft);
+  await expect(view.area).toHaveValue(draft);
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  expect((await extension.readStorage()).mappings).toBe(draft);
+  await expect(view.area).toHaveValue(draft);
+
+  // The base is the text stored, so the next Save is not refused as changed.
+  await retypeLine(view, 2, '😀😀  https://e.example/');
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  expect((await extension.readStorage()).mappings).toBe(draft.replace('😀', '😀😀'));
+});
+
 test('a CRLF document is saved as the text area holds it, with LF endings, and saves again from the text it stored', async ({ extension, site }) => {
   const stored = 'a  https://a/\r\nb  https://b/\r\nc  https://c/\r\n';
   await extension.seedStorage({ mappings: stored });
