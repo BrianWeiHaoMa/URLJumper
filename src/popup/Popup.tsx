@@ -23,12 +23,13 @@ import { send, type JumpReply, type JumpRequest } from '../requests';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
 import { offersUndo, undoFooter, type Confirmed, type Outcome } from '../line-changes/outcomes';
 import { FirstRun } from './FirstRun';
-import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
+import { move, newList, outsideWindow, relist, sameList, scroll, WINDOW_ROWS, type ListState } from './list-state';
 import { NameForm, type NameSubject } from './NameForm';
 import { RowPencils } from './Pencil';
 import { PopupRowEditor } from './PopupRowEditor';
 import { PopupSettings, SettingsGear } from './PopupSettings';
 import { Row, rowId, type MappingRow } from './Row';
+import { useSelectionInView } from './selection-in-view';
 import { ThisPage } from './ThisPage';
 import { useFitToViewport } from './fit-to-viewport';
 import { footerWithNotice } from './upgrade-notice';
@@ -72,6 +73,8 @@ interface State {
   view: View;
   typed: string;
   list: ListState;
+  /** How many times the selection has been set, by Up or Down or by a new list: each brings its row into view (G3). */
+  selections: number;
   mode: OpenMode;
   /**
    * The control in search whose focus changes what Enter does, if one has it: a pencil, a row's or *This page
@@ -114,6 +117,8 @@ export function Popup() {
   const wheel = useRef(0);
   const layout = useFitToViewport();
   const searchBox = useRef<HTMLInputElement>(null);
+  // Shown, and acted on, only while its row is visible in search's view (G3).
+  const selection = useSelectionInView(layout.view, state.list.selected, searchBox);
   const namePage = useRef<HTMLButtonElement>(null);
   const confirmation = useRef<HTMLDivElement>(null);
   const endConfirmation = useCallback((id: number) => dispatch({ kind: 'confirmation-ended', id }), []);
@@ -144,11 +149,10 @@ export function Popup() {
   const theme = state.stored?.theme ?? 'system';
   useEffect(() => applyTheme(theme), [theme]);
 
-  // The selected row is always in view, also when the view has to scroll (G3, G7), when a message above the
-  // rows pushes them down, and when search is shown again after the Name form.
-  useLayoutEffect(() => {
-    if (state.list.selected !== null) document.getElementById(rowId(state.list.selected))?.scrollIntoView({ block: 'nearest' });
-  }, [state.list.selected, state.list.top, state.message, state.confirmed, state.view]);
+  // Up, Down, and every new list bring the selected row into view (G3), as do a message above the rows pushing
+  // them down and search shown again after the Name form; a storage change that leaves the rows as they were
+  // moves nothing, nor does anything here answer the view's own scroll (G7, G32).
+  useLayoutEffect(() => selection.bringIntoView(), [state.selections, state.list.selected, state.list.top, state.message, state.confirmed, state.view]);
 
   const other = otherMode(state.mode);
 
@@ -196,7 +200,8 @@ export function Popup() {
     else if (isEditKey(event)) {
       // Taken from Chrome, which would act on it, whether or not a row can be edited.
       event.preventDefault();
-      const selected = firstRun || state.list.selected === null ? undefined : state.list.rows[state.list.selected];
+      const acted = firstRun ? null : selection.actedOn();
+      const selected = acted === null ? undefined : state.list.rows[acted];
       if (selected !== undefined && selected.group !== 'name') openEditor(selected.mapping.line, selected.group === 'argument' ? selected.argument : null);
     } else if (event.target instanceof Element && event.target.closest('button')) return;
     else if (firstRun) {
@@ -208,7 +213,8 @@ export function Popup() {
       dispatch({ kind: 'move', step: event.key === 'ArrowDown' ? 1 : -1 });
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      const selected = state.list.selected === null ? undefined : state.list.rows[state.list.selected];
+      const acted = selection.actedOn();
+      const selected = acted === null ? undefined : state.list.rows[acted];
       if (selected) act(selected, event.shiftKey ? other : state.mode);
     }
   };
@@ -332,18 +338,16 @@ export function Popup() {
           aria-autocomplete="list"
           aria-expanded={list.rows.length > 0}
           aria-controls={list.rows.length > 0 ? 'rows' : undefined}
-          aria-activedescendant={list.selected === null ? undefined : rowId(list.selected)}
+          aria-activedescendant={selection.shown === null ? undefined : rowId(selection.shown)}
           placeholder="Type a name"
           autoComplete="off"
           spellCheck={false}
           autoFocus
           value={state.typed}
           onChange={(event) => dispatch({ kind: 'typed', typed: event.target.value, now: Date.now() })}
-          // Where Enter acts on the selected row, the row is in view (G3), also after the focus went to a control
-          // the view scrolled to, as the pencil after a long name of the page.
-          onFocus={() => {
-            if (list.selected !== null) document.getElementById(rowId(list.selected))?.scrollIntoView({ block: 'nearest' });
-          }}
+          // Back in the search box, the selection is in view and Enter acts on it (G3), also after the focus went
+          // to a control the view scrolled to, as the pencil after a long name of the page.
+          onFocus={selection.bringIntoView}
         />
         <button
           type="button"
@@ -378,7 +382,7 @@ export function Popup() {
                     row={row}
                     index={list.top + i}
                     count={list.rows.length}
-                    selected={list.selected === list.top + i}
+                    selected={selection.shown === list.top + i}
                     onClick={(event) => onRowClick(row, event)}
                   />
                 ))}
@@ -402,7 +406,7 @@ export function Popup() {
           Name this page
         </button>
       </div>
-      <footer className="footer">{footerWithNotice(footer(state, ready, undoing, editLine), notice)}</footer>
+      <footer className="footer">{footerWithNotice(footer(state, selection.shown, ready, undoing, editLine), notice)}</footer>
     </main>
   );
 }
@@ -414,6 +418,7 @@ function initialState(): State {
     view: { kind: 'search' },
     typed: '',
     list: NO_ROWS,
+    selections: 0,
     mode: 'new-tab',
     focused: null,
     message: null,
@@ -432,16 +437,17 @@ function reduceAction(state: State, action: Action): State {
   switch (action.kind) {
     case 'stored': {
       const input = { ...searchInputs(action.stored), typed: state.typed, now: action.now };
-      return openAsked({ ...state, stored: action.stored, list: state.stored === undefined ? newList(input) : relist(state.list, input) }, action.now);
+      const list = state.stored === undefined ? newList(input) : relist(state.list, input);
+      return openAsked({ ...state, stored: action.stored, list, selections: sameList(state.list, list) ? state.selections : state.selections + 1 }, action.now);
     }
     case 'opener':
       return openAsked({ ...state, opener: action.opener, mode: action.opener.mode }, action.now);
     case 'typed':
       // An edit of the search box is the user's next action (G15).
-      return { ...state, typed: action.typed, list: listFor(state, action.typed, action.now), message: null, confirmed: null };
+      return { ...state, typed: action.typed, list: listFor(state, action.typed, action.now), selections: state.selections + 1, message: null, confirmed: null };
     case 'move': {
       const list = move(state.list, action.step);
-      return { ...state, list, confirmed: list.selected === state.list.selected ? state.confirmed : null };
+      return { ...state, list, selections: state.selections + 1, confirmed: list.selected === state.list.selected ? state.confirmed : null };
     }
     case 'scroll': {
       // Moving the window, which can carry the selection along, is the user's next action too (G15).
@@ -587,8 +593,8 @@ function otherMode(mode: OpenMode): OpenMode {
   return mode === 'new-tab' ? 'this-tab' : 'new-tab';
 }
 
-/** What Enter does now (L2); `editLine` is the line of the pencil with the focus. */
-function footer(state: State, ready: boolean, undoing: boolean, editLine: number | undefined): string {
+/** What Enter does now (L2); `shown` is the selection while its row is in view, `editLine` the line of the pencil with the focus. */
+function footer(state: State, shown: number | null, ready: boolean, undoing: boolean, editLine: number | undefined): string {
   const { list, mode } = state;
   if (state.focused === 'chip') return `Enter or Space switches to ${MODE_LABEL[otherMode(mode)]}`;
   if (state.focused === 'undo' && state.confirmed !== null) return undoFooter(state.confirmed.outcome, undoing);
@@ -598,7 +604,9 @@ function footer(state: State, ready: boolean, undoing: boolean, editLine: number
   if (editLine !== undefined) return `Enter edits line ${editLine}`;
   // Typed text always lists a row, the Name row at least.
   if (list.rows.length === 0) return 'No mappings to list · Enter does nothing';
-  const selected = list.selected === null ? undefined : list.rows[list.selected];
+  // Held back while its row is out of view (G3).
+  if (list.selected !== null && shown === null) return 'Enter does nothing · Up or Down selects a row';
+  const selected = shown === null ? undefined : list.rows[shown];
   if (selected === undefined) return 'Enter does nothing · Down selects a row';
   if (selected.group === 'name') return 'Enter opens the Name form';
   const where = (m: OpenMode) => (m === 'new-tab' ? 'in a new tab' : 'in this tab');

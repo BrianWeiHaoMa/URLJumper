@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { SearchInput } from '../document/search';
-import { move, newList, outsideWindow, relist, scroll, type ListState } from './list-state';
+import { move, newList, outsideWindow, relist, sameList, scroll, type ListState } from './list-state';
 
 const NOW = Date.UTC(2026, 9, 18, 12);
 
@@ -95,12 +95,17 @@ test('a storage change that leaves the rows as they were keeps the selection and
   const list = scroll(move(newList(input(lines(20), '')), 1), 4);
   const again = relist(list, input([...lines(20), '\\ a comment'], ''));
   expect([again.selected, again.top]).toEqual([list.selected, list.top]);
+  expect(sameList(list, again)).toBe(true);
 });
 
 test('a storage change that changes the rows starts a new list, as G3 starts one', () => {
   const typed = repeat(newList(input(lines(20), 'm')), 1, 9);
   const more = relist(typed, input(['m0  x:0', ...lines(20)], 'm'));
   expect([more.selected, more.top]).toEqual([0, 0]);
+  expect(sameList(typed, more)).toBe(false);
+  // A new list whose selection is again the first row at the top is still a new list.
+  const first = newList(input(lines(20), 'm'));
+  expect(sameList(first, relist(first, input(['m0  x:0', ...lines(20)], 'm')))).toBe(false);
   const blank = move(newList(input(lines(20), '')), 1);
   const reordered = relist(blank, input(lines(20), '', { order: 'smart', usage: { ['m20\nhttps://e.example/20']: [NOW] } }));
   expect(names(reordered)[0]).toBe('m20');

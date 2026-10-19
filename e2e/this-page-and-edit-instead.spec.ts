@@ -47,6 +47,9 @@ async function storedDocument(extension: LoadedExtension) {
 async function popupWith(extension: LoadedExtension, site: LocalSite, document: (address: string) => string) {
   const opened = await popupOnNewPage(extension, site);
   await extension.seedStorage({ mappings: document(opened.page.url()) });
+  // Opened on an empty document, the popup shows the first run until it has read the seeded one: a key sent
+  // sooner lands there.
+  await expect(opened.popup.getByRole('option').first()).toBeVisible();
   return opened;
 }
 
@@ -109,7 +112,7 @@ test("This page is names the first line with the tab's address, and its pencil, 
   expect(await storedDocument(extension)).toBe(doc);
 });
 
-test("after Tab to a long This page is's pencil, which scrolls the view past the selected row, the search box shows that row again when the focus comes back to it", async ({ extension, site }) => {
+test("after Tab to a long This page is's pencil, which scrolls the view past the selected row, no row is selected until the focus comes back to the search box, which shows that row again", async ({ extension, site }) => {
   const longName = `n${'x'.repeat(2_999)}`;
   const { popup } = await popupWith(extension, site, (address) => `mail                 https://mail.example.com/\n${longName}  ${address}\n`);
   const selectedInView = () =>
@@ -122,7 +125,10 @@ test("after Tab to a long This page is's pencil, which scrolls the view past the
   await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('mail');
   for (let i = 0; i < 5; i++) await popup.keyboard.press('Tab');
   await expect(thisPagePencil(popup)).toBeFocused();
-  expect(await selectedInView()).toBe(false);
+  // The row the view scrolled away from is held back: neither drawn nor named as selected (G3).
+  await expect(popup.locator('[role=option][aria-selected=true]')).toHaveCount(0);
+  await expect(searchBox(popup)).not.toHaveAttribute('aria-activedescendant');
+  await expect(footer(popup)).toHaveText('Enter edits line 2');
   await popup.keyboard.press('Tab');
   await expect(namePage(popup)).toBeFocused();
   // Tab from the last control wraps through Chrome's own frame and lands after the key has come up.

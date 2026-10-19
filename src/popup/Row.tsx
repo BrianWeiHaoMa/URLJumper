@@ -54,7 +54,10 @@ export function MappingRowText({ row }: { row: MappingRow }) {
   return (
     <>
       <span className="row-line">
-        <span className="row-name">{name}</span>
+        {/* Its own direction, from its first letter, so a right-to-left name is cut at its end, not its start. */}
+        <span className="row-name" dir="auto">
+          {name}
+        </span>
         {address && <span className="row-tag">address match</span>}
       </span>
       <span className="row-line">

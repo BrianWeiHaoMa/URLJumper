@@ -27,7 +27,12 @@ export function newList(input: SearchInput): ListState {
 /** The list for `input` after a storage change: the same rows keep their selection and window; other rows are a new list. */
 export function relist(list: ListState, input: SearchInput): ListState {
   const next = newList(input);
-  return next.blank === list.blank && sameRows(next.rows, list.rows) ? { ...list, rows: next.rows } : next;
+  return sameList(list, next) ? { ...list, rows: next.rows } : next;
+}
+
+/** Whether `next` holds the rows `list` holds, for blank text or typed alike: the list a storage change keeps. */
+export function sameList(list: ListState, next: ListState): boolean {
+  return next.blank === list.blank && sameRows(next.rows, list.rows);
 }
 
 /**

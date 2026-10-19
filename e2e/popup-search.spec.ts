@@ -1,7 +1,7 @@
 // What the popup lists, as the user types and as storage changes: groups and order (G1, G2), selection and
 // the seven-row window (G3, F13), the cue and footer (L2), the theme (F3, F15), and the fit (G7).
 import type { Locator, Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, test, upgradeNotice, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, editSelectedRow, expect, popupOnNewPage, shownTheme, test, upgradeNotice, type LoadedExtension } from './extension.ts';
 
 // Mappings named m1 … m<count>, one per line, each at the address `url` gives it.
 const mappings = (count: number, url = (i: number) => `https://m${i}.example/`) =>
@@ -173,6 +173,19 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
       }),
     )
     .toBe(true);
+});
+
+test('a long name in a right-to-left script is shown from its start, in its row and above its editor', async ({ extension, site }) => {
+  // Its start is its first character, which a right-to-left line draws at its right (E8).
+  const name = `بداية${'س'.repeat(300)}نهاية`;
+  await extension.seedStorage({ mappings: `${name}  https://a.example/\n` });
+  const { popup } = await popupOnNewPage(extension, site);
+  await popup.getByRole('combobox').fill('بداية');
+  await expect(popup.getByRole('option')).toHaveCount(1);
+  await checkFitAndAccessibility(popup);
+  await editSelectedRow(popup);
+  await expect(popup.locator('.editor-header .row-name')).toHaveText(name);
+  await checkFitAndAccessibility(popup);
 });
 
 test('a name or URL that fits its row is shown whole, however many code units it holds', async ({ extension, site }) => {
