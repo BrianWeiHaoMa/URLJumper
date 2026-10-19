@@ -58,7 +58,7 @@ test('with no order or theme stored, both hosts show Document order and System, 
   expect(await extension.readStorage()).toEqual({ mappings: DOC });
 });
 
-test('the order chosen in the popup is stored and the list back in search follows it; one chosen on the options page shows in the next popup', async ({ extension, site }) => {
+test('the order chosen in the popup is stored and the list back in search and the next popup follow it; one chosen on the options page shows in the next popup', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: DOC, searchOrder: 'smart', usage: { [KEY.c]: [Date.now() - 60_000] } });
   const options = await optionsPage(extension);
   const { page, popup } = await settingsInPopup(extension, site);
@@ -76,6 +76,9 @@ test('the order chosen in the popup is stored and the list back in search follow
   await popup.getByRole('button', { name: 'Back' }).click();
   await expect(listed(popup)).toHaveText(['a', 'b', 'c']);
   await popup.close();
+  const reopened = await extension.clickToolbarButton(page);
+  await expect(listed(reopened)).toHaveText(['a', 'b', 'c']);
+  await reopened.close();
 
   await order(options).getByRole('option', { name: 'Smart order' }).click();
   expect((await extension.readStorage()).searchOrder).toBe('smart');

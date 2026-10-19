@@ -10,6 +10,7 @@ import {
   checkFitAndAccessibility,
   closingPopup,
   expect,
+  expectNoNotice,
   holdPageReads,
   popupOnNewPage,
   shownTheme,
@@ -51,13 +52,6 @@ async function whatsNewTabs(extension: LoadedExtension) {
 /** The open tabs but the extension's own pages, the popup among them. */
 async function webPages(extension: LoadedExtension) {
   return (await extension.tabUrls()).filter((url) => !url.startsWith(extension.url('')));
-}
-
-/** Waits until `popup` is ready (its footer no longer says it is not) and shows no notice. */
-async function expectNoNotice(popup: Page) {
-  await expect(footer(popup)).not.toHaveText(/until the popup is ready/);
-  await expect(footer(popup)).not.toHaveText(/notice/);
-  await expect(upgradeNotice(popup).notice).toHaveCount(0);
 }
 
 test('the first popup after an update from 1.x shows the notice; a typed letter dismisses it for good, lands in the search box, and lists what it lists without the notice', async ({ extension, site }) => {

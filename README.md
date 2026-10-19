@@ -6,6 +6,7 @@ URLJumper is a Chrome extension for opening web pages by names you keep in one p
 
 - Node.js 24 and npm.
 - For the end-to-end checks only: Playwright's Chromium, installed once after `npm ci` with `npx playwright install chromium` (on Linux, `npx playwright install --with-deps chromium` also installs the system libraries it needs).
+- For the end-to-end check of the upgrade from 1.3.0 (`e2e/upgrade-from-1x.spec.ts`), which builds 1.3.0 from the project's history and updates it to the new build: a clone whose history holds commit `b0a1994`, the last 1.x commit (a shallow clone lacks it: `git fetch --unshallow`), and, the first time, the npm registry, for 1.3.0's own `npm ci`. The 1.3.0 build is made in a temporary directory and kept, untracked, in `node_modules/.cache/urljumper-1x/` for later runs; nothing of it enters the package.
 
 ## Build the Web Store package
 
