@@ -1,3 +1,5 @@
+// The full settings page's entry, loaded by options.html: mounts `OptionsPage` on the page's `#root`, with
+// the theme and the page's stylesheet.
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../theme.css';

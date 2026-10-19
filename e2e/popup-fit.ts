@@ -9,6 +9,8 @@ import { expect, type Page } from '@playwright/test';
  * view; no element of the popup's own is cut across or along, or lies where a box that clips it cannot show
  * or scroll to, except a row's name or URL cut with an ellipsis from its start; and a field's line holds its
  * text's height. The view may scroll, which cuts nothing; a field's value scrolls across inside the field.
+ * Headless, Chrome gives the popup at most 510 pixels of height, not the 600 it allows, so a view that would
+ * fit in 600, such as the settings, scrolls here.
  */
 export async function checkFit(popup: Page): Promise<void> {
   await expect.poll(() => fitProblems(popup), { message: 'the popup does not fit', timeout: 5_000 }).toEqual([]);

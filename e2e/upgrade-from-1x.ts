@@ -14,6 +14,7 @@ import { distDir, isExtensionWorker, launchChrome, waitForStoredKey, type Loaded
 const RELEASE_1X_COMMIT = 'b0a199430d3ed61c9c0661218bcbdef2ac3ff39b';
 const repository = path.resolve(import.meta.dirname, '..');
 // Under node_modules, which neither Git nor the package holds, so no 1.x file enters the tree or the upload.
+// `npm ci` empties node_modules and the kept build with it; the next run builds 1.3.0 again.
 const keptBuilds = path.join(repository, 'node_modules', '.cache', 'urljumper-1x');
 
 /** 1.3.0 as Chrome runs it from its unpacked directory, before the update. */

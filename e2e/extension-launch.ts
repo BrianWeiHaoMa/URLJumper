@@ -41,7 +41,10 @@ export interface LoadedExtension {
   openPopups(): Promise<number>;
   /**
    * Brings `tab` to the front and returns the tab Chrome gives it, as the worker sees it (without its `url`
-   * and `title`, which only a grant gives): what Chrome passes a command pressed there.
+   * and `title`, which only a grant gives): what Chrome passes a command pressed there. Headless, this changes
+   * the active tab but not the focused window, which a window created focused keeps; the worker's
+   * `chrome.windows.update(id, { focused: true })` moves it, so a check with two windows creates the second
+   * unfocused and asserts which window this reports.
    */
   frontTab(tab: Page): Promise<chrome.tabs.Tab>;
   /**
@@ -54,13 +57,25 @@ export interface LoadedExtension {
   seedStorage(items: Record<string, unknown>): Promise<void>;
   /** The whole of `chrome.storage.local`. */
   readStorage(): Promise<Record<string, unknown>>;
-  /** Fills `chrome.storage.local` with one more key until only `bytesLeft` bytes of its quota are free. */
+  /**
+   * Fills `chrome.storage.local` with one more key until only `bytesLeft` bytes of its quota are free. A Text
+   * view writes `draft` as the user types, so after typing a check first waits until `draft` holds the text,
+   * or a draft write lands between this measure and this write.
+   */
   fillStorage(bytesLeft: number): Promise<void>;
-  /** Starts recording the changes `storage.onChanged` reports in `chrome.storage.local`; the function returned gives those so far, oldest first. */
+  /**
+   * Starts recording the changes `storage.onChanged` reports in `chrome.storage.local`; the function returned
+   * gives those so far, oldest first. Typing in a Text view writes `draft` as it goes, so a check that counts
+   * stores of the document counts the changes that hold `mappings` or `usage`.
+   */
   watchStorage(): Promise<() => Promise<Record<string, chrome.storage.StorageChange>[]>>;
-  /** Sends `request` to the worker from a `popup.html` tab, as a page of the extension does, and resolves to the reply Chrome delivers. */
+  /**
+   * Sends `request` to the worker from a `popup.html` tab, as a page of the extension does, and resolves to the
+   * reply Chrome delivers. The first call opens that tab, and a tab opened while the action popup is open can
+   * close it: a check sends its first request, or opens its request page, before it opens the popup.
+   */
   sendRequest(request: Request): Promise<unknown>;
-  /** Opens one more `popup.html` tab to send requests from, as another popup or settings tab of the extension does (E1). */
+  /** Opens one more `popup.html` tab to send requests from, as another popup or settings tab of the extension does (E1); before the popup, as `sendRequest` says. */
   openRequestPage(): Promise<RequestPage>;
   /**
    * Says this check causes a request from the extension's origin to `url`: a This tab jump it asks for, or

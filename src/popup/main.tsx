@@ -1,3 +1,5 @@
+// The popup's entry, loaded by popup.html: mounts `Popup` on the page's `#root`, with the theme and the
+// popup's stylesheet.
 import { StrictMode } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';

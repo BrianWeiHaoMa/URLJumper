@@ -80,6 +80,8 @@ export async function assignShortcut(context: BrowserContext, extensionId: strin
 /**
  * Lets `page` lose and regain the focus as its tab does: Playwright otherwise keeps every page focused, so
  * a page never learns that the user went to another tab, such as Chrome's shortcuts page, and came back.
+ * The page then gets `blur` and `focus` as its tab is left and made active again; its `visibilityState`
+ * stays `visible`, as Playwright keeps it headless.
  */
 export async function followTabFocus(page: Page): Promise<void> {
   const session = await page.context().newCDPSession(page);
