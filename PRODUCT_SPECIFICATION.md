@@ -48,7 +48,7 @@ Accepted limits, each of which also lowers the cost of building it:
 
 **First run.** With an empty document the popup shows two actions: *Name this page*, selected so Enter starts it, and *Load example mappings*, which stores the example document of F11 so the grammar is learned by example. It also shows the shortcuts and where to change them.
 
-**Upgrade from 1.x.** Nothing is migrated. The document, the theme, and the shortcuts are as they were, and Document order remains the search order. The first popup after the upgrade shows a one-line notice of what is new; any keystroke or its close control dismisses it for good, and activating it opens a short page bundled with the extension.
+**Upgrade from 1.x.** Nothing is migrated. The document, the theme, and the shortcuts are as they were, and Document order remains the search order. The first popup after the upgrade shows a one-line notice of what is new; any keystroke but Tab and Shift+Tab, or its close control, dismisses it for good, and activating it opens a short page bundled with the extension.
 
 **The most common failure.** The user presses Save in the Text view with a line that has a name but no URL. Nothing is stored. The view lists *Line 12: expected a name and a URL*, the caret moves to line 12 when the error is activated, the status reads *Not saved*, and the draft stays exactly as typed.
 
@@ -157,7 +157,7 @@ Upgrade:
 
 - **G23.** After installing 2.0 over 1.x: the stored document is byte for byte what 1.x stored; the theme is what the user had chosen, or System if they had not chosen; the search order is Document order until the user changes it; and for the same typed text the mappings 1.x listed appear in the same relative order, with three deliberate changes: a mapping whose name equals the typed text is listed first even when an earlier line's name starts with it; whitespace at the end of the typed text is ignored; and a URL containing `%s` opens with `%s` removed or replaced per F9, where 1.x opened it with `%s` literally. Rows 1.x never showed (the argument row, address matches, the Name row) appear only in their places under G1.
 - **G24.** A new install starts in Smart order with the System theme.
-- **G25.** The first popup after an upgrade from 1.x shows a one-line notice of what is new; any keystroke or its close control dismisses it, it is never shown again, and activating it opens a page bundled with the extension. Nothing else about the upgrade asks the user anything.
+- **G25.** The first popup after an upgrade from 1.x shows a one-line notice of what is new; any keystroke but Tab and Shift+Tab, which move the focus to and from the notice, or its close control dismisses it, it is never shown again, and activating it opens a page bundled with the extension. Nothing else about the upgrade asks the user anything.
 
 Smart order:
 
