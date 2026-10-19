@@ -44,7 +44,9 @@ body {
   background: var(--bg-page);
 }
 
-:focus-visible {
+/* Every focused control is drawn focused, however the focus got there (G32). Not :focus-visible, which Chrome
+   does not match where the popup moves the focus after a pointer click, as the gear and Back do. */
+:focus {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }

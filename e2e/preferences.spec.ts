@@ -7,6 +7,7 @@ import {
   checkFitAndAccessibility,
   closingPopup,
   expect,
+  followTabFocus,
   popupOnNewPage,
   recordWorkerCalls,
   refuseWorkerStorage,
@@ -232,4 +233,25 @@ test("both hosts show the shortcuts Chrome has assigned, a reassigned one includ
   await expect.poll(async () => (await extension.tabUrls()).filter((url) => url === SHORTCUTS_PAGE)).toHaveLength(1);
   await options.getByRole('button', { name: 'Change shortcuts in Chrome' }).click();
   await expect.poll(async () => (await extension.tabUrls()).filter((url) => url === SHORTCUTS_PAGE)).toHaveLength(2);
+});
+
+test("an open options page shows a shortcut changed on Chrome's page once the user is back on it", async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const options = await optionsPage(extension);
+  await followTabFocus(options);
+  const newTabKey = () => options.locator('.shortcut dd').first().textContent();
+  await expect.poll(newTabKey).toBe('Alt+N');
+  await options.getByRole('button', { name: 'Change shortcuts in Chrome' }).click();
+  await expect.poll(async () => (await extension.tabUrls()).filter((url) => url === SHORTCUTS_PAGE)).toHaveLength(1);
+  await expect.poll(() => options.evaluate(() => document.hasFocus())).toBe(false);
+  await assignShortcut(extension.context, extension.id, 'open-new-tab', 'Alt+J');
+  expect(await newTabKey()).toBe('Alt+N');
+
+  // Back on the options page's tab, as a click on it brings the user.
+  await extension.worker.evaluate(async (url) => {
+    const [tab] = await chrome.tabs.query({ url });
+    await chrome.tabs.update(tab!.id!, { active: true });
+  }, extension.url('options.html'));
+  await expect.poll(() => options.evaluate(() => document.hasFocus())).toBe(true);
+  await expect.poll(newTabKey).toBe('Alt+J');
 });

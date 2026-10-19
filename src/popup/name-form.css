@@ -52,8 +52,8 @@
   padding: 1px 8px;
 }
 
-.field-input:focus-visible,
-.sections:focus-visible {
+.field-input:focus,
+.sections:focus {
   outline-offset: 0;
 }
 

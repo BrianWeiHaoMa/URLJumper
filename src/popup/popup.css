@@ -41,7 +41,7 @@
   color: var(--text-muted);
 }
 
-.search-box:focus-visible {
+.search-box:focus {
   outline-offset: 0;
 }
 
@@ -79,7 +79,7 @@
   overflow-y: auto;
 }
 
-.view:focus-visible {
+.view:focus {
   outline-offset: -2px;
 }
 

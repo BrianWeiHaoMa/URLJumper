@@ -1,7 +1,8 @@
 // Chrome's own menus and shortcuts page, which headless Chrome cannot show: what a check needs to see the
-// extension's right-click menu items and to change a shortcut as the user would there, re-exported by
-// e2e/extension.ts. Menu clicks themselves are dispatched to the worker with `dispatchEvent`.
-import type { BrowserContext, Worker } from '@playwright/test';
+// extension's right-click menu items and to change a shortcut as the user would there, and to leave a page
+// for it and come back, re-exported by e2e/extension.ts. Menu clicks themselves are dispatched to the worker
+// with `dispatchEvent`.
+import type { BrowserContext, Page, Worker } from '@playwright/test';
 
 /** Whether the extension has a menu item with `id`: Chrome updates an existing one and refuses a missing one. */
 export function menuItemExists(worker: Worker, id: string): Promise<boolean> {
@@ -74,4 +75,13 @@ export async function assignShortcut(context: BrowserContext, extensionId: strin
   } finally {
     await page.close();
   }
+}
+
+/**
+ * Lets `page` lose and regain the focus as its tab does: Playwright otherwise keeps every page focused, so
+ * a page never learns that the user went to another tab, such as Chrome's shortcuts page, and came back.
+ */
+export async function followTabFocus(page: Page): Promise<void> {
+  const session = await page.context().newCDPSession(page);
+  await session.send('Emulation.setFocusEmulationEnabled', { enabled: false });
 }

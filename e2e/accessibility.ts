@@ -86,17 +86,8 @@ async function focusProblems(page: Page): Promise<string[]> {
     const index = await controls.evaluate((controls) => controls.indexOf(document.activeElement as HTMLElement));
     if (index < 0 || reached.has(index)) continue;
     reached.add(index);
-    const clip = await page.evaluate(() => {
-      const box = document.activeElement!.getBoundingClientRect();
-      const x = Math.max(0, box.x - 4);
-      const y = Math.max(0, box.y - 4);
-      return { x, y, width: Math.min(innerWidth, box.right + 4) - x, height: Math.min(innerHeight, box.bottom + 4) - y };
-    });
-    const focused = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
     // Tab goes on from the control blurred.
-    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-    const unfocused = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
-    if (focused.equals(unfocused)) problems.push(`focus not visible: ${names[index]}`);
+    if (!(await focusDrawn(page))) problems.push(`focus not visible: ${names[index]}`);
   }
   names.forEach((name, index) => {
     if (!reached.has(index)) problems.push(`focus never reached by Tab: ${name}`);
@@ -106,4 +97,21 @@ async function focusProblems(page: Page): Promise<string[]> {
     if (selection) (element as HTMLInputElement).setSelectionRange(selection[0], selection[1], selection[2] ?? undefined);
   });
   return problems;
+}
+
+/**
+ * Whether the control with the focus is drawn differently from how it is drawn without it, around its box,
+ * however the focus got there (G32, "focus is always visible"). Leaves that control blurred.
+ */
+export async function focusDrawn(page: Page): Promise<boolean> {
+  const clip = await page.evaluate(() => {
+    const box = document.activeElement!.getBoundingClientRect();
+    const x = Math.max(0, box.x - 4);
+    const y = Math.max(0, box.y - 4);
+    return { x, y, width: Math.min(innerWidth, box.right + 4) - x, height: Math.min(innerHeight, box.bottom + 4) - y };
+  });
+  const focused = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  const unfocused = await page.screenshot({ clip, animations: 'disabled', caret: 'hide' });
+  return !focused.equals(unfocused);
 }

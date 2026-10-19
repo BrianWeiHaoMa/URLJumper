@@ -3,7 +3,7 @@
 // page; the footer says what Enter does wherever the focus is (L2), Enter on a choice does nothing, Escape
 // closes the popup, and every state fits (G7) and passes the accessibility pass (G32).
 import type { Page } from '@playwright/test';
-import { checkFit, checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, test } from './extension.ts';
+import { checkFit, checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, test } from './extension.ts';
 
 const DOC = 'mail  https://mail.example.com/\ncal  https://cal.example.com/\n';
 
@@ -123,6 +123,28 @@ test('Enter on a choice stores nothing and leaves settings as they were; Escape 
   expect(await extension.readStorage()).toEqual(stored);
 
   await closingPopup(popup, () => popup.keyboard.press('Escape'));
+});
+
+test('after a pointer click on the gear or on Back, the control the popup focuses is drawn focused, in search and in the first run', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const { popup } = await popupOnNewPage(extension, site);
+  await gear(popup).click();
+  await expect(order(popup)).toBeFocused();
+  // Compared once the stored order is shown, so only the focus can tell the two pictures apart.
+  await expect(order(popup).getByRole('option', { selected: true })).toHaveText('Document order');
+  expect(await focusDrawn(popup)).toBe(true);
+
+  // The document emptied meanwhile, the way back by pointer lands on the first run's *Name this page*.
+  await extension.seedStorage({});
+  await back(popup).click();
+  await expect(firstRun(popup)).toBeVisible();
+  await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
+  expect(await focusDrawn(popup)).toBe(true);
+
+  await gear(popup).click();
+  await expect(order(popup)).toBeFocused();
+  await expect(order(popup).getByRole('option', { selected: true })).toHaveText('Document order');
+  expect(await focusDrawn(popup)).toBe(true);
 });
 
 test('with an empty document the first Enter still opens the Name form; the gear before it opens settings, whose way back returns to the first run', async ({ extension, site }) => {

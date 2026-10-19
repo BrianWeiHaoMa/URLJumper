@@ -1,6 +1,7 @@
 // The shortcuts as Chrome has assigned them now, with the way to Chrome's page for changing them (E6, F5),
-// shown by Preferences and by the popup's first-run state. Read as the view opens: a change made on Chrome's
-// page shows the next time one opens. Nothing here changes a shortcut.
+// shown by Preferences and by the popup's first-run state. Read as the view opens and again whenever its page
+// is back in front, since the user changes them on Chrome's page, in another tab, and Chrome reports no change.
+// Nothing here changes a shortcut.
 import { useEffect, useState } from 'react';
 import { chromeMessage } from '../requests';
 import './settings.css';
@@ -21,8 +22,20 @@ export function Shortcuts({ onFocusChange, onMessage }: ShortcutsProps) {
   const [shortcuts, setShortcuts] = useState<chrome.commands.Command[]>([]);
 
   // The keys Chrome has assigned now, never the suggested ones, which Chrome may have left unassigned (E6).
+  // Chrome answers reads in the order they were made, so the last shows the latest.
   useEffect(() => {
-    void chrome.commands.getAll().then((all) => setShortcuts(COMMANDS.flatMap((name) => all.filter((command) => command.name === name))));
+    const read = () =>
+      void chrome.commands.getAll().then((all) => setShortcuts(COMMANDS.flatMap((name) => all.filter((command) => command.name === name))));
+    const readIfShown = () => {
+      if (document.visibilityState === 'visible') read();
+    };
+    window.addEventListener('focus', read);
+    document.addEventListener('visibilitychange', readIfShown);
+    read();
+    return () => {
+      window.removeEventListener('focus', read);
+      document.removeEventListener('visibilitychange', readIfShown);
+    };
   }, []);
 
   const openShortcutsPage = () => {

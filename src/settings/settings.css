@@ -80,7 +80,7 @@
   border-radius: 6px;
 }
 
-.choice:focus-visible {
+.choice:focus {
   outline-offset: 1px;
 }
 
