@@ -29,7 +29,8 @@ export function Row({ row, index, count, selected, onClick }: RowProps) {
   return (
     <li
       id={rowId(index)}
-      className="row"
+      // A mapping row's name leaves room for its pencil, drawn over the row from outside the list (Pencil.tsx).
+      className={row.group === 'name' ? 'row' : 'row has-pencil'}
       role="option"
       // The Name row's words are three boxes, which a screen reader would read with spaces between.
       aria-label={row.group === 'name' ? nameRowLabel(row.name) : undefined}

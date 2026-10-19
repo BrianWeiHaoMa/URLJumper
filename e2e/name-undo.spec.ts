@@ -4,7 +4,7 @@
 // and every outcome fits the popup (G7) and passes the accessibility pass (G32).
 import type { Page } from '@playwright/test';
 import type { InsertRequest } from '../src/requests.ts';
-import { checkFitAndAccessibility, expect, popupOnNewPage, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, expect, popupOnNewPage, rowPencils, slowWorkerReads, test, thisPagePencil, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const searchBox = (popup: Page) => popup.getByRole('combobox');
@@ -91,11 +91,21 @@ test('the offer stays across Shift+Tab round to Undo; a key typed there goes to 
   await extension.seedStorage({ mappings: DOC });
   const { popup, saved } = await savedOnNewPage(extension, site, 'one');
   await expect(searchBox(popup)).toBeFocused();
-  // Back from the search box, round through the page bar's button, to Undo. From the first control the focus
-  // wraps through Chrome's own frame and lands after the key has come up: a key sent before it lands starts from
-  // no control, so the next waits for it, as a user sees it land.
+  // Back from the search box, round through the page bar's button and the listed rows' pencils, to Undo. From
+  // the first control the focus wraps through Chrome's own frame and lands after the key has come up: a key sent
+  // before it lands starts from no control, so the next waits for it, as a user sees it land.
   await popup.keyboard.press('Shift+Tab');
   await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
+  // The page now has the name just saved, which *This page is* says with its pencil.
+  await popup.keyboard.press('Shift+Tab');
+  await expect(thisPagePencil(popup)).toBeFocused();
+  await expect(confirmation(popup)).toHaveText('Saved "one" as line 3');
+  await expect(rowPencils(popup)).toHaveCount(2);
+  for (const pencil of [1, 0]) {
+    await popup.keyboard.press('Shift+Tab');
+    await expect(rowPencils(popup).nth(pencil)).toBeFocused();
+    await expect(confirmation(popup)).toHaveText('Saved "one" as line 3');
+  }
   await popup.keyboard.press('Shift+Tab');
   await expect(undo(popup)).toBeFocused();
   await popup.keyboard.press('Shift');

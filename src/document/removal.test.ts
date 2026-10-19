@@ -22,6 +22,17 @@ describe('a remove takes away exactly its line (G12)', () => {
     expect(removeMapping('a a:1\nb b:1\r\nc c:1', { line: 3, text: 'c c:1' })).toMatchObject({ document: 'a a:1\nb b:1' });
   });
 
+  test('the first, a middle, and the last line go alone, in LF, CRLF, and mixed documents, and before a final line break', () => {
+    const removed = (document: string, line: number) => applied(removeMapping(document, { line, text: ['a a:1', 'b b:1', 'c c:1'][line - 1]! }));
+    const cases: [string, [string, string, string]][] = [
+      ['a a:1\nb b:1\nc c:1', ['b b:1\nc c:1', 'a a:1\nc c:1', 'a a:1\nb b:1']],
+      ['a a:1\r\nb b:1\r\nc c:1', ['b b:1\r\nc c:1', 'a a:1\r\nc c:1', 'a a:1\r\nb b:1']],
+      ['a a:1\r\nb b:1\nc c:1', ['b b:1\nc c:1', 'a a:1\r\nc c:1', 'a a:1\r\nb b:1']],
+      ['a a:1\nb b:1\r\nc c:1\r\n', ['b b:1\r\nc c:1\r\n', 'a a:1\nc c:1\r\n', 'a a:1\nb b:1\r\n']],
+    ];
+    for (const [document, after] of cases) expect([1, 2, 3].map((line) => removed(document, line)), JSON.stringify(document)).toEqual(after);
+  });
+
   test('the only line leaves the empty document', () => {
     expect(removeMapping('a a:1', { line: 1, text: 'a a:1' })).toEqual({ kind: 'applied', document: '', line: 1, text: 'a a:1' });
   });

@@ -15,7 +15,7 @@ import { anchorAt, type Anchor } from '../document/anchor';
 import { mappingOfLine } from '../document/grammar';
 import type { MappingFields } from '../document/validation';
 import { chromeMessage, send, type InsertReply } from '../requests';
-import { fieldProblemText, takenNameText } from './field-problems';
+import { editInsteadText, fieldProblemText, takenNameText } from './field-problems';
 import { insertedOutcome, removedOutcome, rewrittenOutcome, type Outcome } from './outcomes';
 import { destination, lineFields, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
 import './line-form.css';
@@ -245,8 +245,8 @@ function EditorMessages({ check, stale, said, loaded, busy, actions }: EditorMes
       {check.takenBy !== null && (
         <div className="row-editor-taken">
           <p className="row-editor-taken-text">{takenNameText(check.takenBy)}</p>
-          <button type="button" className="form-button row-editor-instead" data-control="edit-instead" aria-disabled={busy} onClick={actions.editInstead}>
-            Edit "{check.takenBy.name}" instead
+          <button type="button" className="form-button edit-instead" data-control="edit-instead" aria-disabled={busy} onClick={actions.editInstead}>
+            {editInsteadText(check.takenBy)}
           </button>
         </div>
       )}

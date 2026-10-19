@@ -1,5 +1,6 @@
 // What a form that writes one mapping line, the Name form or a row editor, says of the values it refuses
-// (G8, G14, L2): each problem names the line the values are for, and a taken name names the line that has it.
+// (G8, G14, L2): each problem names the line the values are for, and a taken name names the line that has it,
+// with the offer to edit that line instead.
 import type { Mapping } from '../document/grammar';
 import type { FieldProblem } from '../document/validation';
 
@@ -21,4 +22,9 @@ export function fieldProblemText(problem: FieldProblem, line: number, url: strin
 /** That `holder` already has the name (G8). */
 export function takenNameText(holder: Mapping): string {
   return `Line ${holder.line} already has the name "${holder.name}".`;
+}
+
+/** The offer, beside a taken name, to edit the line that has it instead (G8). */
+export function editInsteadText(holder: Mapping): string {
+  return `Edit "${holder.name}" instead`;
 }

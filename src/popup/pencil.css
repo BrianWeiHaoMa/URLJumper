@@ -1,0 +1,70 @@
+/* The pencils (G7, G32): the window's pencils drawn over the ends of their rows, each beside its row's name
+   in the room the name's line leaves it, so a long name is cut before the pencil and the pencil never is; the
+   URL's line below keeps the row's whole width. And the pencil after what the page is called. Every color is
+   a token of src/theme.css. */
+
+/* The list and its pencils share one cell, the pencils over the rows' ends; the cell is as wide as the view,
+   whatever the rows' text would take. */
+.rows-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rows-area > .rows,
+.rows-area > .row-pencils {
+  grid-area: 1 / 1;
+}
+
+.row-pencils {
+  justify-self: end;
+  display: flex;
+  flex-direction: column;
+  /* A press beside a pencil reaches the row under it. */
+  pointer-events: none;
+}
+
+/* As tall as a row (`.row`, popup.css), so each pencil stands on its own row, at the height of its name's
+   line and clear of the URL's; e2e/row-pencils.spec.ts checks that every pencil does. */
+.row-pencil-slot {
+  box-sizing: border-box;
+  height: 46px;
+  display: flex;
+  align-items: flex-start;
+  padding: 1px 8px 0 0;
+}
+
+/* The room at the end of a name's line for its pencil and a gap. A URL's line keeps the row's width: cut
+   short under the pencil, a URL's `%s` marks, elements of their own, would fall under the hint beside them,
+   where the accessibility pass's contrast rule, which counts only an `overflow: hidden` box as cutting, would
+   take them for covering it. */
+.row.has-pencil > .row-line:first-child {
+  padding-right: 32px;
+}
+
+.pencil {
+  pointer-events: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pencil[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.this-page .pencil {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+}

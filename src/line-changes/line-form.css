@@ -66,3 +66,11 @@
   color: var(--text-muted);
   cursor: default;
 }
+
+/* The offer to edit the line that has a taken name instead (G8): a name as long as the document wraps inside
+   its button. */
+.edit-instead {
+  max-width: 100%;
+  text-align: start;
+  overflow-wrap: anywhere;
+}

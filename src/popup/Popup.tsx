@@ -1,10 +1,11 @@
-// The popup (In use, "Jump", "Name this page", "Name from a search", "Name a link", "First run"): search,
-// with the search box, the mode chip, and the gear, the confirmation of the last change with its Undo, the
-// list seven rows at a time with a cue for the rest, what the page is called (G10), and the *Name this page*
-// button; the Name form, also opened for a command or a menu item that asked for it; a row's editor, opened
-// by Ctrl+E on the selected row (P1); the settings, opened by the gear (G31); or, while the document is empty,
-// the first-run state in search's place (G30). After an update from 1.x, search, the first run, the Name form,
-// and the editor show the notice of what is new (G25). A footer says what Enter does. Everything shown derives
+// The popup (In use, "Jump", "Name this page", "Name from a search", "Name a link", "Edit from a suggestion",
+// "First run"): search, with the search box, the mode chip, and the gear, the confirmation of the last change
+// with its Undo, the list seven rows at a time with a cue for the rest and each listed mapping's pencil, what
+// the page is called (G10) with its pencil, and the *Name this page* button; the Name form, also opened for a
+// command or a menu item that asked for it; a row's editor, opened by a pencil, by Ctrl+E on the selected row
+// (P1), or from the Name form; the settings, opened by the gear (G31); or, while the document is empty, the
+// first-run state in search's place (G30). After an update from 1.x, search, the first run, the Name form, and
+// the editor show the notice of what is new (G25). A footer says what Enter does. Everything shown derives
 // from storage, read when the popup opens and again after every change; a mapping opens only through the
 // worker's jump, sent from the popup's Enter handler or a row's click handler (R4), never from anything else.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
@@ -12,7 +13,7 @@ import { flushSync } from 'react-dom';
 import { anchorAt, type Anchor } from '../document/anchor';
 import { isArgumentAlias } from '../document/argument';
 import { isEmptyDocument } from '../document/example';
-import { readDocument } from '../document/grammar';
+import { readDocument, type Mapping } from '../document/grammar';
 import { mappingOfPage } from '../document/page-mapping';
 import type { SearchOrder, SearchRow } from '../document/search';
 import type { Usage } from '../document/score';
@@ -24,9 +25,11 @@ import { offersUndo, undoFooter, type Confirmed, type Outcome } from '../line-ch
 import { FirstRun } from './FirstRun';
 import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
 import { NameForm, type NameSubject } from './NameForm';
+import { RowPencils } from './Pencil';
 import { PopupRowEditor } from './PopupRowEditor';
 import { PopupSettings, SettingsGear } from './PopupSettings';
 import { Row, rowId, type MappingRow } from './Row';
+import { ThisPage } from './ThisPage';
 import { useFitToViewport } from './fit-to-viewport';
 import { footerWithNotice } from './upgrade-notice';
 import { UpgradeNotice, useUpgradeNotice } from './UpgradeNotice';
@@ -70,8 +73,11 @@ interface State {
   typed: string;
   list: ListState;
   mode: OpenMode;
-  /** The control in search whose focus changes what Enter does, if one has it. */
-  focused: 'chip' | 'settings' | 'name-page' | 'undo' | null;
+  /**
+   * The control in search whose focus changes what Enter does, if one has it: a pencil, a row's or *This page
+   * is*'s, by the key of the mapping it edits.
+   */
+  focused: 'chip' | 'settings' | 'name-page' | 'undo' | { edit: string } | null;
   /** Why the last jump did not open, or the example mappings were not loaded; kept until the user types or tries again. */
   message: string | null;
   /** The last change's confirmation, a save's or an Undo's, until its lifetime ends (G15). */
@@ -119,15 +125,6 @@ export function Popup() {
   const firstRun = ready && state.view.kind === 'search' && isEmptyDocument(state.stored!.document);
   // Shown once the popup is ready, as the first run is: until then Enter does nothing, as the footer says.
   const notice = useUpgradeNotice(ready && state.stored!.upgradeNotice);
-
-  // Focus taken away with what held it gives it to the view's first control instead of to nothing (G32): Undo
-  // going with its confirmation or for a refusal, or the view switching between search and the first run. An
-  // Undo still offered there takes it back, also from the search box, which takes the focus as search is drawn
-  // again, so the footer's word for Undo stays true (L2).
-  useLayoutEffect(() => {
-    if (state.focused === 'undo' && offersUndo(state.confirmed)) confirmation.current?.querySelector('button')?.focus();
-    else if (document.activeElement === document.body) (firstRun ? namePage : searchBox).current?.focus();
-  }, [state.confirmed, firstRun]);
 
   useEffect(() => {
     // Every read asks for the keys again, and Chrome answers reads in the order they were made, so the last
@@ -238,6 +235,23 @@ export function Popup() {
     () => (storedDocument === undefined || pageUrl === undefined ? undefined : mappingOfPage(readDocument(storedDocument).mappings, pageUrl)),
     [storedDocument, pageUrl],
   );
+  const { list } = state;
+  const shown = list.rows.slice(list.top, list.top + WINDOW_ROWS);
+
+  // Focus taken away with what held it gives it to the view's first control instead of to nothing (G32): Undo
+  // going with its confirmation or for a refusal; a pencil going with its row, as the window moves or another
+  // window's change takes its mapping (E1), or *This page is*'s with that mapping; or the view switching
+  // between search and the first run. An Undo still offered there takes it back, also from the search box,
+  // which takes the focus as search is drawn again, so the footer's word for Undo stays true (L2). Keyed to
+  // what can go, not run on every render: the accessibility pass blurs each control on purpose.
+  const editControls = state.view.kind === 'search' ? editControlsOf(shown, thisPage) : '';
+  useLayoutEffect(() => {
+    if (state.focused === 'undo' && offersUndo(state.confirmed)) confirmation.current?.querySelector('button')?.focus();
+    else if (document.activeElement === document.body) {
+      (firstRun ? namePage : searchBox).current?.focus();
+      if (typeof state.focused === 'object' && state.focused !== null) dispatch({ kind: 'focused', focused: null });
+    }
+  }, [state.confirmed, firstRun, editControls]);
 
   if (state.view.kind === 'name' && state.stored !== undefined) {
     return (
@@ -248,6 +262,7 @@ export function Popup() {
         subject={state.view.subject}
         notice={notice}
         onSaved={(outcome) => dispatch({ kind: 'changed', outcome, now: Date.now() })}
+        onEdit={(line) => openEditor(line, null)}
         onCancel={() => dispatch({ kind: 'cancel' })}
       />
     );
@@ -299,9 +314,10 @@ export function Popup() {
     );
   }
 
-  const { list } = state;
-  const shown = list.rows.slice(list.top, list.top + WINDOW_ROWS);
   const { above, below } = outsideWindow(list);
+  const onEditFocus = (key: string | null) => dispatch({ kind: 'focused', focused: key === null ? null : { edit: key } });
+  const editKey = typeof state.focused === 'object' && state.focused !== null ? state.focused.edit : undefined;
+  const editLine = editKey === undefined ? undefined : editedLine(editKey, shown, thisPage);
   const cue = [above > 0 ? `${above} more above` : '', below > 0 ? `${below} more below` : ''].filter(Boolean).join(' · ');
 
   return (
@@ -323,6 +339,11 @@ export function Popup() {
           autoFocus
           value={state.typed}
           onChange={(event) => dispatch({ kind: 'typed', typed: event.target.value, now: Date.now() })}
+          // Where Enter acts on the selected row, the row is in view (G3), also after the focus went to a control
+          // the view scrolled to, as the pencil after a long name of the page.
+          onFocus={() => {
+            if (list.selected !== null) document.getElementById(rowId(list.selected))?.scrollIntoView({ block: 'nearest' });
+          }}
         />
         <button
           type="button"
@@ -348,23 +369,26 @@ export function Popup() {
             </p>
           )}
           {list.rows.length > 0 && (
-            // Pressing a row keeps the focus, and with it the typing, in the search box.
-            <ul id="rows" className="rows" role="listbox" aria-label="Mappings" onMouseDown={(event) => event.preventDefault()} onWheel={onWheel}>
-              {shown.map((row, i) => (
-                <Row
-                  key={list.top + i}
-                  row={row}
-                  index={list.top + i}
-                  count={list.rows.length}
-                  selected={list.selected === list.top + i}
-                  onClick={(event) => onRowClick(row, event)}
-                />
-              ))}
-            </ul>
+            <div className="rows-area" onWheel={onWheel}>
+              {/* Pressing a row keeps the focus, and with it the typing, in the search box. */}
+              <ul id="rows" className="rows" role="listbox" aria-label="Mappings" onMouseDown={(event) => event.preventDefault()}>
+                {shown.map((row, i) => (
+                  <Row
+                    key={list.top + i}
+                    row={row}
+                    index={list.top + i}
+                    count={list.rows.length}
+                    selected={list.selected === list.top + i}
+                    onClick={(event) => onRowClick(row, event)}
+                  />
+                ))}
+              </ul>
+              <RowPencils rows={shown} onEdit={openEditor} onFocusChange={onEditFocus} />
+            </div>
           )}
           {cue !== '' && <p className="cue">{cue}</p>}
           {/* In the view, which scrolls, since a name may be as long as the document. */}
-          {thisPage && <p className="this-page">This page is "{thisPage.name}"</p>}
+          {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} onEdit={(line) => openEditor(line, null)} onFocusChange={(focused) => onEditFocus(focused ? thisPage.key : null)} />}
         </div>
       </div>
       <div className="page-bar">
@@ -378,7 +402,7 @@ export function Popup() {
           Name this page
         </button>
       </div>
-      <footer className="footer">{footerWithNotice(footer(state, ready, undoing), notice)}</footer>
+      <footer className="footer">{footerWithNotice(footer(state, ready, undoing, editLine), notice)}</footer>
     </main>
   );
 }
@@ -542,6 +566,18 @@ function notOpened(reply: Exclude<JumpReply, { kind: 'opened' }>): string {
   return `Not opened, because URLJumper could not save this use of it. Chrome said: ${reply.message}`;
 }
 
+/** What tells the pencils of search apart, the window's and *This page is*'s, so a change of them is seen. */
+function editControlsOf(rows: readonly SearchRow[], thisPage: Mapping | undefined): string {
+  return JSON.stringify([rows.map((row) => (row.group === 'name' ? null : row.mapping.key)), thisPage?.key ?? null]);
+}
+
+/** The line the pencil for the mapping keyed `key` edits, as this render shows it; undefined once it has gone. */
+function editedLine(key: string, shown: readonly SearchRow[], thisPage: Mapping | undefined): number | undefined {
+  if (thisPage?.key === key) return thisPage.line;
+  for (const row of shown) if (row.group !== 'name' && row.mapping.key === key) return row.mapping.line;
+  return undefined;
+}
+
 /** Ctrl+E, which edits the selected row on every platform (P1). */
 function isEditKey(event: KeyboardEvent): boolean {
   return event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'e';
@@ -551,14 +587,15 @@ function otherMode(mode: OpenMode): OpenMode {
   return mode === 'new-tab' ? 'this-tab' : 'new-tab';
 }
 
-/** What Enter does now (L2). */
-function footer(state: State, ready: boolean, undoing: boolean): string {
+/** What Enter does now (L2); `editLine` is the line of the pencil with the focus. */
+function footer(state: State, ready: boolean, undoing: boolean, editLine: number | undefined): string {
   const { list, mode } = state;
   if (state.focused === 'chip') return `Enter or Space switches to ${MODE_LABEL[otherMode(mode)]}`;
   if (state.focused === 'undo' && state.confirmed !== null) return undoFooter(state.confirmed.outcome, undoing);
   if (!ready) return 'Enter does nothing until the popup is ready';
   if (state.focused === 'name-page') return 'Enter opens the Name form';
   if (state.focused === 'settings') return 'Enter opens settings';
+  if (editLine !== undefined) return `Enter edits line ${editLine}`;
   // Typed text always lists a row, the Name row at least.
   if (list.rows.length === 0) return 'No mappings to list · Enter does nothing';
   const selected = list.selected === null ? undefined : list.rows[list.selected];

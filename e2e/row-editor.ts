@@ -1,6 +1,7 @@
 // A row's editor as a check reaches it, re-exported by e2e/extension.ts: its fields, actions, and what it says,
-// found by their names, wherever it is hosted; its opening by Ctrl+E on the popup's selected row; and the
-// confirmation of a single-line change with its Undo.
+// found by their names, wherever it is hosted; its opening by Ctrl+E on the popup's selected row, and the
+// pencils that open it, the rows' and *This page is*'s; and the confirmation of a single-line change with its
+// Undo.
 import { expect, type Page } from '@playwright/test';
 
 /** The row editor's parts in `page`. */
@@ -39,6 +40,16 @@ export async function editSelectedRow(popup: Page): Promise<RowEditor> {
   const editor = rowEditor(popup);
   await expect(editor.name).toBeFocused();
   return editor;
+}
+
+/** The pencils of the popup's search window, in row order, each named `Edit "‹name›"`. */
+export function rowPencils(popup: Page) {
+  return popup.locator('.row-pencils').getByRole('button');
+}
+
+/** The pencil beside *This page is "‹name›"*, in the popup's search or its Name form. */
+export function thisPagePencil(popup: Page) {
+  return popup.locator('.this-page').getByRole('button');
 }
 
 /** The confirmation of the last single-line change, and its Undo. */

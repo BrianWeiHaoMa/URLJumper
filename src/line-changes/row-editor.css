@@ -36,13 +36,6 @@
   overflow-wrap: anywhere;
 }
 
-/* A name as long as the document wraps inside its button. */
-.row-editor-instead {
-  max-width: 100%;
-  text-align: start;
-  overflow-wrap: anywhere;
-}
-
 /* The line as it now stands, its spaces kept: the alignment is part of it (F12). */
 .row-editor-line {
   max-width: 100%;

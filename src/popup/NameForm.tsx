@@ -3,17 +3,22 @@
 // document has headings, and a preview of the exact line and where it goes. Every check and the preview
 // come from the document module against the document as last read, so they follow every storage change and
 // agree with what the worker writes. Save sends one insert; its outcome, which the confirmation shows, is built
-// from the worker's reply alone. Below the header, after an update from 1.x, the notice of what is new (G25).
+// from the worker's reply alone. A taken name is named, with the offer to edit that line instead, beside any
+// other problem (G8); that offer and *This page is*'s pencil (G10) leave the form for the editor of that line,
+// the form's values stored nowhere, and wait while Save awaits its reply, so the reply never lands on an
+// editor opened meanwhile (G21). Below the header, after an update from 1.x, the notice of what is new (G25).
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
 import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingText, namedSections, type HeadingIdentity, type Section } from '../document/sections';
-import { fieldProblemText, takenNameText } from '../line-changes/field-problems';
+import { checkMapping } from '../document/validation';
+import { editInsteadText, fieldProblemText, takenNameText } from '../line-changes/field-problems';
 import { insertedOutcome, type Outcome } from '../line-changes/outcomes';
 import { send, type InsertReply } from '../requests';
 import { useFitToViewport } from './fit-to-viewport';
 import { SectionChoice, type SectionOption } from './SectionChoice';
+import { ThisPage } from './ThisPage';
 import { footerWithNotice } from './upgrade-notice';
 import { UpgradeNotice, type Notice } from './UpgradeNotice';
 import '../line-changes/line-form.css';
@@ -38,10 +43,15 @@ interface NameFormProps {
   notice: Notice;
   /** Called with the stored insert's outcome, which the host confirms. */
   onSaved(outcome: Outcome): void;
+  /** Opens the editor of line N as the document the form last rendered holds it, leaving the form. */
+  onEdit(line: number): void;
   onCancel(): void;
 }
 
-export function NameForm({ document: stored, name: startName, subject, notice, onSaved, onCancel }: NameFormProps) {
+/** The controls whose focus changes what Enter does. */
+type FormControl = 'cancel' | 'this-page' | 'edit-instead';
+
+export function NameForm({ document: stored, name: startName, subject, notice, onSaved, onEdit, onCancel }: NameFormProps) {
   const layout = useFitToViewport();
   const nameField = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(startName);
@@ -52,11 +62,14 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
   const [refusal, setRefusal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
-  const [cancelFocused, setCancelFocused] = useState(false);
+  const [focusedOn, setFocusedOn] = useState<FormControl | null>(null);
+  const focusOn = (control: FormControl) => (focused: boolean) => setFocusedOn(focused ? control : null);
 
   const read = useMemo(() => readDocument(stored), [stored]);
   const sections = useMemo(() => namedSections(read.lines), [read]);
   const result = useMemo(() => insertMapping(stored, { name, url, note: '' }, heading), [stored, name, url, heading]);
+  // The line that has the name, whatever else the values break (G8); `insertMapping` names only the first problem.
+  const takenBy = useMemo(() => checkMapping({ name, url, note: '' }, read.mappings).takenBy, [name, url, read]);
   const point = insertionPoint(read.lines, heading);
   const tabUrl = subject.kind === 'link' ? subject.tabUrl : subject.url;
   const thisPage = tabUrl === undefined ? undefined : mappingOfPage(read.mappings, tabUrl);
@@ -64,7 +77,7 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
   const chosen = heading === null ? undefined : findSection(read.lines, heading);
   const options: SectionOption[] = [{ key: 'end', label: 'End of document' }, ...sections.map((section) => ({ key: `${section.heading.first}`, label: label(section) }))];
   const chosenIndex = heading === null ? 0 : chosen === undefined ? null : 1 + sections.findIndex((section) => section.heading.first === chosen.heading.first);
-  const problem = result.kind === 'applied' ? null : problemText(result, point.after + 1, url, read.mappings);
+  const problem = result.kind === 'applied' ? null : problemText(result, point.after + 1, url, takenBy);
 
   const save = async () => {
     if (inFlight.current || result.kind !== 'applied') return;
@@ -78,7 +91,11 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
     }
     inFlight.current = false;
     setSaving(false);
-    setRefusal(refusalText(reply, point.after + 1, url, read.mappings));
+    setRefusal(refusalText(reply, point.after + 1, url));
+  };
+  // Leaving for the editor waits for Save's reply, which would otherwise close the editor opened meanwhile.
+  const edit = (line: number) => {
+    if (!inFlight.current) onEdit(line);
   };
 
   // The name field has the focus when the form appears, with the caret after a prefilled name.
@@ -88,12 +105,15 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
     field?.setSelectionRange(field.value.length, field.value.length);
   }, []);
 
-  // Another view's write can remove the last heading and the Section choice with it: a focus that fell to the
-  // page body with it goes to the name field, where the form starts, never to nothing (G32).
+  // Another view's write can remove the last heading and the Section choice with it, free the taken name and
+  // the offer to edit its line, or change what this page is called and the pencil beside it: a focus that fell
+  // to the page body with one goes to the name field, where the form starts, never to nothing (G32).
   const hasSections = sections.length > 0;
   useLayoutEffect(() => {
-    if (document.activeElement === document.body) nameField.current?.focus();
-  }, [hasSections]);
+    if (document.activeElement !== document.body) return;
+    nameField.current?.focus();
+    setFocusedOn(null);
+  }, [hasSections, takenBy?.line, thisPage?.key]);
 
   // Enter saves wherever the focus is but on a button, which Enter activates instead; while Save is blocked
   // it does nothing. It never reaches search's list.
@@ -112,13 +132,17 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
 
   const where = describeWhere(result, point, chosen ? label(chosen) : undefined);
   // The footer is fixed, so it holds no typed or stored text, which can be as long as the document.
-  const footer = cancelFocused
-    ? 'Enter returns to search'
-    : saving
-      ? 'Saving · Enter does nothing until it is stored'
-      : result.kind === 'applied'
-        ? `Enter saves it as line ${result.line}`
-        : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : problem}`;
+  const editsInstead = focusedOn === 'this-page' ? thisPage?.line : focusedOn === 'edit-instead' ? takenBy?.line : undefined;
+  const footer =
+    focusedOn === 'cancel'
+      ? 'Enter returns to search'
+      : saving
+        ? 'Saving · Enter does nothing until it is stored'
+        : editsInstead !== undefined
+          ? `Enter edits line ${editsInstead} instead`
+          : result.kind === 'applied'
+            ? `Enter saves it as line ${result.line}`
+            : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : fieldProblemText(result, point.after + 1, url)}`;
 
   return (
     <main className="popup" ref={layout.root}>
@@ -147,7 +171,7 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
                   {hostOf(subject.url) ? <p className="subject-host">{hostOf(subject.url)}</p> : null}
                 </>
               )}
-              {thisPage && <p className="this-page">This page is "{thisPage.name}"</p>}
+              {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} waiting={saving} onEdit={edit} onFocusChange={focusOn('this-page')} />}
             </div>
             <label className="field">
               <span className="field-label">Name</span>
@@ -201,11 +225,16 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
             <p id="name-form-problem" className="form-problem" aria-live="polite">
               {refusal ?? problem ?? ''}
             </p>
+            {takenBy !== null && (
+              <button type="button" className="form-button edit-instead" aria-disabled={saving} onClick={() => edit(takenBy.line)} onFocus={() => setFocusedOn('edit-instead')} onBlur={() => setFocusedOn(null)}>
+                {editInsteadText(takenBy)}
+              </button>
+            )}
             <div className="form-actions">
               <button type="submit" className="form-button save" aria-disabled={result.kind !== 'applied' || saving}>
                 Save
               </button>
-              <button type="button" className="form-button" onClick={onCancel} onFocus={() => setCancelFocused(true)} onBlur={() => setCancelFocused(false)}>
+              <button type="button" className="form-button" onClick={onCancel} onFocus={() => setFocusedOn('cancel')} onBlur={() => setFocusedOn(null)}>
                 Cancel
               </button>
             </div>
@@ -243,18 +272,18 @@ function describeWhere(result: InsertResult, point: { after: number; headingMiss
 
 type Refused = Exclude<InsertResult, { kind: 'applied' }>;
 
-/** Why Save is blocked, naming the line that holds a taken name or else the line the mapping would be (L2). */
-function problemText(problem: Refused, line: number, url: string, mappings: readonly Mapping[]): string {
-  if (problem.kind === 'name-taken') {
-    const holder = mappings.find((mapping) => mapping.line === problem.line);
-    return holder ? takenNameText(holder) : `Line ${problem.line} already has this name.`;
-  }
-  // The form sends no note; the worker checks one all the same.
-  return fieldProblemText(problem, line, url);
+/**
+ * Why Save is blocked (L2): a value's problem, naming the line the mapping would be, and the line that has a
+ * taken name, together (G8). The form sends no note; the worker checks one all the same.
+ */
+function problemText(problem: Refused, line: number, url: string, takenBy: Mapping | null): string {
+  const field = problem.kind === 'invalid' ? fieldProblemText(problem, line, url) : '';
+  const taken = takenBy !== null ? takenNameText(takenBy) : problem.kind === 'name-taken' ? `Line ${problem.line} already has this name.` : '';
+  return [field, taken].filter((text) => text !== '').join(' ');
 }
 
-function refusalText(reply: Exclude<InsertReply, { kind: 'applied' }>, line: number, url: string, mappings: readonly Mapping[]): string {
+function refusalText(reply: Exclude<InsertReply, { kind: 'applied' }>, line: number, url: string): string {
   if (reply.kind === 'storage-failed') return `Not saved. Chrome said: ${reply.message}`;
   if (reply.kind === 'name-taken') return `Not saved: line ${reply.line} already has this name.`;
-  return `Not saved: ${problemText(reply, line, url, mappings)}`;
+  return `Not saved: ${fieldProblemText(reply, line, url)}`;
 }
