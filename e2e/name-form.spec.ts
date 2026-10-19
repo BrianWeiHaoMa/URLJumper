@@ -2,7 +2,8 @@
 // *Name this page* button open it (G1 (f), G4), it shows the page or says Chrome gave no address (E5, N6),
 // what the page is already called (G10), the Section choice (G9, P2), a preview of the exact line, and why
 // Save is blocked (G8, L2), and it fits the popup (G7) and passes the accessibility pass (G32), keeping a
-// visible focus when another view's write takes away the Section choice that had it.
+// visible focus as it opens below a long title and when another view's write takes away the Section choice
+// that had it.
 import type { Page } from '@playwright/test';
 import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, selectedRow, selectedRowName, test, textViewOnOptionsPage, type LoadedExtension, type LocalSite } from './extension.ts';
 
@@ -327,6 +328,25 @@ test('a long title and URL wrap: the form keeps its footer in view, nothing of i
   });
   expect(shown).toEqual({ footerInView: true, headerInView: true, noPageOverflow: true, viewScrolls: true, uncut: true, titleWhole: title });
   await checkFitAndAccessibility(popup);
+});
+
+test('a title that puts the name field near or below the end of the view: the form opens with its focused name field in view', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: '\\ Work\nw  https://w.example/\n' });
+  // From a name field that fits as it is to one past the end of the popup's height.
+  for (const words of [150, 180, 200, 230, 260]) {
+    const { page, popup } = await formOnNewPage(extension, site, `T ${'word '.repeat(words)}end`);
+    const fieldInView = () =>
+      popup.evaluate(() => {
+        const field = document.activeElement!.getBoundingClientRect();
+        const view = document.querySelector('.view')!.getBoundingClientRect();
+        return field.top >= view.top - 0.5 && field.bottom <= view.bottom + 0.5;
+      });
+    await expect.poll(fieldInView, `${words} words`).toBe(true);
+    if (words === 200) await checkFitAndAccessibility(popup);
+    await popup.close();
+    await page.close();
+    await expect.poll(() => extension.openPopups()).toBe(0);
+  }
 });
 
 test('the Name form keeps a visible focus when the Section choice it is on goes', async ({ extension, site }) => {
