@@ -28,16 +28,34 @@ export type Validation =
 const LINE_BREAK = /[\n\r]/;
 const WHITESPACE = /\s/;
 
+/**
+ * Everything a form that writes `fields` shows against them at once: the first rule a value breaks, and the
+ * mapping of `mappings` that already has the name, each null when there is none. G8 has a taken name named,
+ * and its line offered for editing, beside any other value's problem; `validateMapping` gives the first of them.
+ */
+export interface MappingCheck {
+  problem: FieldProblem | null;
+  takenBy: Mapping | null;
+}
+
 /** Checks `fields` against the rules and against `mappings`, the mapping lines whose names are taken. */
 export function validateMapping(fields: MappingFields, mappings: readonly Mapping[]): Validation {
-  const name = fields.name.toWellFormed().trim();
-  const url = fields.url.toWellFormed();
-  const note = fields.note.toWellFormed();
-  const problem = nameProblem(name) ?? urlProblem(url) ?? noteProblem(note);
+  const { name, url, note } = wellFormed(fields);
+  const { problem, takenBy } = checkMapping(fields, mappings);
   if (problem) return { kind: 'invalid', ...problem };
-  const holder = holderOfName(mappings, name);
-  if (holder) return { kind: 'name-taken', line: holder.line };
+  if (takenBy) return { kind: 'name-taken', line: takenBy.line };
   return { kind: 'valid', fields: { name, url, note: note.trim() } };
+}
+
+/** Every problem of `fields` against the rules and against `mappings`, as `validateMapping` checks them. */
+export function checkMapping(fields: MappingFields, mappings: readonly Mapping[]): MappingCheck {
+  const { name, url, note } = wellFormed(fields);
+  return { problem: nameProblem(name) ?? urlProblem(url) ?? noteProblem(note) ?? null, takenBy: holderOfName(mappings, name) ?? null };
+}
+
+/** The values as they are checked: well-formed, the name trimmed. */
+function wellFormed(fields: MappingFields): MappingFields {
+  return { name: fields.name.toWellFormed().trim(), url: fields.url.toWellFormed(), note: fields.note.toWellFormed() };
 }
 
 /** The mapping of `mappings` that already has `name`, compared as the grammar compares names; undefined when the name is free. */

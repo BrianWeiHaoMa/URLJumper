@@ -19,6 +19,14 @@ test('the fragment a view is opened with names it again', () => {
   for (const view of VIEWS) expect(viewInFragment(settingsFragment(view.id), VIEWS)).toBe(view);
 });
 
+test("the fragment that opens the Text view on a line names the view and the line, which the page reads back", () => {
+  expect(settingsFragment('text', 12)).toBe('#view=text&line=12');
+  expect(viewInFragment(settingsFragment('text', 12), VIEWS)).toBe(VIEWS[1]);
+  expect(lineInFragment(settingsFragment('text', 12))).toBe(12);
+  expect(lineInFragment(settingsFragment('text', 1))).toBe(1);
+  expect(lineInFragment(settingsFragment('text'))).toBeUndefined();
+});
+
 test('the fragment names the Text view\'s line as decimal digits naming a number from 1, among other parameters', () => {
   expect(lineInFragment('#view=text&line=3')).toBe(3);
   expect(lineInFragment('#line=250&view=text')).toBe(250);

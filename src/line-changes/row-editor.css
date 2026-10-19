@@ -1,0 +1,64 @@
+/* The row editor's layout (G7): its fields, problems, and actions as every form that writes one line draws
+   them (line-form.css), and what it says of a line found stale, a taken name, or an action that stored
+   nothing. None of its own text is cut off: messages, the line as it now stands, and a name in a button
+   wrap. Every color is a token of src/theme.css, and every line height a whole number of pixels. */
+.row-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 6px 6px;
+}
+
+.row-editor .form-actions {
+  flex-wrap: wrap;
+}
+
+.row-editor-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.row-editor-taken,
+.row-editor-stale {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  color: var(--text-alert);
+  background: var(--bg-alert);
+  border-radius: 6px;
+}
+
+.row-editor-taken-text,
+.row-editor-stale-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A name as long as the document wraps inside its button. */
+.row-editor-instead {
+  max-width: 100%;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+
+/* The line as it now stands, its spaces kept: the alignment is part of it (F12). */
+.row-editor-line {
+  max-width: 100%;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.row-editor-said {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.row-editor-said.refused {
+  color: var(--text-alert);
+}

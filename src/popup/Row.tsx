@@ -8,6 +8,9 @@ import type { SearchRow } from '../document/search';
 
 const ARGUMENT_HINT = 'Space and text fill %s';
 
+/** A row that lists a mapping: every row but the Name row. */
+export type MappingRow = Exclude<SearchRow, { group: 'name' }>;
+
 export function rowId(index: number): string {
   return `row-${index}`;
 }
@@ -40,7 +43,8 @@ export function Row({ row, index, count, selected, onClick }: RowProps) {
   );
 }
 
-function MappingRowText({ row }: { row: Exclude<SearchRow, { group: 'name' }> }) {
+/** A mapping row's name and URL as the list shows them; also above a row's editor. */
+export function MappingRowText({ row }: { row: MappingRow }) {
   const name = row.mapping.name;
   // The list holds an argument row only when its URL can be filled.
   const url = row.group === 'argument' ? fillArgument(row.mapping.url, row.argument)! : row.mapping.url;

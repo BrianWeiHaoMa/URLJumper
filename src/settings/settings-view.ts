@@ -2,7 +2,7 @@
 // and shown by two hosts, the popup's settings and the options page, which give it only what is here. What
 // differs by host is passed in, never worked out by the view. The options page opens on the view its
 // fragment names (`#view=<id>`), with the Text view's caret on the line it names (`&line=N`); the popup's
-// *Open in tab* names the view it shows.
+// *Open in tab* names the view it shows, and its row editor's *Open in text* the Text view and the line.
 import type { ComponentType, ReactNode } from 'react';
 
 /** A file's text Import brings to the Text view as its draft (G20). */
@@ -62,7 +62,7 @@ export function lineInFragment(hash: string): number | undefined {
   return number >= 1 ? number : undefined;
 }
 
-/** The fragment that opens the options page on the view `id`. */
-export function settingsFragment(id: string): string {
-  return `#${new URLSearchParams({ view: id })}`;
+/** The fragment that opens the options page on the view `id`, and for the Text view with its caret on `line` when given. */
+export function settingsFragment(id: string, line?: number): string {
+  return `#${new URLSearchParams({ view: id, ...(line === undefined ? {} : { line: `${line}` }) })}`;
 }

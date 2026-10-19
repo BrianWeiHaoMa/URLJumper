@@ -1,14 +1,15 @@
 // The popup (In use, "Jump", "Name this page", "Name from a search", "Name a link", "First run"): search,
 // with the search box, the mode chip, and the gear, the confirmation of the last change with its Undo, the
 // list seven rows at a time with a cue for the rest, what the page is called (G10), and the *Name this page*
-// button; the Name form, also opened for a command or a menu item that asked for it; the settings, opened by
-// the gear (G31); or, while the document is empty, the first-run state in search's place (G30). After an
-// update from 1.x, search, the first run, and the Name form show the notice of what is new (G25). A footer says
-// what Enter does. Everything shown derives from storage, read when the popup opens and again after every
-// change; a mapping opens only through the worker's jump, sent from the popup's Enter handler or a row's click
-// handler (R4), never from anything else.
+// button; the Name form, also opened for a command or a menu item that asked for it; a row's editor, opened
+// by Ctrl+E on the selected row (P1); the settings, opened by the gear (G31); or, while the document is empty,
+// the first-run state in search's place (G30). After an update from 1.x, search, the first run, the Name form,
+// and the editor show the notice of what is new (G25). A footer says what Enter does. Everything shown derives
+// from storage, read when the popup opens and again after every change; a mapping opens only through the
+// worker's jump, sent from the popup's Enter handler or a row's click handler (R4), never from anything else.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type MouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import { flushSync } from 'react-dom';
+import { anchorAt, type Anchor } from '../document/anchor';
 import { isArgumentAlias } from '../document/argument';
 import { isEmptyDocument } from '../document/example';
 import { readDocument } from '../document/grammar';
@@ -18,12 +19,14 @@ import type { Usage } from '../document/score';
 import { intentFor, startMode, type OpenIntent, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme, type Theme } from '../preferences';
 import { send, type JumpReply, type JumpRequest } from '../requests';
-import { Confirmation, offersUndo, undoFooter, useConfirmationLifetime, useUndo, type Confirmed, type Outcome } from './Confirmation';
+import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
+import { offersUndo, undoFooter, type Confirmed, type Outcome } from '../line-changes/outcomes';
 import { FirstRun } from './FirstRun';
 import { move, newList, outsideWindow, relist, scroll, WINDOW_ROWS, type ListState } from './list-state';
-import { NameForm, type NameSubject, type Saved } from './NameForm';
+import { NameForm, type NameSubject } from './NameForm';
+import { PopupRowEditor } from './PopupRowEditor';
 import { PopupSettings, SettingsGear } from './PopupSettings';
-import { Row, rowId } from './Row';
+import { Row, rowId, type MappingRow } from './Row';
 import { useFitToViewport } from './fit-to-viewport';
 import { footerWithNotice } from './upgrade-notice';
 import { UpgradeNotice, useUpgradeNotice } from './UpgradeNotice';
@@ -48,8 +51,15 @@ interface Opener {
   asks: NameSubject | undefined;
 }
 
-/** Search, the Name form opened with a name to start with (`opened` counts the openings, so each starts afresh), or settings. */
-type View = { kind: 'search' } | { kind: 'name'; name: string; subject: NameSubject; opened: number } | { kind: 'settings' };
+/**
+ * Search, the Name form opened with a name to start with, a line's editor opened on its anchor with the
+ * argument row's argument (`opened` counts the openings, so each starts afresh), or settings.
+ */
+type View =
+  | { kind: 'search' }
+  | { kind: 'name'; name: string; subject: NameSubject; opened: number }
+  | { kind: 'editor'; anchor: Anchor; argument: string | null; opened: number }
+  | { kind: 'settings' };
 
 interface State {
   /** What storage held at the last read; undefined until the first read. */
@@ -70,8 +80,6 @@ interface State {
   count: number;
 }
 
-type MappingRow = Exclude<SearchRow, { group: 'name' }>;
-
 type Action =
   | { kind: 'stored'; stored: Stored; now: number }
   | { kind: 'opener'; opener: Opener; now: number }
@@ -84,7 +92,8 @@ type Action =
   | { kind: 'name'; name: string }
   | { kind: 'cancel' }
   | { kind: 'settings' }
-  | { kind: 'saved'; saved: Saved; now: number }
+  | { kind: 'edit'; anchor: Anchor; argument: string | null }
+  | { kind: 'changed'; outcome: Outcome; now: number }
   | { kind: 'undone'; outcome: Outcome }
   | { kind: 'confirmation-ended'; id: number };
 
@@ -113,11 +122,11 @@ export function Popup() {
 
   // Focus taken away with what held it gives it to the view's first control instead of to nothing (G32): Undo
   // going with its confirmation or for a refusal, or the view switching between search and the first run. An
-  // Undo still offered there takes it back.
+  // Undo still offered there takes it back, also from the search box, which takes the focus as search is drawn
+  // again, so the footer's word for Undo stays true (L2).
   useLayoutEffect(() => {
-    if (document.activeElement !== document.body) return;
-    if (state.focused === 'undo') confirmation.current?.querySelector('button')?.focus();
-    else (firstRun ? namePage : searchBox).current?.focus();
+    if (state.focused === 'undo' && offersUndo(state.confirmed)) confirmation.current?.querySelector('button')?.focus();
+    else if (document.activeElement === document.body) (firstRun ? namePage : searchBox).current?.focus();
   }, [state.confirmed, firstRun]);
 
   useEffect(() => {
@@ -169,18 +178,30 @@ export function Popup() {
   };
   // The Name row opens the form with its text, whatever the mode (G4); every other row opens its mapping.
   const act = (row: SearchRow, mode: OpenMode) => (row.group === 'name' ? openForm(row.name) : void jump(row, mode));
+  // The one way a line's editor opens: on `line` as the read this popup shows holds it, its number and exact
+  // text from that one read, which no later read moves (G13); with the argument row's argument, else none.
+  const openEditor = (line: number, argument: string | null) => {
+    const anchor = ready ? anchorAt(state.stored!.document, line) : undefined;
+    if (anchor !== undefined) dispatch({ kind: 'edit', anchor, argument });
+  };
 
   // Search's keys, wherever the focus is (the search box, the view when Chrome lets it take focus to scroll,
-  // or nothing), so the footer is true for all of them; on a button, Enter and Space activate it instead.
-  // In the first run, Enter starts *Name this page* (G30). The Name form has its own Enter, and settings have
-  // their controls'; Escape closes the popup from every view.
+  // or nothing), so the footer is true for all of them; on a button, Enter and Space activate it instead, but
+  // Ctrl+E edits the selected row from there too (P1). In the first run, Enter starts *Name this page* (G30).
+  // The Name form and the editor have their own Enter, and settings have their controls'; Escape closes the
+  // popup from every view.
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
   onKey.current = (event: KeyboardEvent) => {
     // A key that ends an input method's composition belongs to the composition.
     if (event.isComposing) return;
     if (event.key === 'Escape') window.close();
     else if (state.view.kind !== 'search') return;
-    else if (event.target instanceof Element && event.target.closest('button')) return;
+    else if (isEditKey(event)) {
+      // Taken from Chrome, which would act on it, whether or not a row can be edited.
+      event.preventDefault();
+      const selected = firstRun || state.list.selected === null ? undefined : state.list.rows[state.list.selected];
+      if (selected !== undefined && selected.group !== 'name') openEditor(selected.mapping.line, selected.group === 'argument' ? selected.argument : null);
+    } else if (event.target instanceof Element && event.target.closest('button')) return;
     else if (firstRun) {
       if (event.key !== 'Enter') return;
       event.preventDefault();
@@ -226,8 +247,24 @@ export function Popup() {
         name={state.view.name}
         subject={state.view.subject}
         notice={notice}
-        onSaved={(saved) => dispatch({ kind: 'saved', saved, now: Date.now() })}
+        onSaved={(outcome) => dispatch({ kind: 'changed', outcome, now: Date.now() })}
         onCancel={() => dispatch({ kind: 'cancel' })}
+      />
+    );
+  }
+
+  if (state.view.kind === 'editor' && state.stored !== undefined) {
+    return (
+      <PopupRowEditor
+        key={state.view.opened}
+        document={state.stored.document}
+        anchor={state.view.anchor}
+        argument={state.view.argument}
+        notice={notice}
+        onStored={(outcome) => dispatch({ kind: 'changed', outcome, now: Date.now() })}
+        onEditInstead={(anchor) => dispatch({ kind: 'edit', anchor, argument: null })}
+        // Back to search as it was left: the typed text, the window, the selection, and the chip's mode.
+        onBack={() => dispatch({ kind: 'cancel' })}
       />
     );
   }
@@ -400,19 +437,28 @@ function reduceAction(state: State, action: Action): State {
     case 'settings':
       // Opening settings is the user's next action: the confirmation and its Undo end (G15).
       return { ...state, view: { kind: 'settings' }, focused: null, message: null, confirmed: null };
-    case 'saved': {
-      const { headingMissing, ...changed } = action.saved;
-      // Back to a blank search box, where an Enter left over from the save opens nothing (G3).
+    case 'edit':
+      // Opening the editor is the user's next action: the confirmation and its Undo end (G15).
+      return {
+        ...state,
+        view: { kind: 'editor', anchor: action.anchor, argument: action.argument, opened: state.count + 1 },
+        focused: null,
+        message: null,
+        confirmed: null,
+        count: state.count + 1,
+      };
+    case 'changed':
+      // A change the Name form or the editor stored: back to a blank search box, where an Enter left over from
+      // the save opens nothing (G3, G4), with its confirmation.
       return {
         ...state,
         view: { kind: 'search' },
         typed: '',
         list: listFor(state, '', action.now),
         message: null,
-        confirmed: { id: state.count + 1, outcome: { kind: 'saved', changed, headingMissing } },
+        confirmed: { id: state.count + 1, outcome: action.outcome },
         count: state.count + 1,
       };
-    }
     case 'undone':
       // An Undo is a change of its own: its outcome replaces the confirmation and starts its own lifetime (G15).
       return { ...state, confirmed: { id: state.count + 1, outcome: action.outcome }, count: state.count + 1 };
@@ -494,6 +540,11 @@ function jumpRequest(row: MappingRow, mode: OpenMode, opener: Opener | undefined
 function notOpened(reply: Exclude<JumpReply, { kind: 'opened' }>): string {
   if (reply.kind === 'failed') return `Not opened. Chrome said: ${reply.message}`;
   return `Not opened, because URLJumper could not save this use of it. Chrome said: ${reply.message}`;
+}
+
+/** Ctrl+E, which edits the selected row on every platform (P1). */
+function isEditKey(event: KeyboardEvent): boolean {
+  return event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'e';
 }
 
 function otherMode(mode: OpenMode): OpenMode {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { EXAMPLE_DOCUMENT } from './example';
 import { splitLines } from './lines';
-import { rewriteMapping } from './rewriting';
+import { rewriteChecks, rewriteMapping } from './rewriting';
 import type { MappingFields } from './validation';
 
 const fields = (name: string, url: string, note = ''): MappingFields => ({ name, url, note });
@@ -101,5 +101,34 @@ describe('a rewrite whose values break G8 or G14 names the field and the rule, a
 
   test('a line break at the edge of the name is trimmed away and accepted', () => {
     expect(rewriteMapping('a  u:1\n', anchor, fields('\nb\r\n', 'u:1'))).toMatchObject({ kind: 'applied', text: 'b  u:1' });
+  });
+});
+
+describe("what a row editor shows before Save: rewriteMapping's checks, every problem at once (G8, G14)", () => {
+  const document = '\\ top\nalpha  a:1\nStocks  s:1\n';
+  const anchor = { line: 3, text: 'Stocks  s:1' };
+
+  test("the line's own name, or its case changed, is free", () => {
+    expect(rewriteChecks(document, anchor, fields('Stocks', 's:2'))).toEqual({ kind: 'found', line: 3, problem: null, takenBy: null });
+    expect(rewriteChecks(document, anchor, fields('STOCKS', 's:1'))).toEqual({ kind: 'found', line: 3, problem: null, takenBy: null });
+  });
+
+  test("another line's name is taken, named beside a value's problem", () => {
+    expect(rewriteChecks(document, anchor, fields('Alpha', ''))).toEqual({
+      kind: 'found',
+      line: 3,
+      problem: { field: 'url', rule: 'no-scheme' },
+      takenBy: expect.objectContaining({ line: 2, name: 'alpha' }),
+    });
+    expect(rewriteMapping(document, anchor, fields('Alpha', ''))).toEqual({ kind: 'invalid', field: 'url', rule: 'no-scheme' });
+  });
+
+  test('the line where it stands now, lines above added since', () => {
+    expect(rewriteChecks(`\\ new\n${document}`, anchor, fields('Stocks', 's:1'))).toMatchObject({ kind: 'found', line: 4 });
+  });
+
+  test('stale where rewriteMapping is, whatever the values', () => {
+    expect(rewriteChecks(document.replace('s:1', 's:9'), anchor, fields('', ''))).toEqual({ kind: 'stale' });
+    expect(rewriteMapping(document.replace('s:1', 's:9'), anchor, fields('', ''))).toEqual({ kind: 'stale' });
   });
 });

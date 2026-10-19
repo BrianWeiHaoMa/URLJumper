@@ -1,0 +1,68 @@
+/* The fields, problems, and actions of a form that writes one mapping line, the Name form and the row editor
+   (G7, G32): a field's value scrolls inside the field; a problem wraps. Every color is a token of
+   src/theme.css, and every line height a whole number of pixels. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.field-input {
+  font: inherit;
+  font-size: 14px;
+  /* The field clips its text to its line box, so the line box holds the room marks above and below need. */
+  line-height: 26px;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.field-input:focus {
+  outline-offset: 0;
+}
+
+.field-url {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.form-problem {
+  margin: 0;
+  color: var(--text-alert);
+  overflow-wrap: anywhere;
+}
+
+.form-problem:empty {
+  display: none;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.form-button {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.form-button.save {
+  font-weight: 600;
+}
+
+.form-button[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}

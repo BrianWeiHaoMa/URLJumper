@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { comparableName, documentErrors, hasScheme, mappingKey, readDocument, type ReadLine } from './grammar';
+import { comparableName, documentErrors, hasScheme, mappingKey, mappingOfLine, readDocument, type ReadLine } from './grammar';
 import { validateMapping } from './validation';
 
 const read = (...lines: string[]) => readDocument(lines.join('\n')).lines;
@@ -185,4 +185,10 @@ describe('the errors of a document (G17)', () => {
     expect(documentErrors(draft)).toEqual([]);
     expect(validateMapping({ name: 'a', url: 'https://a/', note: 'note\\more' }, [])).toMatchObject({ kind: 'invalid', field: 'note' });
   });
+});
+
+test("a line read on its own gives its mapping, as a change wrote or found it; a line that is no mapping, none", () => {
+  expect(mappingOfLine('news   https://n.example/   \\ my note ')).toEqual({ line: 1, name: 'news', url: 'https://n.example/', note: 'my note', key: 'news\nhttps://n.example/' });
+  expect(mappingOfLine('a b  x:1')).toMatchObject({ name: 'a b', url: 'x:1', note: null });
+  for (const text of ['', '  ', '\\ heading', 'just-a-name', 'name  no-scheme']) expect(mappingOfLine(text), text).toBeUndefined();
 });

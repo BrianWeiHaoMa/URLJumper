@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { readDocument } from './grammar';
-import { validateMapping, type MappingFields } from './validation';
+import { checkMapping, validateMapping, type MappingFields } from './validation';
 
 const URL = 'https://s.example/';
 const check = (fields: Partial<MappingFields>, document = '') =>
@@ -79,4 +79,23 @@ test('every value is made well-formed first, a lone surrogate becoming U+FFFD', 
     fields: { name: 'a�', url: 'https://e.example/?q=�', note: 'x�' },
   });
   expect(check({ name: 'a\uD800' }, 'a�  x:1\n')).toEqual({ kind: 'name-taken', line: 1 });
+});
+
+describe('every problem at once, for a form that shows them together (G8)', () => {
+  const all = (fields: Partial<MappingFields>, document = '') => checkMapping({ name: 'a', url: URL, note: '', ...fields }, readDocument(document).mappings);
+  const document = 'alpha  a:1\nStocks  s:1\n';
+
+  test('a taken name beside a value that breaks a rule: both, where validateMapping gives the rule alone', () => {
+    expect(all({ name: 'STOCKS', url: '' }, document)).toEqual({ problem: { field: 'url', rule: 'no-scheme' }, takenBy: expect.objectContaining({ line: 2, name: 'Stocks' }) });
+    expect(validateMapping({ name: 'STOCKS', url: '', note: '' }, readDocument(document).mappings)).toEqual({ kind: 'invalid', field: 'url', rule: 'no-scheme' });
+  });
+
+  test('the name compared once well-formed and trimmed, as validateMapping compares it', () => {
+    expect(all({ name: '  stocks ' }, document).takenBy?.line).toBe(2);
+    expect(all({ name: 'a\uD800' }, 'a\uFFFD  x:1\n').takenBy?.line).toBe(1);
+  });
+
+  test('neither, for values validateMapping accepts', () => {
+    expect(all({ name: 'free' }, document)).toEqual({ problem: null, takenBy: null });
+  });
 });

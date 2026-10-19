@@ -64,8 +64,17 @@ export function mappingKey(name: string, url: string): string {
  * is not a mapping line, as a blank or comment line, which has no name.
  */
 export function comparableLineName(text: string): string | null {
+  const mapping = mappingOfLine(text);
+  return mapping === undefined ? null : comparableName(mapping.name);
+}
+
+/**
+ * The mapping of the line `text` read on its own, as line 1: its name, URL, and note as a change wrote or
+ * found them; undefined when such a line is not a mapping line.
+ */
+export function mappingOfLine(text: string): Mapping | undefined {
   const read = readLine({ number: 1, text, ending: '' }, new Map());
-  return read.kind === 'mapping' ? comparableName(read.mapping.name) : null;
+  return read.kind === 'mapping' ? read.mapping : undefined;
 }
 
 export function readDocument(document: string): ReadDocument {

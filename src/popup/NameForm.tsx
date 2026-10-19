@@ -2,19 +2,21 @@
 // for a link the page it is on, the URL prefilled and editable, the name, the Section choice when the
 // document has headings, and a preview of the exact line and where it goes. Every check and the preview
 // come from the document module against the document as last read, so they follow every storage change and
-// agree with what the worker writes. Save sends one insert; the confirmation is built from the worker's
-// reply alone. Below the header, after an update from 1.x, the notice of what is new (G25).
+// agree with what the worker writes. Save sends one insert; its outcome, which the confirmation shows, is built
+// from the worker's reply alone. Below the header, after an update from 1.x, the notice of what is new (G25).
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
-import type { EndingGiven } from '../document/line-edits';
 import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingText, namedSections, type HeadingIdentity, type Section } from '../document/sections';
+import { fieldProblemText, takenNameText } from '../line-changes/field-problems';
+import { insertedOutcome, type Outcome } from '../line-changes/outcomes';
 import { send, type InsertReply } from '../requests';
 import { useFitToViewport } from './fit-to-viewport';
 import { SectionChoice, type SectionOption } from './SectionChoice';
 import { footerWithNotice } from './upgrade-notice';
 import { UpgradeNotice, type Notice } from './UpgradeNotice';
+import '../line-changes/line-form.css';
 import './name-form.css';
 
 /**
@@ -26,16 +28,6 @@ export type NameSubject =
   | { kind: 'page'; url: string | undefined; title: string | undefined }
   | { kind: 'link'; url: string; pageUrl: string | undefined; pageTitle: string | undefined; tabUrl: string | undefined };
 
-/** A stored line, as the worker's reply gives it: what the confirmation names and what an Undo needs. */
-export interface Saved {
-  name: string;
-  line: number;
-  text: string;
-  headingMissing: boolean;
-  /** Present when the line went after the last line: what its Undo takes back from that line (G12). */
-  endingGiven?: EndingGiven;
-}
-
 interface NameFormProps {
   /** The stored document as last read. */
   document: string;
@@ -44,7 +36,8 @@ interface NameFormProps {
   subject: NameSubject;
   /** The notice of what is new, while it shows. */
   notice: Notice;
-  onSaved(saved: Saved): void;
+  /** Called with the stored insert's outcome, which the host confirms. */
+  onSaved(outcome: Outcome): void;
   onCancel(): void;
 }
 
@@ -80,7 +73,7 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
     setRefusal(null);
     const reply = await send({ kind: 'insert', name, url, note: '', heading });
     if (reply.kind === 'applied') {
-      onSaved({ name: storedName(reply.text), line: reply.line, text: reply.text, headingMissing: reply.headingMissing, endingGiven: reply.endingGiven });
+      onSaved(insertedOutcome(reply));
       return;
     }
     inFlight.current = false;
@@ -224,11 +217,6 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
   );
 }
 
-/** The name of the line the worker stored, read back from its exact text. */
-function storedName(text: string): string {
-  return readDocument(text).mappings[0]?.name ?? '';
-}
-
 /** The page a link is on (G11): its title, else its address. */
 function linkPage(subject: Extract<NameSubject, { kind: 'link' }>): string {
   if (subject.pageTitle) return `A link on the page "${subject.pageTitle}"`;
@@ -259,20 +247,10 @@ type Refused = Exclude<InsertResult, { kind: 'applied' }>;
 function problemText(problem: Refused, line: number, url: string, mappings: readonly Mapping[]): string {
   if (problem.kind === 'name-taken') {
     const holder = mappings.find((mapping) => mapping.line === problem.line);
-    return holder ? `Line ${problem.line} already has the name "${holder.name}".` : `Line ${problem.line} already has this name.`;
-  }
-  if (problem.field === 'name') {
-    if (problem.rule === 'empty') return `Line ${line} needs a name.`;
-    if (problem.rule === 'backslash') return `Line ${line}: a name cannot contain a backslash (\\), which starts a comment.`;
-    return `Line ${line}: a name cannot contain a line break.`;
-  }
-  if (problem.field === 'url') {
-    if (problem.rule === 'whitespace') return `Line ${line}: a URL cannot contain spaces or other whitespace.`;
-    if (problem.rule === 'backslash') return `Line ${line}: a URL cannot contain a backslash (\\), which starts a comment.`;
-    return url === '' ? `Line ${line} needs a URL.` : `Line ${line}: a URL must begin with a scheme, such as https:`;
+    return holder ? takenNameText(holder) : `Line ${problem.line} already has this name.`;
   }
   // The form sends no note; the worker checks one all the same.
-  return problem.rule === 'backslash' ? `Line ${line}: a note cannot contain a backslash (\\).` : `Line ${line}: a note cannot contain a line break.`;
+  return fieldProblemText(problem, line, url);
 }
 
 function refusalText(reply: Exclude<InsertReply, { kind: 'applied' }>, line: number, url: string, mappings: readonly Mapping[]): string {
