@@ -11,7 +11,9 @@ import {
   holdPageRequests,
   popupOnNewPage,
   refuseWorkerStorage,
+  restartWorker,
   slowWorkerReads,
+  stallWorkerAfterWriting,
   storedDraft,
   test,
   textView,
@@ -290,6 +292,28 @@ test('a Save applied leaves no draft, and the next Text view offers none', async
   await popup.close();
   await textViewInPopup(await extension.clickToolbarButton(page));
   expect((await extension.readStorage()).mappings).toBe(`${DOC}c  https://c/\n`);
+});
+
+test('a Save whose worker stopped after storing, before it let the draft go, in a popup closed meanwhile: the next Text view offers nothing and the draft goes', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: DOC });
+  // Wakes the worker after it is stopped; refused, as the document is not empty, so it writes nothing.
+  const other = await extension.openRequestPage();
+  const { page, popup } = await popupOnNewPage(extension, site);
+  const view = await textViewInPopup(popup);
+  await typeAtEnd(view, 'c  https://c/\n');
+  const saved = `${DOC}c  https://c/\n`;
+  await stallWorkerAfterWriting(extension.worker, 'mappings');
+  await view.save.click();
+  await expect.poll(async () => (await extension.readStorage()).mappings).toBe(saved);
+  await popup.close();
+  await restartWorker(extension.context, extension.worker, () => other.send({ kind: 'load-example' }));
+  // Stopped between the two, the worker left the draft of the text it stored.
+  expect(await storedDraft(extension.worker)).toMatchObject({ text: saved, base: DOC });
+
+  const next = await textViewInPopup(await extension.clickToolbarButton(page));
+  await expect(next.area).toHaveValue(saved);
+  await noDraft(extension);
+  await expect(next.keptOffer).toHaveCount(0);
 });
 
 test('a Save applied keeps no draft of its text even when another page changes the document before the view lets the draft go: the view left before reading that change, the next Text view offers none', async ({ extension }) => {

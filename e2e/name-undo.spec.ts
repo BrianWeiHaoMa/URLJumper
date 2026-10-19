@@ -91,8 +91,11 @@ test('the offer stays across Shift+Tab round to Undo; a key typed there goes to 
   await extension.seedStorage({ mappings: DOC });
   const { popup, saved } = await savedOnNewPage(extension, site, 'one');
   await expect(searchBox(popup)).toBeFocused();
-  // Back from the search box, round through the page bar's button, to Undo.
+  // Back from the search box, round through the page bar's button, to Undo. From the first control the focus
+  // wraps through Chrome's own frame and lands after the key has come up: a key sent before it lands starts from
+  // no control, so the next waits for it, as a user sees it land.
   await popup.keyboard.press('Shift+Tab');
+  await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
   await popup.keyboard.press('Shift+Tab');
   await expect(undo(popup)).toBeFocused();
   await popup.keyboard.press('Shift');

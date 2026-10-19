@@ -179,6 +179,31 @@ test('a kept draft replaced by a file whose text the stored document holds is go
   expect((await extension.readStorage()).mappings).toBe(DOC);
 });
 
+test("a file imported before another window names a page is not saved over that line: Save stores nothing and offers the change; brought in, Save stores both", async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  // Stands for the other window, whose Name form saves.
+  const other = await extension.openRequestPage();
+  const page = await optionsPage(extension);
+  const file = `${DOC}x  https://x.example/\n`;
+  await importFile(page, 'mappings.txt', Buffer.from(file));
+  const view = textView(page);
+  await expect(view.area).toHaveValue(file);
+  await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: file, base: DOC });
+  expect(await other.send({ kind: 'insert', name: 'named', url: 'https://named.example/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
+  const named = (await extension.readStorage()).mappings as string;
+
+  await view.save.click();
+  await expect(view.status).toHaveText(/^Not saved: the stored document changed/);
+  expect((await extension.readStorage()).mappings).toBe(named);
+  await expect(view.conflicts).toHaveCount(0);
+  await view.bringIn.click();
+  const merged = `${named}x  https://x.example/\n`;
+  await expect(view.area).toHaveValue(merged);
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  expect((await extension.readStorage()).mappings).toBe(merged);
+});
+
 test("Import's text is taken once: edited and left for Preferences, the Text view shown again offers the edit, and resumes it", async ({ extension }) => {
   await extension.seedStorage({ mappings: DOC });
   const page = await optionsPage(extension);
