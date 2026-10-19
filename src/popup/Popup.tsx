@@ -2,7 +2,8 @@
 // with the search box, the mode chip, and the gear, the confirmation of the last change with its Undo, the
 // list seven rows at a time with a cue for the rest, what the page is called (G10), and the *Name this page*
 // button; the Name form, also opened for a command or a menu item that asked for it; the settings, opened by
-// the gear (G31); or, while the document is empty, the first-run state in search's place (G30). A footer says
+// the gear (G31); or, while the document is empty, the first-run state in search's place (G30). After an
+// update from 1.x, search, the first run, and the Name form show the notice of what is new (G25). A footer says
 // what Enter does. Everything shown derives from storage, read when the popup opens and again after every
 // change; a mapping opens only through the worker's jump, sent from the popup's Enter handler or a row's click
 // handler (R4), never from anything else.
@@ -24,12 +25,16 @@ import { NameForm, type NameSubject, type Saved } from './NameForm';
 import { PopupSettings, SettingsGear } from './PopupSettings';
 import { Row, rowId } from './Row';
 import { useFitToViewport } from './fit-to-viewport';
+import { footerWithNotice } from './upgrade-notice';
+import { UpgradeNotice, useUpgradeNotice } from './UpgradeNotice';
 
 interface Stored {
   document: string;
   order: SearchOrder;
   usage: Usage | undefined;
   theme: Theme;
+  /** Whether the worker's mark of an update from 1.x is pending (G25). */
+  upgradeNotice: boolean;
 }
 
 /** The tab the popup was opened on: its id and window, and its address and title when Chrome granted them (E5). */
@@ -83,7 +88,7 @@ type Action =
   | { kind: 'undone'; outcome: Outcome }
   | { kind: 'confirmation-ended'; id: number };
 
-const STORED_KEYS = ['mappings', 'usage', 'searchOrder', 'themePref'];
+const STORED_KEYS = ['mappings', 'usage', 'searchOrder', 'themePref', 'upgradeNotice'];
 const NO_ROWS: ListState = { rows: [], blank: true, selected: null, top: 0 };
 const MODE_LABEL: Record<OpenMode, string> = { 'new-tab': 'New tab', 'this-tab': 'This tab' };
 // Pixels of wheel movement that move the window by one row.
@@ -103,6 +108,8 @@ export function Popup() {
   const ready = state.stored !== undefined && state.opener !== undefined;
   // Shown only once the popup knows whether it opened for the Name form, so keys typed until then go to the search box.
   const firstRun = ready && state.view.kind === 'search' && isEmptyDocument(state.stored!.document);
+  // Shown once the popup is ready, as the first run is: until then Enter does nothing, as the footer says.
+  const notice = useUpgradeNotice(ready && state.stored!.upgradeNotice);
 
   // Focus taken away with what held it gives it to the view's first control instead of to nothing (G32): Undo
   // going with its confirmation or for a refusal, or the view switching between search and the first run. An
@@ -218,6 +225,7 @@ export function Popup() {
         document={state.stored.document}
         name={state.view.name}
         subject={state.view.subject}
+        notice={notice}
         onSaved={(saved) => dispatch({ kind: 'saved', saved, now: Date.now() })}
         onCancel={() => dispatch({ kind: 'cancel' })}
       />
@@ -245,6 +253,7 @@ export function Popup() {
         confirmation={shownConfirmation}
         undoFooter={state.focused === 'undo' && state.confirmed !== null ? undoFooter(state.confirmed.outcome, undoing) : undefined}
         message={state.message}
+        notice={notice}
         namePage={namePage}
         onNamePage={() => openForm('')}
         onSettings={openSettings}
@@ -292,6 +301,7 @@ export function Popup() {
         </button>
         <SettingsGear onClick={openSettings} onFocusChange={(focused) => dispatch({ kind: 'focused', focused: focused ? 'settings' : null })} />
       </header>
+      <UpgradeNotice notice={notice} start={searchBox} />
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
           {shownConfirmation}
@@ -331,9 +341,7 @@ export function Popup() {
           Name this page
         </button>
       </div>
-      <footer className="footer">
-        {footer(state, ready, undoing)}
-      </footer>
+      <footer className="footer">{footerWithNotice(footer(state, ready, undoing), notice)}</footer>
     </main>
   );
 }
@@ -437,12 +445,13 @@ function searchInputs(stored: Stored) {
 }
 
 function readStored(items: Record<string, unknown>): Stored {
-  const { mappings, usage, searchOrder, themePref } = items;
+  const { mappings, usage, searchOrder, themePref, upgradeNotice } = items;
   return {
     document: typeof mappings === 'string' ? mappings : '',
     order: readSearchOrder(searchOrder),
     usage: typeof usage === 'object' && usage !== null ? (usage as Usage) : undefined,
     theme: readTheme(themePref),
+    upgradeNotice: upgradeNotice === 'pending',
   };
 }
 

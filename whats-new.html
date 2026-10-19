@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>What's new in URLJumper 2.0</title>
+  </head>
+  <body>
+    <main class="whats-new">
+      <h1 class="whats-new-title">What's new in URLJumper 2.0</h1>
+      <p class="whats-new-intro">Your mappings, your theme, and your shortcuts are as you left them, and the popup lists your mappings in the order it always has. Here is what is new.</p>
+      <ul class="whats-new-items">
+        <li>
+          <h2>A name typed in full comes first</h2>
+          <p>
+            The mapping whose name is exactly what you typed is listed first, even when an earlier line's name starts
+            with it: with <code>mailbox</code> above <code>mail</code>, typing <code>mail</code> lists <code>mail</code> first.
+          </p>
+        </li>
+        <li>
+          <h2>Search through a name with <code>%s</code></h2>
+          <p>
+            Put <code>%s</code> in a mapping's URL, and the text you type after its name goes there. With the line
+            <code>yt https://www.youtube.com/results?search_query=%s</code>, typing <code>yt lo-fi beats</code> and Enter
+            searches YouTube for lo-fi beats; <code>yt</code> alone opens the URL with <code>%s</code> left empty.
+          </p>
+        </li>
+        <li>
+          <h2>Name this page</h2>
+          <p>
+            Give the page you are on a name, and next time type that name to return to it. Use the <em>Name this page</em>
+            shortcut, suggested as <kbd>Alt+Shift+N</kbd>; where something else already uses that key, Chrome leaves the
+            shortcut unassigned, and Chrome's shortcuts page (chrome://extensions/shortcuts) shows the key it has and lets
+            you choose one. Or right-click a page and choose <em>Name this page in URLJumper</em>, or a link and choose
+            <em>Name this link in URLJumper</em>. And when what you type in the popup matches no name, its last row offers
+            to name the page you are on with it.
+          </p>
+        </li>
+        <li>
+          <h2>The keyword <kbd>j</kbd> in the address bar</h2>
+          <p>
+            In Chrome's address bar, type <kbd>j</kbd>, a space, and a name: Chrome suggests your mappings, in the order
+            the popup lists them, and Enter opens one.
+          </p>
+        </li>
+        <li>
+          <h2>Smart order</h2>
+          <p>
+            Smart order lists the mappings you used recently first. It is off for you, so your list keeps the order of
+            your document. To turn it on, choose <em>Smart order</em> in Preferences, in the popup's settings (the gear)
+            or on the settings page.
+          </p>
+        </li>
+      </ul>
+    </main>
+    <script type="module" src="/src/whats-new/main.ts"></script>
+  </body>
+</html>

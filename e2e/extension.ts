@@ -15,6 +15,7 @@ export { checkAccessibility, checkAccessibilityInBothSchemes, focusDrawn } from 
 export { checkFit } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, followTabFocus, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
 export { caret, clipboardText, delayPageReads, holdFileReads, holdPageReads, holdPageRequests, importFile, retypeLine, storedDraft, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, version, watchDraftSets, watchRequests, type TextView } from './text-view.ts';
+export { upgradeNotice } from './upgrade-notice.ts';
 export { restartWorker, stallWorkerAfterWriting } from './worker-restart.ts';
 
 export const distDir = path.resolve(import.meta.dirname, '..', 'dist');

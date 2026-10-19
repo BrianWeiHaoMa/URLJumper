@@ -1,7 +1,7 @@
 // What the popup lists, as the user types and as storage changes: groups and order (G1, G2), selection and
 // the seven-row window (G3, F13), the cue and footer (L2), the theme (F3, F15), and the fit (G7).
 import type { Locator, Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, test, upgradeNotice, type LoadedExtension } from './extension.ts';
 
 // Mappings named m1 … m<count>, one per line, each at the address `url` gives it.
 const mappings = (count: number, url = (i: number) => `https://m${i}.example/`) =>
@@ -396,6 +396,7 @@ test("after an update from 1.x the popup is dark and in Document order, and list
   await expect.poll(() => shownTheme(popup)).toBe('dark');
   // Document order: the used mapping keeps its line.
   await expect.poll(() => names(popup)).toEqual(['mailbox', 'mail', 'docs']);
+  await expect(upgradeNotice(popup).notice).toBeVisible();
   await popup.keyboard.type('ma');
   await expect.poll(() => names(popup)).toEqual(['mailbox', 'mail']);
   await popup.keyboard.type('il');
@@ -408,7 +409,8 @@ test("after an update from 1.x the popup is dark and in Document order, and list
     await expect(popup.getByRole('option')).toHaveCount(1);
     await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
   }
-  expect(await extension.readStorage()).toEqual({ ...oneX, upgradeNotice: 'pending' });
+  // Everything 1.x stored is as it was; the first key typed dismissed the notice of what is new (G25).
+  await expect.poll(() => extension.readStorage()).toEqual(oneX);
 });
 
 test('focus on the chip makes the footer say Enter flips it, and Enter does', async ({ extension, site }) => {

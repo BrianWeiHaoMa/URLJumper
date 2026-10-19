@@ -1,13 +1,15 @@
 // The first-run state (In use, "First run"; G30): while the document is absent or holds only whitespace, the
 // popup shows it in place of search: *Name this page*, selected so Enter starts it, *Load example mappings*,
 // which has the worker store F11's example document, and the shortcuts as Chrome reports them now, with the
-// way to Chrome's page for changing them (E6). Its header has the gear to settings, never focused first. A
-// footer says what Enter does.
+// way to Chrome's page for changing them (E6). Its header has the gear to settings, never focused first. Below
+// the header, after an update from 1.x, the notice of what is new (G25). A footer says what Enter does.
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { send, type LoadExampleReply } from '../requests';
 import { Shortcuts } from '../settings/Shortcuts';
 import { useFitToViewport } from './fit-to-viewport';
 import { SettingsGear } from './PopupSettings';
+import { footerWithNotice } from './upgrade-notice';
+import { UpgradeNotice, type Notice } from './UpgradeNotice';
 import './first-run.css';
 
 interface FirstRunProps {
@@ -19,6 +21,8 @@ interface FirstRunProps {
   undoFooter: string | undefined;
   /** Why the last attempt did nothing, until the next. */
   message: string | null;
+  /** The notice of what is new, while it shows. */
+  notice: Notice;
   /** The *Name this page* button, which the popup focuses when nothing else has the focus. */
   namePage: RefObject<HTMLButtonElement | null>;
   onNamePage(): void;
@@ -26,7 +30,7 @@ interface FirstRunProps {
   onMessage(message: string | null): void;
 }
 
-export function FirstRun({ ready, confirmation, undoFooter, message, namePage, onNamePage, onSettings, onMessage }: FirstRunProps) {
+export function FirstRun({ ready, confirmation, undoFooter, message, notice, namePage, onNamePage, onSettings, onMessage }: FirstRunProps) {
   const layout = useFitToViewport();
   const [loading, setLoading] = useState(false);
   const inFlight = useRef(false);
@@ -64,6 +68,7 @@ export function FirstRun({ ready, confirmation, undoFooter, message, namePage, o
         <h1 className="form-title">No mappings yet</h1>
         <SettingsGear onClick={onSettings} onFocusChange={(on) => setFocused(on ? 'settings' : null)} />
       </header>
+      <UpgradeNotice notice={notice} start={namePage} />
       <div className="view" ref={layout.view} role="region" aria-label="Getting started">
         <div className="view-content" ref={layout.content}>
           {confirmation}
@@ -94,7 +99,7 @@ export function FirstRun({ ready, confirmation, undoFooter, message, namePage, o
           </div>
         </div>
       </div>
-      <footer className="footer">{footer}</footer>
+      <footer className="footer">{footerWithNotice(footer, notice)}</footer>
     </main>
   );
 }

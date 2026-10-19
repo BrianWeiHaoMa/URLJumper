@@ -3,7 +3,7 @@
 // document has headings, and a preview of the exact line and where it goes. Every check and the preview
 // come from the document module against the document as last read, so they follow every storage change and
 // agree with what the worker writes. Save sends one insert; the confirmation is built from the worker's
-// reply alone.
+// reply alone. Below the header, after an update from 1.x, the notice of what is new (G25).
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
@@ -12,6 +12,8 @@ import { findSection, headingText, namedSections, type HeadingIdentity, type Sec
 import { send, type InsertReply } from '../requests';
 import { useFitToViewport } from './fit-to-viewport';
 import { SectionChoice, type SectionOption } from './SectionChoice';
+import { footerWithNotice } from './upgrade-notice';
+import { UpgradeNotice, type Notice } from './UpgradeNotice';
 import './name-form.css';
 
 /**
@@ -37,11 +39,13 @@ interface NameFormProps {
   /** The name to start with: empty, the Name row's typed text, or what was typed before a form a command or menu item asked for showed. */
   name: string;
   subject: NameSubject;
+  /** The notice of what is new, while it shows. */
+  notice: Notice;
   onSaved(saved: Saved): void;
   onCancel(): void;
 }
 
-export function NameForm({ document: stored, name: startName, subject, onSaved, onCancel }: NameFormProps) {
+export function NameForm({ document: stored, name: startName, subject, notice, onSaved, onCancel }: NameFormProps) {
   const layout = useFitToViewport();
   const nameField = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(startName);
@@ -125,6 +129,7 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
       <header className="form-header">
         <h1 className="form-title">{subject.kind === 'link' ? 'Name this link' : 'Name this page'}</h1>
       </header>
+      <UpgradeNotice notice={notice} start={nameField} />
       <div className="view" ref={layout.view} role="region" aria-label="Name form">
         <div className="view-content" ref={layout.content}>
           <form
@@ -211,7 +216,7 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
           </form>
         </div>
       </div>
-      <footer className="footer">{footer}</footer>
+      <footer className="footer">{footerWithNotice(footer, notice)}</footer>
     </main>
   );
 }

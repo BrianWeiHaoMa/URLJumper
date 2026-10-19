@@ -1,4 +1,4 @@
-import { expect, test, watchPolicy, type LoadedExtension } from './extension.ts';
+import { expect, shownTheme, test, watchPolicy, type LoadedExtension } from './extension.ts';
 
 test('an extension page renders under the CSP with no violation and no request outside the package', async ({ extension, site }) => {
   const page = await extension.context.newPage();
@@ -46,6 +46,25 @@ test('the options page renders, follows a theme, and exports under the CSP with 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export…' }).click();
   await download;
+  expect(await policy.violations()).toEqual([]);
+  expect(policy.offPackage).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("the what's-new page renders and follows the stored theme under the CSP with no violation and no request outside the package", async ({ extension }) => {
+  const page = await extension.context.newPage();
+  const policy = await watchPolicy(page, extension);
+  const errors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  page.on('pageerror', (error) => errors.push(error.message));
+
+  await extension.seedStorage({ themePref: 'dark' });
+  await page.goto(extension.url('whats-new.html'));
+  await expect(page.getByRole('listitem')).toHaveCount(5);
+  // Its script ran: the stored theme shows.
+  await expect.poll(() => shownTheme(page)).toBe('dark');
   expect(await policy.violations()).toEqual([]);
   expect(policy.offPackage).toEqual([]);
   expect(errors).toEqual([]);

@@ -1,0 +1,51 @@
+/* The notice of what is new, a fixed line between a view's header and its scrolling part (G7): the control
+   that opens the page, drawn as a link, and the close control. Every color is a token of src/theme.css, and
+   every line height a whole number of pixels. */
+.upgrade-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 12px;
+  background: var(--bg-notice);
+  border-bottom: 1px solid var(--line-separator);
+}
+
+.upgrade-notice-open {
+  flex: 0 1 auto;
+  min-width: 0;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.upgrade-notice-close {
+  flex: none;
+  margin-left: auto;
+  font: inherit;
+  font-size: 16px;
+  line-height: 18px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.upgrade-notice-close:hover {
+  background: var(--bg-hover);
+}
+
+/* Why the page did not open, in the notice's place. */
+.upgrade-notice-failure {
+  flex: none;
+  margin: 6px 12px;
+}
