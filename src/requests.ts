@@ -1,5 +1,6 @@
 // What the extension's pages ask the service worker, the only writer, to do, and what it answers. Every
 // request and reply is declared here once, and pages send them only through `send`.
+import type { DocumentError } from './document/grammar';
 import type { HeadingIdentity } from './document/sections';
 import type { FieldProblem } from './document/validation';
 
@@ -47,6 +48,13 @@ export type InsertRequest = { kind: 'insert'; name: string; url: string; /** Emp
  */
 export type UndoRequest = { kind: 'undo'; act: 'remove' | 'reinsert'; line: number; text: string };
 
+/**
+ * A Text view's Save (G17, G18): stores `text`, exactly as given, in place of the stored document, only while
+ * the stored document is still `base`, the string the view loaded (empty when absent), and only when `text`
+ * has no F4 error.
+ */
+export type ReplaceRequest = { kind: 'replace'; text: string; base: string };
+
 /** Stores the example document (F11), only into a document that is absent or holds only whitespace (G30). */
 export type LoadExampleRequest = { kind: 'load-example' };
 
@@ -56,7 +64,7 @@ export type LoadExampleRequest = { kind: 'load-example' };
  */
 export type ResetUsageRequest = { kind: 'reset-usage' };
 
-export type Request = JumpRequest | RemoveIntentRequest | InsertRequest | UndoRequest | LoadExampleRequest | ResetUsageRequest;
+export type Request = JumpRequest | RemoveIntentRequest | InsertRequest | UndoRequest | ReplaceRequest | LoadExampleRequest | ResetUsageRequest;
 
 /** Chrome refused to store; nothing of the request was stored. */
 export type StorageFailed = { kind: 'storage-failed'; message: string };
@@ -88,6 +96,15 @@ export type UndoReply =
   | { kind: 'name-taken'; line: number }
   | StorageFailed;
 
+export type ReplaceReply =
+  /** Stored: the text, and the first and last lines it wrote, which are all of its lines. */
+  | { kind: 'applied'; text: string; first: number; last: number }
+  /** The stored document is no longer the base; nothing was stored. `document` is the stored text, empty when absent. */
+  | { kind: 'changed'; document: string }
+  /** The text has an F4 error, the first of which this is; nothing was stored. */
+  | ({ kind: 'invalid' } & DocumentError)
+  | StorageFailed;
+
 export type LoadExampleReply =
   /** Stored: the text, and the first and last lines it wrote. */
   | { kind: 'applied'; text: string; first: number; last: number }
@@ -106,11 +123,13 @@ export type ReplyTo<R extends Request> = R extends JumpRequest
       ? InsertReply
       : R extends UndoRequest
         ? UndoReply
-        : R extends LoadExampleRequest
-          ? LoadExampleReply
-          : R extends ResetUsageRequest
-            ? ResetUsageReply
-            : never;
+        : R extends ReplaceRequest
+          ? ReplaceReply
+          : R extends LoadExampleRequest
+            ? LoadExampleReply
+            : R extends ResetUsageRequest
+              ? ResetUsageReply
+              : never;
 
 /** What a page shows when the worker gave no reply and Chrome no reason. */
 const NO_REPLY = "URLJumper's service worker did not reply.";
@@ -139,6 +158,8 @@ export function isRequest(value: unknown): value is Request {
       return typeof value.name === 'string' && typeof value.url === 'string' && typeof value.note === 'string' && (value.heading === null || isHeading(value.heading));
     case 'undo':
       return (value.act === 'remove' || value.act === 'reinsert') && isLineNumber(value.line) && typeof value.text === 'string';
+    case 'replace':
+      return typeof value.text === 'string' && typeof value.base === 'string';
     case 'load-example':
     case 'reset-usage':
       return true;
@@ -162,6 +183,12 @@ function isLineNumber(value: unknown): value is number {
   return Number.isInteger(value) && (value as number) >= 1;
 }
 
+function isDocumentError(value: Record<string, unknown>): boolean {
+  if (!isLineNumber(value.line)) return false;
+  if (value.problem === 'repeated-name') return isLineNumber(value.heldBy);
+  return value.problem === 'needs-name-and-url' || value.problem === 'no-scheme';
+}
+
 function isReplyTo(request: Request, value: unknown): boolean {
   if (!isRecord(value)) return false;
   if (value.kind === 'storage-failed') return typeof value.message === 'string';
@@ -177,6 +204,10 @@ function isReplyTo(request: Request, value: unknown): boolean {
       if (value.kind === 'applied') return isLineNumber(value.line) && typeof value.text === 'string';
       if (value.kind === 'name-taken') return isLineNumber(value.line);
       return value.kind === 'stale' && typeof value.document === 'string';
+    case 'replace':
+      if (value.kind === 'applied') return typeof value.text === 'string' && isLineNumber(value.first) && isLineNumber(value.last);
+      if (value.kind === 'changed') return typeof value.document === 'string';
+      return value.kind === 'invalid' && isDocumentError(value);
     case 'load-example':
       if (value.kind === 'applied') return typeof value.text === 'string' && isLineNumber(value.first) && isLineNumber(value.last);
       return value.kind === 'not-empty';

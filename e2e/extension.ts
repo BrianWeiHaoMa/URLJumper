@@ -14,6 +14,7 @@ export { addressBar, chromeShows, type AddressBar, type AddressBarInput, type Ch
 export { checkAccessibility, checkAccessibilityInBothSchemes, focusDrawn } from './accessibility.ts';
 export { checkFit } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, followTabFocus, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
+export { caret, clipboardText, retypeLine, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, watchRequests, type TextView } from './text-view.ts';
 export { restartWorker } from './worker-restart.ts';
 
 export const distDir = path.resolve(import.meta.dirname, '..', 'dist');

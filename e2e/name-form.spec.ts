@@ -1,9 +1,10 @@
 // The Name form from inside the popup (In use, "Name this page", "Name from a search"): the Name row and the
 // *Name this page* button open it (G1 (f), G4), it shows the page or says Chrome gave no address (E5, N6),
 // what the page is already called (G10), the Section choice (G9, P2), a preview of the exact line, and why
-// Save is blocked (G8, L2), and it fits the popup (G7) and passes the accessibility pass (G32).
+// Save is blocked (G8, L2), and it fits the popup (G7) and passes the accessibility pass (G32), keeping a
+// visible focus when another view's write takes away the Section choice that had it.
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, test, textViewOnOptionsPage, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const selected = (popup: Page) => popup.locator('[role=option][aria-selected=true]');
@@ -327,4 +328,44 @@ test('a long title and URL wrap: the form keeps its footer in view, nothing of i
   });
   expect(shown).toEqual({ footerInView: true, headerInView: true, noPageOverflow: true, viewScrolls: true, uncut: true, titleWhole: title });
   await checkFitAndAccessibility(popup);
+});
+
+test('the Name form keeps a visible focus when the Section choice it is on goes', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: '\\ Work\nw w:1\n' });
+  const { popup } = await popupOnNewPage(extension, site);
+  await popup.getByRole('button', { name: 'Name this page' }).click();
+  await popup.getByRole('textbox', { name: 'Name', exact: true }).fill('new');
+  await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
+  await expect(popup.getByRole('listbox', { name: 'Section' })).toBeFocused();
+  await popup.keyboard.press('ArrowDown');
+  await extension.seedStorage({ mappings: 'w w:1\n' });
+  await expect(popup.getByRole('listbox', { name: 'Section' })).toHaveCount(0);
+  expect(await popup.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+});
+
+test("a Text view Save in another tab that removes the only heading leaves the focus on the name field, drawn, and Enter saves at the end", async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: '\\ Work\nw  https://w.example/\n' });
+  // Opened before the popup, which a tab opened later can close.
+  const options = await textViewOnOptionsPage(extension);
+  const { page, popup } = await formOnNewPage(extension, site);
+  await nameField(popup).fill('new');
+  await sectionChoice(popup).focus();
+  await popup.keyboard.press('ArrowDown');
+  await expect(popup.getByRole('option', { selected: true })).toHaveText('Work');
+
+  await options.area.fill('w  https://w.example/\n');
+  await options.save.click();
+  await expect(options.status).toHaveText('Saved');
+  expect((await extension.readStorage()).mappings).toBe('w  https://w.example/\n');
+  await expect(sectionChoice(popup)).toHaveCount(0);
+  await expect(nameField(popup)).toBeFocused();
+  expect(await focusDrawn(popup)).toBe(true);
+  await nameField(popup).focus();
+  await expect(footer(popup)).toHaveText('Enter saves it as line 2');
+  await checkFitAndAccessibility(popup);
+  await popup.keyboard.press('Enter');
+  // The chosen heading is gone, so the line went to the end, and the confirmation says so (G9).
+  await expect(popup.getByRole('status')).toHaveText('Saved "new" as line 2, at the end of the document: the heading you chose was not found');
+  expect((await extension.readStorage()).mappings).toBe(`w  https://w.example/\nnew ${page.url()}\n`);
 });

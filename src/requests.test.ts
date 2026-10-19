@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { isRequest, send, type InsertRequest, type JumpRequest, type LoadExampleRequest, type RemoveIntentRequest, type ResetUsageRequest, type UndoRequest } from './requests';
+import { isRequest, send, type InsertRequest, type JumpRequest, type LoadExampleRequest, type RemoveIntentRequest, type ReplaceRequest, type ResetUsageRequest, type UndoRequest } from './requests';
 
 const JUMP: JumpRequest = { kind: 'jump', name: 'alpha', url: 'https://a.example/', argument: null, mode: 'new-tab', active: true };
 const REMOVE_INTENT: RemoveIntentRequest = { kind: 'remove-intent', windowId: 3, time: 1_700_000_000_000 };
@@ -8,6 +8,7 @@ const UNDO: UndoRequest = { kind: 'undo', act: 'remove', line: 3, text: 'stocks 
 const REINSERT: UndoRequest = { ...UNDO, act: 'reinsert' };
 const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
 const RESET_USAGE: ResetUsageRequest = { kind: 'reset-usage' };
+const REPLACE: ReplaceRequest = { kind: 'replace', text: 'a  https://a.example/\nb  https://b.example/\n', base: 'a  https://a.example/\r\n' };
 const NO_REPLY = { kind: 'storage-failed', message: "URLJumper's service worker did not reply." };
 
 // Chrome's transport, replaced; `send` is the product's.
@@ -180,4 +181,56 @@ test("a request to reset the learned order resolves to the worker's reply for it
   }
   chromeWhoseSendMessage(() => Promise.reject(new Error('Could not establish connection. Receiving end does not exist.')));
   expect(await send(RESET_USAGE)).toEqual({ kind: 'storage-failed', message: 'Could not establish connection. Receiving end does not exist.' });
+});
+
+test("a Text view's Save is a replace of the text and the base it was loaded with, each a string, possibly empty", () => {
+  expect(isRequest(REPLACE)).toBe(true);
+  expect(isRequest({ kind: 'replace', text: '', base: '' })).toBe(true);
+  for (const value of [
+    { ...REPLACE, text: undefined },
+    { ...REPLACE, text: null },
+    { ...REPLACE, text: ['a  https://a.example/'] },
+    { ...REPLACE, base: undefined },
+    { ...REPLACE, base: null },
+    { kind: 'replace', text: 'a  https://a.example/' },
+    { kind: 'Replace', text: '', base: '' },
+  ]) {
+    expect(isRequest(value), JSON.stringify(value)).toBe(false);
+  }
+});
+
+test("a replace resolves to the worker's reply for it: stored, refused over a changed document or a text with an F4 error, or not stored", async () => {
+  const declared = [
+    { kind: 'applied', text: REPLACE.text, first: 1, last: 3 },
+    { kind: 'changed', document: 'c  https://c.example/\n' },
+    { kind: 'changed', document: '' },
+    { kind: 'invalid', line: 12, problem: 'needs-name-and-url' },
+    { kind: 'invalid', line: 5, problem: 'no-scheme' },
+    { kind: 'invalid', line: 9, problem: 'repeated-name', heldBy: 1 },
+    { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
+  ];
+  for (const reply of declared) {
+    const sent = chromeWhoseSendMessage(async () => reply);
+    expect(await send(REPLACE)).toEqual(reply);
+    expect(sent).toEqual([REPLACE]);
+  }
+  const undeclared = [
+    undefined,
+    { kind: 'applied', text: REPLACE.text },
+    { kind: 'applied', text: REPLACE.text, first: 0, last: 3 },
+    { kind: 'changed' },
+    { kind: 'stale', document: '' },
+    { kind: 'invalid', field: 'url', rule: 'no-scheme' },
+    { kind: 'invalid', line: 0, problem: 'no-scheme' },
+    { kind: 'invalid', line: 3, problem: 'unreadable' },
+    { kind: 'invalid', line: 9, problem: 'repeated-name' },
+    { kind: 'not-empty' },
+    { kind: 'done' },
+  ];
+  for (const reply of undeclared) {
+    chromeWhoseSendMessage(async () => reply);
+    expect(await send(REPLACE), JSON.stringify(reply)).toEqual(NO_REPLY);
+  }
+  chromeWhoseSendMessage(() => Promise.reject(new Error('Message length exceeded maximum allowed length.')));
+  expect(await send(REPLACE)).toEqual({ kind: 'storage-failed', message: 'Message length exceeded maximum allowed length.' });
 });

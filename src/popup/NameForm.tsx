@@ -88,6 +88,13 @@ export function NameForm({ document: stored, name: startName, subject, onSaved, 
     field?.setSelectionRange(field.value.length, field.value.length);
   }, []);
 
+  // Another view's write can remove the last heading and the Section choice with it: a focus that fell to the
+  // page body with it goes to the name field, where the form starts, never to nothing (G32).
+  const hasSections = sections.length > 0;
+  useLayoutEffect(() => {
+    if (document.activeElement === document.body) nameField.current?.focus();
+  }, [hasSections]);
+
   // Enter saves wherever the focus is but on a button, which Enter activates instead; while Save is blocked
   // it does nothing. It never reaches search's list.
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});

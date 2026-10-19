@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { splitLines } from './lines';
+import { splitLines, textAreaLineStart } from './lines';
 
 const rejoin = (document: string) => splitLines(document).map(({ text, ending }) => text + ending).join('');
 
@@ -38,4 +38,29 @@ test('joining the lines gives back the document exactly', () => {
   for (const document of ['', '\n', '\r\n', '\r', 'x\r', '\\ h\r\nx https://x \\ n\n\n\t\r\ny https://y\r\n', 'a\n\r\nb\r\r\nc']) {
     expect(rejoin(document)).toBe(document);
   }
+});
+
+test("a line's start in a text area: each line before it counts its text and one character, whatever its ending", () => {
+  const document = 'a  https://a/\r\nbb  https://b/\r\ncc  https://c/\r\n';
+  const shown = document.replace(/\r\n?/g, '\n');
+  for (const line of [1, 2, 3, 4]) {
+    const start = textAreaLineStart(document, line);
+    expect(start).toBe(shown.split('\n').slice(0, line - 1).join('\n').length + (line > 1 ? 1 : 0));
+  }
+  expect(textAreaLineStart(document, 3)).toBe(shown.indexOf('cc'));
+});
+
+test('a lone CR, which a text area shows as a break, keeps the line it is in: line 2 starts after it', () => {
+  const document = 'x  https://x/\ry  https://y/\nlast  https://l/';
+  expect(textAreaLineStart(document, 2)).toBe('x  https://x/\ny  https://y/\n'.length);
+  // A CR before a CRLF is content too, and shown as a break of its own.
+  expect(textAreaLineStart('a\r\r\nb', 2)).toBe('a\n\n'.length);
+});
+
+test('before the first line is the start; past the last line is the last line\'s start', () => {
+  expect(textAreaLineStart('a\nb\nc', 0)).toBe(0);
+  expect(textAreaLineStart('a\nb\nc', 1)).toBe(0);
+  expect(textAreaLineStart('a\nb\nc', 999)).toBe(4);
+  expect(textAreaLineStart('a\nb\n', 999)).toBe(4);
+  expect(textAreaLineStart('', 5)).toBe(0);
 });

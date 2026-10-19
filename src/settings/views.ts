@@ -2,5 +2,9 @@
 // (G31). A new view is a file beside this one and one entry here.
 import { Preferences } from './Preferences';
 import type { SettingsView } from './settings-view';
+import { TextView } from './TextView';
 
-export const SETTINGS_VIEWS: readonly [SettingsView, ...SettingsView[]] = [{ id: 'preferences', title: 'Preferences', View: Preferences }];
+export const SETTINGS_VIEWS: readonly [SettingsView, ...SettingsView[]] = [
+  { id: 'preferences', title: 'Preferences', View: Preferences },
+  { id: 'text', title: 'Text', View: TextView },
+];

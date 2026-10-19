@@ -26,3 +26,16 @@ export function splitLines(document: string): Line[] {
   lines.push({ number: lines.length + 1, text: document.slice(start), ending: '' });
   return lines;
 }
+
+/**
+ * Where line `line` of `document` starts in a text area that holds it, in UTF-16 code units, as a caret is
+ * placed: a text area turns CRLF and a lone CR into LF (S14), so each line before it takes its exact text
+ * and one character. Before the first line, the first line's start; past the last, the last line's start.
+ */
+export function textAreaLineStart(document: string, line: number): number {
+  const lines = splitLines(document);
+  const before = Math.max(0, Math.min(line, lines.length) - 1);
+  let start = 0;
+  for (let index = 0; index < before; index++) start += lines[index]!.text.length + 1;
+  return start;
+}

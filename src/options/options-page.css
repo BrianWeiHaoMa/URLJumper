@@ -24,3 +24,9 @@
   line-height: 28px;
   font-weight: 600;
 }
+
+/* The Text view's text area, with the page's room: taller than in the popup, and the user may make it taller. */
+.options-view .text-view-area {
+  height: 474px;
+  resize: vertical;
+}

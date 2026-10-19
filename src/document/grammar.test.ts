@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { comparableName, hasScheme, mappingKey, readDocument, type ReadLine } from './grammar';
+import { comparableName, documentErrors, hasScheme, mappingKey, readDocument, type ReadLine } from './grammar';
+import { validateMapping } from './validation';
 
 const read = (...lines: string[]) => readDocument(lines.join('\n')).lines;
 
@@ -130,4 +131,46 @@ test('a line as long as E3 allows reads without backtracking over its runs', () 
   const started = Date.now();
   expect(readDocument(line).mappings).toMatchObject([{ name: `a${' '.repeat(250_000)}${'x'.repeat(250_000)}`, url: 'https://y' }]);
   expect(Date.now() - started).toBeLessThan(1_000);
+});
+
+describe('the errors of a document (G17)', () => {
+  test('every unreadable line is an error, in line order, with its number and problem', () => {
+    const draft = ['mail  https://mail/', 'just-a-name', 'b  https://b/', '\\ heading', 'a  example.com', '', 'c  https://c/', 'x', 'Mail  https://m/'].join('\n');
+    expect(documentErrors(draft)).toEqual([
+      { line: 2, problem: 'needs-name-and-url' },
+      { line: 5, problem: 'no-scheme' },
+      { line: 8, problem: 'needs-name-and-url' },
+      { line: 9, problem: 'repeated-name', heldBy: 1 },
+    ]);
+  });
+
+  test('a repeated name names the mapping line that has it, not an earlier line refused for its URL', () => {
+    expect(documentErrors('a  nourl\nA  https://1\na  https://2\nA  https://3')).toEqual([
+      { line: 1, problem: 'no-scheme' },
+      { line: 3, problem: 'repeated-name', heldBy: 2 },
+      { line: 4, problem: 'repeated-name', heldBy: 2 },
+    ]);
+  });
+
+  test('line numbers count LF and CRLF breaks only: a lone CR is content of its line', () => {
+    expect(documentErrors('a  https://a/\r\njust-a-name\nb  https://b/\r\nname-only\r\n')).toEqual([
+      { line: 2, problem: 'needs-name-and-url' },
+      { line: 4, problem: 'needs-name-and-url' },
+    ]);
+    // A lone CR is whitespace inside the line: here it separates a name from something that is not a URL.
+    expect(documentErrors('ok  https://ok/\na\rb\nlast  https://l/')).toEqual([{ line: 2, problem: 'no-scheme' }]);
+    // And here a name that holds a URL and a CR from the URL that ends the line, which reads.
+    expect(documentErrors('x  https://x/\ry  https://y/\nlast  https://l/')).toEqual([]);
+    expect(documentErrors('just-a-name\r\nok  https://ok/')).toEqual([{ line: 1, problem: 'needs-name-and-url' }]);
+  });
+
+  test('an empty document, and one of only whitespace, comments, and blank lines, has no error', () => {
+    for (const document of ['', '\n', '   \t\r\n\u00A0\n', '\\ only a comment\r\n\n']) expect(documentErrors(document), JSON.stringify(document)).toEqual([]);
+  });
+
+  test("lines F4 reads are no error, a note holding a backslash among them, which the rules for typed values refuse", () => {
+    const draft = 'a  https://a/ \\ note\\more\nteam  calendar\t https://c/\nno\u00A0break space  https://n/\n';
+    expect(documentErrors(draft)).toEqual([]);
+    expect(validateMapping({ name: 'a', url: 'https://a/', note: 'note\\more' }, [])).toMatchObject({ kind: 'invalid', field: 'note' });
+  });
 });

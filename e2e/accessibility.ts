@@ -61,11 +61,16 @@ async function axeProblems(page: Page): Promise<string[]> {
 
 // Tab walks the controls in order and wraps; each one reached is drawn focused, then with nothing focused.
 async function focusProblems(page: Page): Promise<string[]> {
-  // Tab into a text field selects its text: the field's selection is given back with the focus.
+  // Tab into a text field selects its text: the field's selection is given back with the focus. Tab scrolls
+  // each control it reaches into view: every scrolled box is given back its scroll, so the page is left as
+  // the walk found it, and a pass after this one sees the same state.
   const before = await page.evaluateHandle(() => {
     const element = document.activeElement as HTMLElement | null;
     const field = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element : undefined;
-    return { element, selection: field ? ([field.selectionStart, field.selectionEnd, field.selectionDirection] as const) : undefined };
+    const scrolled = [...document.querySelectorAll<HTMLElement>('*')]
+      .filter((box) => box.scrollTop !== 0 || box.scrollLeft !== 0)
+      .map((box) => [box, box.scrollTop, box.scrollLeft] as const);
+    return { element, selection: field ? ([field.selectionStart, field.selectionEnd, field.selectionDirection] as const) : undefined, scrolled };
   });
   // Every control Tab can focus, and every control a user acts on, whatever its tabindex: a list's options are
   // the exception, reached with the arrow keys from the control that owns them.
@@ -92,9 +97,17 @@ async function focusProblems(page: Page): Promise<string[]> {
   names.forEach((name, index) => {
     if (!reached.has(index)) problems.push(`focus never reached by Tab: ${name}`);
   });
-  await before.evaluate(({ element, selection }) => {
-    element?.focus();
+  await before.evaluate(({ element, selection, scrolled }) => {
+    element?.focus({ preventScroll: true });
     if (selection) (element as HTMLInputElement).setSelectionRange(selection[0], selection[1], selection[2] ?? undefined);
+    for (const box of document.querySelectorAll<HTMLElement>('*')) {
+      if (box.scrollTop !== 0) box.scrollTop = 0;
+      if (box.scrollLeft !== 0) box.scrollLeft = 0;
+    }
+    for (const [box, top, left] of scrolled) {
+      box.scrollTop = top;
+      box.scrollLeft = left;
+    }
   });
   return problems;
 }

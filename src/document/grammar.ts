@@ -17,13 +17,19 @@ export interface Mapping {
  *  scheme, or a name an earlier mapping line already has. */
 export type UnreadableProblem = 'needs-name-and-url' | 'no-scheme' | 'repeated-name';
 
+/** What makes a line unreadable; for a repeated name, `heldBy` is the number of the mapping line that has it. */
+export type Unreadable = { problem: Exclude<UnreadableProblem, 'repeated-name'> } | { problem: 'repeated-name'; heldBy: number };
+
 export type ReadLine =
   | (Line & { kind: 'blank' })
   /** A line holding a comment and nothing else; runs of them are headings (see `findSections`). */
   | (Line & { kind: 'comment' })
   /** `urlStart`: where the URL starts in the line's exact text, as an index of UTF-16 code units. */
   | (Line & { kind: 'mapping'; mapping: Mapping; urlStart: number })
-  | (Line & { kind: 'unreadable'; problem: UnreadableProblem });
+  | (Line & { kind: 'unreadable' } & Unreadable);
+
+/** An error of the document by F4: an unreadable line, by its number, with what makes it one. */
+export type DocumentError = { line: number } & Unreadable;
 
 export interface ReadDocument {
   lines: ReadLine[];
@@ -54,7 +60,7 @@ export function readDocument(document: string): ReadDocument {
   const lines: ReadLine[] = [];
   const mappings: Mapping[] = [];
   // Only a mapping line lends its name: a line refused for its URL reserves nothing, as in 1.x.
-  const namesSeen = new Set<string>();
+  const namesSeen = new Map<string, number>();
   for (const line of splitLines(document)) {
     const read = readLine(line, namesSeen);
     lines.push(read);
@@ -63,7 +69,20 @@ export function readDocument(document: string): ReadDocument {
   return { lines, mappings };
 }
 
-function readLine(line: Line, namesSeen: Set<string>): ReadLine {
+/**
+ * Every error of `document` by F4, in line order: the lines it cannot read (G17). The Text view lists them
+ * and refuses to save while there is one, and the worker refuses a *replace* whose text has one.
+ */
+export function documentErrors(document: string): DocumentError[] {
+  const errors: DocumentError[] = [];
+  for (const line of readDocument(document).lines) {
+    if (line.kind !== 'unreadable') continue;
+    errors.push(line.problem === 'repeated-name' ? { line: line.number, problem: line.problem, heldBy: line.heldBy } : { line: line.number, problem: line.problem });
+  }
+  return errors;
+}
+
+function readLine(line: Line, namesSeen: Map<string, number>): ReadLine {
   const commentAt = line.text.indexOf('\\');
   const beforeComment = commentAt === -1 ? line.text : line.text.slice(0, commentAt);
   const content = beforeComment.trim();
@@ -81,8 +100,9 @@ function readLine(line: Line, namesSeen: Set<string>): ReadLine {
   const name = content.slice(0, nameEnd);
 
   const lowered = comparableName(name);
-  if (namesSeen.has(lowered)) return { ...line, kind: 'unreadable', problem: 'repeated-name' };
-  namesSeen.add(lowered);
+  const heldBy = namesSeen.get(lowered);
+  if (heldBy !== undefined) return { ...line, kind: 'unreadable', problem: 'repeated-name', heldBy };
+  namesSeen.set(lowered, line.number);
   const note = commentAt === -1 ? null : line.text.slice(commentAt + 1).trim();
   const contentStart = beforeComment.length - beforeComment.trimStart().length;
   return {

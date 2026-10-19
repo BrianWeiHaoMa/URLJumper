@@ -1,7 +1,8 @@
 // The popup's settings (In use, "Preferences"; G31; Composition, "Popup"): the settings views inside the
 // popup, reached by the gear in search and in the first-run state. Its header holds the way back, the list of
 // views, and *Open in tab*, which opens the options page on the view shown; between header and footer the
-// view scrolls (G7), and the footer says what Enter does wherever the focus is (L2). It holds none of the
+// view scrolls (G7), and the footer says what Enter does wherever the focus is (L2). It gives the views the
+// tab the popup was opened on, whose address the Text view's *Copy tab URL* copies. It holds none of the
 // views' logic and offers no Import or Export, which are the full page's.
 import { useLayoutEffect, useState } from 'react';
 import { chromeMessage } from '../requests';
@@ -12,11 +13,13 @@ import { useFitToViewport } from './fit-to-viewport';
 import './popup-settings.css';
 
 interface PopupSettingsProps {
+  /** The address of the tab the popup was opened on; undefined when Chrome granted none (E5). */
+  tabUrl: string | undefined;
   /** Returns to search, or to the first-run state while the document is empty. */
   onBack(): void;
 }
 
-export function PopupSettings({ onBack }: PopupSettingsProps) {
+export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
   const layout = useFitToViewport();
   // Settings open on the first view of the list.
   const [shown, setShown] = useState<SettingsView>(SETTINGS_VIEWS[0]);
@@ -67,7 +70,7 @@ export function PopupSettings({ onBack }: PopupSettingsProps) {
               {message}
             </p>
           )}
-          <View sayWhatEnterDoes={setViewSays} />
+          <View sayWhatEnterDoes={setViewSays} openerTab={{ url: tabUrl }} />
         </div>
       </div>
       <footer className="footer">{footer}</footer>

@@ -225,7 +225,7 @@ export function Popup() {
   }
 
   // Back to search as it was left, its list redrawn for any change made meanwhile (G27).
-  if (state.view.kind === 'settings') return <PopupSettings onBack={() => dispatch({ kind: 'cancel' })} />;
+  if (state.view.kind === 'settings') return <PopupSettings tabUrl={state.opener?.url} onBack={() => dispatch({ kind: 'cancel' })} />;
 
   const shownConfirmation = state.confirmed !== null && (
     <Confirmation
