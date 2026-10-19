@@ -38,7 +38,7 @@ Accepted limits, each of which also lowers the cost of building it:
 
 **Name a link.** The user right-clicks a link and chooses *Name this link in URLJumper*. The popup opens on the same form with the link's address as the URL and a line saying which page it was on. *Name this page in URLJumper* on a page does the same for the page.
 
-**Edit from a suggestion.** The user activates the pencil on a row (Tab reaches it from the search box). The row expands into name, URL, and note fields with *Save*, *Delete*, *Copy link*, and *Open in text*. Save rewrites that line only. Delete asks nothing and offers Undo. Copy link puts the destination on the clipboard without opening it.
+**Edit from a suggestion.** The user activates the pencil on a row (Tab reaches it from the search box). The row expands into name, URL, and note fields with *Save*, *Delete*, *Copy link*, and *Open in text*, taking the popup's list while it is open; the other rows return when it closes. Save rewrites that line only. Delete asks nothing and offers Undo. Copy link puts the destination on the clipboard without opening it.
 
 **Edit the list.** In settings (the gear in the popup, or the full settings page), the *List* view shows the document's mappings in document order with line numbers, comment-only lines as section headings and a trailing comment as the row's note. Each row can be edited in place, deleted, moved up or down, or have its destination copied; *Add mapping* at the bottom opens the Name form without a page. Every action saves at once, changes only the line it concerns, and offers Undo. A line the extension cannot read appears as an unreadable row showing its raw text with *Fix in text*.
 
