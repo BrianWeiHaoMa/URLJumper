@@ -2,7 +2,8 @@
 // and shown by two hosts, the popup's settings and the options page, which give it only what is here. What
 // differs by host is passed in, never worked out by the view. The options page opens on the view its
 // fragment names (`#view=<id>`), with the Text view's caret on the line it names (`&line=N`); the popup's
-// *Open in tab* names the view it shows, and its row editor's *Open in text* the Text view and the line.
+// *Open in tab* names the view it shows, and its row editor's *Open in text* the Text view and the line. Both
+// hosts show their own Text view on a line when the List view asks (`showTextView`).
 import type { ComponentType, ReactNode } from 'react';
 
 /** A file's text Import brings to the Text view as its draft (G20). */
@@ -21,10 +22,13 @@ export interface SettingsViewProps {
   /** Called with what Enter does where the focus is in the view, whenever that changes; the popup's footer says it (L2). */
   sayWhatEnterDoes?(text: string): void;
   /**
-   * On the options page opened at `#view=text&line=N`, until another view is shown: N, the stored document's
-   * line the Text view puts the caret on, with the focus, as it first shows the document.
+   * On the options page opened at `#view=text&line=N`, or in either host after `showTextView(N)`, until another
+   * view is shown: N, the stored document's line the Text view puts the caret on, with the focus, as it first
+   * shows the document.
    */
   caretLine?: number;
+  /** Shows the host's own Text view with the caret on the stored document's line N, as `caretLine` says: the List view's *Fix in text*. */
+  showTextView?(line: number): void;
   /**
    * In the popup alone: the tab it was opened on, with its address when Chrome granted it (E5), which the
    * Text view's *Copy tab URL* copies (G31). Absent on the options page, which has no such tab.

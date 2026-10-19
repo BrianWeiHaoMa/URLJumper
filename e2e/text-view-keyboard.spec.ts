@@ -104,9 +104,11 @@ test('on the options page, the keyboard alone reaches the Text view, the text ar
   await page.goto(extension.url('options.html'));
   const view = textView(page);
   await expect(page.getByRole('listbox', { name: 'Search order' })).toBeVisible();
-  // From the page's start, one stop each: the list of views, Preferences then Text.
+  // From the page's start, one stop each: the list of views, Preferences, List, then Text.
   await page.keyboard.press('Tab');
   await expect(nav(page, 'Preferences')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(nav(page, 'List')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(nav(page, 'Text')).toBeFocused();
   await page.keyboard.press('Enter');

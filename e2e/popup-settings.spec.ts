@@ -66,6 +66,7 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   const header: [() => ReturnType<typeof order>, string][] = [
     [() => back(popup), 'Enter leaves settings'],
     [() => viewButton(popup), 'Enter does nothing · Preferences is shown'],
+    [() => popup.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'List' }), 'Enter shows List'],
     [() => popup.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'Text' }), 'Enter shows Text'],
     [() => openInTab(popup), 'Enter opens settings in a tab'],
   ];

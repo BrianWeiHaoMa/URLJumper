@@ -1,13 +1,13 @@
 // The fit every popup state is held to (G7), through e2e/extension.ts: the real action popup inside Chrome's
-// popup size limit, its header and footer in view, and nothing of its own cut off but a row's name or URL
-// longer than the row, shown from its start and cut with an ellipsis.
+// popup size limit, its header and footer in view, and nothing of its own cut off but a row's name or URL, or
+// a List view row's note, longer than the row, shown from its start and cut with an ellipsis.
 import { expect, type Page } from '@playwright/test';
 
 /**
  * Fails unless the state `popup` shows, once Chrome has sized the popup to it, fits (G7): the viewport is
  * within Chrome's 800 by 600 limit (S6) and the page does not overflow it; the header and footer are whole in
  * view; no element of the popup's own is cut across or along, or lies where a box that clips it cannot show
- * or scroll to, except a row's name or URL cut with an ellipsis from its start; and a field's line holds its
+ * or scroll to, except a row's name, URL, or note cut with an ellipsis from its start; and a field's line holds its
  * text's height. The view may scroll, which cuts nothing; a field's value scrolls across inside the field.
  * Headless, Chrome gives the popup at most 510 pixels of height, not the 600 it allows, so a view that would
  * fit in 600, such as the settings, scrolls here.
@@ -44,7 +44,7 @@ function fitProblems(popup: Page): Promise<string[]> {
       const box = part.getBoundingClientRect();
       if (box.top < 0 || box.left < 0 || box.bottom > innerHeight || box.right > innerWidth) problems.push(`not whole in view: ${described(part)}`);
     }
-    const shortenedText = '.row-name, .row-url, .name-row-name';
+    const shortenedText = '.row-name, .row-url, .name-row-name, .list-name, .list-url, .list-note';
     for (const element of [main, ...main.querySelectorAll<HTMLElement>('*')]) {
       // Inside a name or URL a row may cut, the text is that text.
       if (element.parentElement?.closest(shortenedText)) continue;

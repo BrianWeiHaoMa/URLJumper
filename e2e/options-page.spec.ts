@@ -30,7 +30,7 @@ test('Chrome opens the options page in a tab of its own, with Preferences and Ex
   const page = opened()!;
   await expect(page).toHaveTitle('URLJumper settings');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('URLJumper settings');
-  await expect(page.getByRole('navigation', { name: 'Settings views' }).getByRole('button')).toHaveText(['Preferences', 'Text']);
+  await expect(page.getByRole('navigation', { name: 'Settings views' }).getByRole('button')).toHaveText(['Preferences', 'List', 'Text']);
   await expect(page.getByRole('region', { name: 'Preferences' })).toBeVisible();
   for (const heading of ['Search order', 'Theme', 'Address bar', 'Shortcuts', 'Export']) await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible();
   await expect(exportButton(page)).toBeVisible();

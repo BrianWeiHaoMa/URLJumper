@@ -40,6 +40,8 @@ export interface RowEditorProps {
   onBack(): void;
   /** Called with what Enter does where the focus is in the editor, whenever that changes (L2). */
   sayWhatEnterDoes(text: string): void;
+  /** Called with true as a Save or Delete is sent and with false as its reply lands, so a host can hold its other edits meanwhile (G21). */
+  onBusy?(busy: boolean): void;
 }
 
 /** The editor's controls, by which the footer says what Enter does. */
@@ -57,7 +59,7 @@ interface Said {
   alert: boolean;
 }
 
-export function RowEditor({ document: stored, anchor: loaded, argument, start, openInText, onStored, onEditInstead, onBack, sayWhatEnterDoes }: RowEditorProps) {
+export function RowEditor({ document: stored, anchor: loaded, argument, start, openInText, onStored, onEditInstead, onBack, sayWhatEnterDoes, onBusy }: RowEditorProps) {
   const problemId = `${useId()}-problem`;
   // Only *Edit again* moves it: to the line as it now stands, or to none, a new line at the end.
   const [anchor, setAnchor] = useState<Anchor | null>(loaded);
@@ -65,7 +67,7 @@ export function RowEditor({ document: stored, anchor: loaded, argument, start, o
   const [focused, setFocused] = useState<Control | null>(null);
   const check = useMemo(() => saveCheck(stored, anchor, fields), [stored, anchor, fields]);
   const textLine = useMemo(() => (anchor === null ? undefined : textViewLine(stored, anchor)), [stored, anchor]);
-  const writes = useWrites(onStored);
+  const writes = useWrites(onStored, onBusy);
   const { busy, stale, said, setSaid } = writes;
 
   const actions: EditorActions = {
@@ -152,7 +154,7 @@ interface EditorActions {
  * The editor's writes (G13, G21): one Save or Delete at a time, its outcome handed to the host; a stale reply
  * kept as what became of the line until *Edit again*; and what the last action came to when it stored nothing.
  */
-function useWrites(onStored: (outcome: Outcome) => void) {
+function useWrites(onStored: (outcome: Outcome) => void, onBusy: ((busy: boolean) => void) | undefined) {
   const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
   const inFlight = useRef(false);
   const [stale, setStale] = useState<Stale | null>(null);
@@ -162,7 +164,9 @@ function useWrites(onStored: (outcome: Outcome) => void) {
     inFlight.current = true;
     setBusy(by);
     setSaid(null);
+    onBusy?.(true);
     const written = await request();
+    onBusy?.(false);
     if ('outcome' in written) return onStored(written.outcome);
     inFlight.current = false;
     setBusy(null);

@@ -13,7 +13,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'reac
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
 import { mappingOfPage } from '../document/page-mapping';
-import { findSection, headingText, namedSections, type HeadingIdentity, type Section } from '../document/sections';
+import { findSection, headingName, namedSections, type HeadingIdentity, type Section } from '../document/sections';
 import { checkMapping } from '../document/validation';
 import { send, type InsertReply } from '../requests';
 import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
@@ -72,7 +72,7 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   const point = insertionPoint(read.lines, heading);
   const tabUrl = subject.kind === 'link' ? subject.tabUrl : subject.url;
   const thisPage = tabUrl === undefined ? undefined : mappingOfPage(read.mappings, tabUrl);
-  const label = (section: Section) => headingText(read.lines, section.heading) || `Heading at line ${section.heading.first}`;
+  const label = (section: Section) => headingName(read.lines, section.heading);
   const chosen = heading === null ? undefined : findSection(read.lines, heading);
   const options: SectionOption[] = [{ key: 'end', label: 'End of document' }, ...sections.map((section) => ({ key: `${section.heading.first}`, label: label(section) }))];
   const chosenIndex = heading === null ? 0 : chosen === undefined ? null : 1 + sections.findIndex((section) => section.heading.first === chosen.heading.first);

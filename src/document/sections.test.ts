@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { readDocument } from './grammar';
-import { findSection, findSections, headingText, namedSections } from './sections';
+import { findSection, findSections, headingName, headingText, namedSections } from './sections';
 
 const sectionsOf = (...lines: string[]) => findSections(readDocument(lines.join('\n')).lines);
 
@@ -66,4 +66,9 @@ test("only a line's first backslash starts its comment; a later one is text", ()
 test('a line with no comment text adds nothing, and a heading with none on any line has no text', () => {
   expect(headingTexts('\\', '\\ Work', '  \\   ', '\\ more', '\\')).toEqual(['Work more']);
   expect(headingTexts('\\', ' \\ ', '', '\\ Home')).toEqual(['', 'Home']);
+});
+
+test('a heading is named by its text, or, with none, by its first line', () => {
+  const read = readDocument(['\\', ' \\ ', '', '\\ Home', '\\ more'].join('\n')).lines;
+  expect(findSections(read).map(({ heading }) => headingName(read, heading))).toEqual(['Heading at line 1', 'Home more']);
 });

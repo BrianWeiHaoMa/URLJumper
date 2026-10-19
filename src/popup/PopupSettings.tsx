@@ -2,13 +2,14 @@
 // popup, reached by the gear in search and in the first-run state. Its header holds the way back, the list of
 // views, and *Open in tab*, which opens the options page on the view shown; between header and footer the
 // view scrolls (G7), and the footer says what Enter does wherever the focus is (L2). It gives the views the
-// tab the popup was opened on, whose address the Text view's *Copy tab URL* copies. It holds none of the
-// views' logic and offers no Import or Export, which are the full page's.
+// tab the popup was opened on, whose address the Text view's *Copy tab URL* copies, and shows its Text view on
+// a line when the List view asks. It holds none of the views' logic and offers no Import or Export, which are
+// the full page's.
 import { useLayoutEffect, useState } from 'react';
 import { chromeMessage } from '../requests';
 import { settingsFragment, type SettingsView } from '../settings/settings-view';
 import { enterOnView, SettingsNav } from '../settings/SettingsNav';
-import { SETTINGS_VIEWS } from '../settings/views';
+import { SETTINGS_VIEWS, TEXT_VIEW } from '../settings/views';
 import { useFitToViewport } from './fit-to-viewport';
 import './popup-settings.css';
 
@@ -23,6 +24,8 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
   const layout = useFitToViewport();
   // Settings open on the first view of the list.
   const [shown, setShown] = useState<SettingsView>(SETTINGS_VIEWS[0]);
+  // The line the Text view shows when the List view asked for it; showing another view drops it.
+  const [caretLine, setCaretLine] = useState<number>();
   const [viewSays, setViewSays] = useState('Enter does nothing');
   const [focused, setFocused] = useState<'back' | 'open-in-tab' | SettingsView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,6 +35,15 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
     const controls = layout.view.current?.querySelectorAll<HTMLElement>('.view-content *') ?? [];
     [...controls].find((control) => control.tabIndex >= 0 && !control.matches(':disabled'))?.focus();
   }, [shown]);
+
+  const show = (view: SettingsView) => {
+    if (view !== shown) setCaretLine(undefined);
+    setShown(view);
+  };
+  const showTextView = (line: number) => {
+    setCaretLine(line);
+    setShown(TEXT_VIEW);
+  };
 
   const openInTab = () => {
     setMessage(null);
@@ -58,7 +70,7 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
         <button type="button" className="settings-bar-button" onClick={onBack} onFocus={() => setFocused('back')} onBlur={() => setFocused(null)}>
           Back
         </button>
-        <SettingsNav views={SETTINGS_VIEWS} shown={shown} onShow={setShown} onFocusView={setFocused} />
+        <SettingsNav views={SETTINGS_VIEWS} shown={shown} onShow={show} onFocusView={setFocused} />
         <button type="button" className="settings-bar-button open-in-tab" onClick={openInTab} onFocus={() => setFocused('open-in-tab')} onBlur={() => setFocused(null)}>
           Open in tab
         </button>
@@ -70,7 +82,7 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
               {message}
             </p>
           )}
-          <View sayWhatEnterDoes={setViewSays} openerTab={{ url: tabUrl }} />
+          <View sayWhatEnterDoes={setViewSays} openerTab={{ url: tabUrl }} caretLine={caretLine} showTextView={showTextView} />
         </div>
       </div>
       <footer className="footer">{footer}</footer>

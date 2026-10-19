@@ -64,6 +64,11 @@ export function headingText(lines: readonly ReadLine[], heading: Section['headin
     .join(' ');
 }
 
+/** What a surface calls `heading` (P2): its text (`headingText`), or, with none, its first line's number. */
+export function headingName(lines: readonly ReadLine[], heading: Section['heading']): string {
+  return headingText(lines, heading) || `Heading at line ${heading.first}`;
+}
+
 /** The section whose heading has `identity`; undefined when no heading has it now. */
 export function findSection(lines: readonly ReadLine[], identity: HeadingIdentity): Section | undefined {
   const textsKey = JSON.stringify(identity.texts);

@@ -1,7 +1,8 @@
 // The full settings page, `options.html`, which Chrome opens in a tab of its own (G31; Composition, "Settings
 // views"): the same settings views as the popup's, listed from the one list, opened on the view its fragment
 // names (read once, as the page opens) with the Text view's caret on the line it names, and with Import and
-// Export beside Preferences, which the popup's settings do not offer; Import's file it shows in the Text view.
+// Export beside Preferences, which the popup's settings do not offer; Import's file it shows in the Text view,
+// and the Text view on a line when the List view asks.
 // It shows the stored theme live, as the popup does. It holds none of the views' logic.
 import { useEffect, useState, type ReactNode } from 'react';
 import { followStoredTheme } from '../preferences';
@@ -9,10 +10,7 @@ import { Export } from '../settings/Export';
 import { Import } from '../settings/Import';
 import { lineInFragment, viewInFragment, type ImportedText, type SettingsView } from '../settings/settings-view';
 import { SettingsNav } from '../settings/SettingsNav';
-import { SETTINGS_VIEWS } from '../settings/views';
-
-/** The view Import's file is shown in. */
-const TEXT_VIEW = viewInFragment('#view=text', SETTINGS_VIEWS);
+import { SETTINGS_VIEWS, TEXT_VIEW } from '../settings/views';
 
 export function OptionsPage() {
   const [shown, setShown] = useState<SettingsView>(() => viewInFragment(location.hash, SETTINGS_VIEWS));
@@ -29,6 +27,11 @@ export function OptionsPage() {
       setImported(undefined);
     }
     setShown(view);
+  };
+  const showTextView = (line: number) => {
+    setCaretLine(line);
+    setImported(undefined);
+    setShown(TEXT_VIEW);
   };
   const importText = (text: ImportedText) => {
     setCaretLine(undefined);
@@ -54,7 +57,7 @@ export function OptionsPage() {
         <SettingsNav views={SETTINGS_VIEWS} shown={shown} onShow={show} />
       </header>
       <section className="options-view" aria-label={shown.title}>
-        <View key={`${shown.id} ${imports}`} beside={beside[shown.id]} caretLine={caretLine} imported={imported} />
+        <View key={`${shown.id} ${imports}`} beside={beside[shown.id]} caretLine={caretLine} showTextView={showTextView} imported={imported} />
       </section>
     </main>
   );

@@ -1,0 +1,108 @@
+/* The List view, as both hosts show it (G7, G32): one list of the document's lines, each mapping row with
+   its line number, name, URL, and note beside its pencil; a heading's text; an unreadable row's raw text,
+   wrapped and never cut, with why and *Fix in text*; the open editor and the confirmation in their places. A
+   name, URL, or note longer than the row is shown from its start and cut with an ellipsis; nothing else is
+   cut. Every color is a token of src/theme.css, and every line height a whole number of pixels. */
+.list-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 6px 6px;
+}
+
+.list-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A row out of view is not laid out or painted until it nears it, which halves the time a document of
+   10,000 lines takes to appear and keeps Tab quick (T1). That contains its painting: its padding holds the
+   4 pixels a focused control's outline takes beyond it. */
+.list-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
+.list-number {
+  flex: none;
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.list-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Only the inline axis clips (`clip`, unlike `hidden`, leaves the other axis visible), so marks a script
+   stacks above or below the line are drawn whole. */
+.list-name,
+.list-url,
+.list-note {
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+
+.list-name {
+  font-weight: 600;
+}
+
+.list-url,
+.list-raw {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.list-url,
+.list-note {
+  color: var(--text-muted);
+}
+
+/* The line as written, its spaces and tabs kept: wrapped, never cut (G16). */
+.list-raw {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.list-problem {
+  color: var(--text-alert);
+  overflow-wrap: anywhere;
+}
+
+.list-fix {
+  flex: none;
+}
+
+.list-heading {
+  padding: 8px 4px 2px;
+}
+
+.list-heading-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.list-editor {
+  border: 1px solid var(--line-separator);
+  border-radius: 6px;
+}

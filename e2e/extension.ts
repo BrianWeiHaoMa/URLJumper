@@ -7,6 +7,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { checkAccessibilityInBothSchemes } from './accessibility.ts';
 import { distDir, launchChrome, waitForStoredKey, type LoadedExtension } from './extension-launch.ts';
+import { listViewInPopup, listViewOnOptionsPage } from './list-view.ts';
 import { checkFit } from './popup-fit.ts';
 import { keptRelease1xBuild, withRelease1x, type Release1x } from './upgrade-from-1x.ts';
 
@@ -20,6 +21,7 @@ export { caret, clipboardText, delayPageReads, draftLanded, holdFileReads, holdP
 export { type Release1x } from './upgrade-from-1x.ts';
 export { expectNoNotice, upgradeNotice } from './upgrade-notice.ts';
 export { editSelectedRow, lineConfirmation, rowEditor, rowPencils, thisPagePencil, type RowEditor } from './row-editor.ts';
+export { listView, listViewInPopup, listViewOnOptionsPage, type ListView } from './list-view.ts';
 export { restartWorker, stallWorkerAfterWriting } from './worker-restart.ts';
 
 export interface LocalSite {
@@ -150,6 +152,24 @@ export async function popupOnNewPage(extension: LoadedExtension, site: LocalSite
   const page = await extension.context.newPage();
   await page.goto(site.pageUrl(title));
   return { page, popup: await extension.clickToolbarButton(page) };
+}
+
+/** The two places the settings views are shown (G31). */
+export const SETTINGS_HOSTS = ['popup', 'options page'] as const;
+export type SettingsHost = (typeof SETTINGS_HOSTS)[number];
+
+/**
+ * Stores `stored` and shows the List view in `host`: in the popup opened on a new page of `site`, or on the
+ * options page; returns the page that shows it, the view, and the check every state there is held to.
+ */
+export async function listViewIn(host: SettingsHost, extension: LoadedExtension, site: LocalSite, stored: Record<string, unknown>) {
+  await extension.seedStorage(stored);
+  if (host === 'popup') {
+    const { popup } = await popupOnNewPage(extension, site);
+    return { page: popup, view: await listViewInPopup(popup), check: () => checkFitAndAccessibility(popup) };
+  }
+  const { page, ...view } = await listViewOnOptionsPage(extension);
+  return { page, view, check: () => checkAccessibilityInBothSchemes(page) };
 }
 
 /** Search's selected row, as a check inside the page finds it: the option named as selected, none while none is (G3). */

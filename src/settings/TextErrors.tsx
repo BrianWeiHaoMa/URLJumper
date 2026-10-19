@@ -24,7 +24,8 @@ export function TextErrors({ errors, onShow, onFocusLine }: TextErrorsProps) {
   );
 }
 
-function errorText(error: DocumentError): string {
+/** What an F4 error says, naming its line (L2); the List view's unreadable rows say it too. */
+export function errorText(error: DocumentError): string {
   switch (error.problem) {
     case 'needs-name-and-url':
       return `Line ${error.line}: expected a name and a URL`;
