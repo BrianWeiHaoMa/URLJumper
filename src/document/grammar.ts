@@ -56,6 +56,15 @@ export function mappingKey(name: string, url: string): string {
   return `${comparableName(name)}\n${url}`;
 }
 
+/**
+ * The name of the line `text` read on its own, as names are compared (`comparableName`); null when such a line
+ * is not a mapping line, as a blank or comment line, which has no name.
+ */
+export function comparableLineName(text: string): string | null {
+  const read = readLine({ number: 1, text, ending: '' }, new Map());
+  return read.kind === 'mapping' ? comparableName(read.mapping.name) : null;
+}
+
 export function readDocument(document: string): ReadDocument {
   const lines: ReadLine[] = [];
   const mappings: Mapping[] = [];

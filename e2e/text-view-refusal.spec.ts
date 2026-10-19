@@ -1,6 +1,7 @@
 // What the Text view's Save keeps when it cannot store (G18, G21; Composition, *replace*, "Settings views";
 // State): a view with nothing typed takes in every change to the stored document, while a change that lands
-// under typing is never overwritten, before or after the view hears of it, so Save stores nothing and says so;
+// under typing is never overwritten, before or after the view hears of it, so Save stores nothing, says so, and
+// stores nothing more until the change is brought in (e2e/text-view-merge.spec.ts);
 // the text area is read-only while a Save is under way and sends one; a store Chrome refuses, or a Save that gets
 // no reply, says so and keeps the text and the base it was loaded with; and a popup closed during a Save leaves
 // its outcome stored.
@@ -66,7 +67,7 @@ test('a view with nothing typed takes in another page\'s change, and a Save afte
   }
 });
 
-test('a change that lands under typing is never overwritten: Save stores nothing and says so, whether pressed at once or once the view has heard of it', async ({ extension, site }) => {
+test('a change that lands under typing is never overwritten: Save stores nothing and says so, whether pressed at once or once the view has heard of it, and nothing more until the change is brought in', async ({ extension, site }) => {
   for (const when of ['at once', 'once heard'] as const) {
     const stored = 'a  https://a/\nb  https://b/\n';
     await extension.seedStorage({ mappings: stored });
@@ -87,12 +88,21 @@ test('a change that lands under typing is never overwritten: Save stores nothing
     await expect(view.status, when).toHaveText(CHANGED);
     expect(await storedDocument(extension), when).toBe(inserted);
     await expect(view.area).toHaveValue(typed);
-    await expect(view.area).toBeEditable();
+    // The offer stands, and the text it merges is the text submitted: not editable until it is brought in.
+    await expect(view.offer).toBeVisible();
+    await expect(view.area).not.toBeEditable();
     await checkFitAndAccessibility(popup);
-    // Saving again is refused again: the view's base is still the document it loaded.
-    await view.save.click();
+    // Save again stores nothing and sends nothing until the change is brought in.
+    const replaces = await watchRequests(extension.worker, 'replace');
+    await view.save.focus();
+    await popup.keyboard.press('Enter');
+    await view.save.click({ force: true });
+    // Time for a request, had one been sent, to reach the worker.
+    await popup.waitForTimeout(300);
     await expect(view.status).toHaveText(CHANGED);
+    await expect(view.area).toHaveValue(typed);
     expect(await storedDocument(extension)).toBe(inserted);
+    expect(await replaces()).toEqual([]);
     await popup.close();
     await page.close();
   }

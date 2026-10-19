@@ -12,7 +12,8 @@ const axeSource = fs.readFileSync(createRequire(import.meta.url).resolve('axe-co
  * The accessibility pass on the state `page` shows now (G32): fails on an interactive element without an
  * accessible name, on text below 4.5:1 against its rendered background, and on a focusable control that
  * Tab never reaches or whose keyboard focus does not visibly change it. Names and contrast are axe-core's
- * WCAG 2 A and AA rules; focus is walked with Tab and given back where it was.
+ * WCAG 2 A and AA rules, with text a scrolling view hides judged scrolled into view; focus is walked with Tab
+ * and given back where it was.
  */
 export async function checkAccessibility(page: Page): Promise<void> {
   const problems = [...(await axeProblems(page)), ...(await focusProblems(page))];
@@ -43,18 +44,45 @@ async function axeProblems(page: Page): Promise<string[]> {
       id: string;
       nodes: Node[];
     }
-    const axe = (window as unknown as { axe: { run(context: Document, options: object): Promise<Record<'violations' | 'incomplete' | 'passes', Result[]>> } }).axe;
+    type Results = Record<'violations' | 'incomplete' | 'passes', Result[]>;
+    const axe = (window as unknown as { axe: { run(context: Document | Element, options: object): Promise<Results> } }).axe;
     const results = await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } });
     const where = (node: Node) => node.target.join(' ');
     const contrast = (results: Result[]) => results.filter((result) => result.id === 'color-contrast').flatMap((result) => result.nodes);
+    // Text axe cannot judge where it stands, partly or wholly scrolled out of a scrolling view, it judges again
+    // scrolled into view, as it is read there; every box is then given back its scroll. Text that stays
+    // undecided is reported below.
+    const judged = new Map<string, { verdict: keyof Results; node: Node }>();
+    for (const verdict of ['violations', 'incomplete', 'passes'] as const) for (const node of contrast(results[verdict])) judged.set(where(node), { verdict, node });
+    const undecided = contrast(results.incomplete).map(where);
+    if (undecided.length > 0) {
+      const scrolls = [...document.querySelectorAll<HTMLElement>('*')].map((box) => [box, box.scrollTop, box.scrollLeft] as const);
+      for (const target of undecided) {
+        const element = document.querySelector(target);
+        if (element === null) continue;
+        element.scrollIntoView({ block: 'center', inline: 'nearest' });
+        const again = await axe.run(element, { runOnly: { type: 'rule', values: ['color-contrast'] } });
+        for (const verdict of ['violations', 'incomplete', 'passes'] as const) for (const node of contrast(again[verdict])) if (where(node) === target) judged.set(target, { verdict, node });
+      }
+      for (const [box, top, left] of scrolls) {
+        box.scrollTop = top;
+        box.scrollLeft = left;
+      }
+    }
+    const verdicts = [...judged.values()];
     return [
       ...results.violations.flatMap((result) => result.nodes.map((node) => `${result.id}: ${where(node)}: ${(node.failureSummary ?? '').replace(/\s+/g, ' ')}`)),
+      ...verdicts
+        .filter(({ verdict, node }) => verdict === 'violations' && !contrast(results.violations).includes(node))
+        .map(({ node }) => `color-contrast: ${where(node)}: ${(node.failureSummary ?? '').replace(/\s+/g, ' ')}`),
       // Contrast axe could not decide is not contrast shown to hold.
-      ...contrast(results.incomplete).map((node) => `color-contrast undecided: ${where(node)}: ${node.any.map((check) => check.message).join(' ')}`),
+      ...verdicts
+        .filter(({ verdict }) => verdict === 'incomplete')
+        .map(({ node }) => `color-contrast undecided: ${where(node)}: ${node.any.map((check) => check.message).join(' ')}`),
       // axe allows 3:1 for large text; G32 asks 4.5:1 of all text.
-      ...contrast(results.passes)
-        .filter((node) => !((node.any[0]?.data?.contrastRatio ?? 0) >= needed))
-        .map((node) => `color-contrast: ${where(node)}: ${node.any[0]?.data?.contrastRatio ?? 'no ratio'}:1 is below ${needed}:1`),
+      ...verdicts
+        .filter(({ verdict, node }) => verdict === 'passes' && !((node.any[0]?.data?.contrastRatio ?? 0) >= needed))
+        .map(({ node }) => `color-contrast: ${where(node)}: ${node.any[0]?.data?.contrastRatio ?? 'no ratio'}:1 is below ${needed}:1`),
     ];
   }, TEXT_CONTRAST);
 }

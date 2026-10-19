@@ -2,16 +2,20 @@
 // "Settings views"): the whole stored document in a native text area with a short grammar hint, and Save.
 // The view holds two texts: the draft, which is what the text area holds, and the base, the stored string
 // exactly as read (CRLF endings and all, empty when absent), never taken from the text area, which turns CRLF
-// into LF (S14). The base moves only when the view loads the stored document and after an applied Save, so
-// the worker's check that the stored document is still the base keeps a Save from overwriting a change the
-// view did not take in (G18). Save validates the draft with the document module and stores it, through the
-// worker's *replace*, exactly as the text area holds it, or stores nothing and lists every error by its line.
-// In the popup it also offers *Copy tab URL*.
+// into LF (S14). The base moves only when the view loads the stored document, after an applied Save, and when
+// a change is brought in, so the worker's check that the stored document is still the base keeps a Save from
+// overwriting a change the view did not take in (G18). Save validates the draft with the document module and
+// stores it, through the worker's *replace*, exactly as the text area holds it, or stores nothing and lists
+// every error by its line. Refused because the stored document changed, it offers to bring that change into
+// the draft (`MergeOffer`), the text area read-only until it is brought in, since the merge is of the text
+// submitted. In the popup it also offers *Copy tab URL*.
 import { useEffect, useRef, useState } from 'react';
 import { documentErrors, type DocumentError } from '../document/grammar';
 import { textAreaLineStart } from '../document/lines';
+import { mergeTexts, type MergePart } from '../document/merge';
 import { chromeMessage, send } from '../requests';
 import { CopyTabUrl } from './CopyTabUrl';
+import { MergeOffer } from './MergeOffer';
 import type { SettingsViewProps } from './settings-view';
 import { TextErrors } from './TextErrors';
 import './settings.css';
@@ -22,6 +26,7 @@ type Outcome =
   | { kind: 'saved' }
   | { kind: 'errors'; errors: DocumentError[] }
   | { kind: 'changed' }
+  | { kind: 'merged' }
   | { kind: 'failed'; message: string }
   | { kind: 'unread'; message: string };
 
@@ -43,6 +48,11 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
   const inFlight = useRef(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [focused, setFocused] = useState<Focused>(null);
+  // After a Save refused as `changed`, until the change is brought in: the merge of the text submitted with the
+  // stored text the reply carried, which becomes the base when the merge is brought in (G18).
+  const [offer, setOffer] = useState<{ parts: MergePart[]; stored: string } | null>(null);
+  // What Enter does on the offer's control that has the focus.
+  const [offerSays, setOfferSays] = useState<string | null>(null);
   const firstCaretLine = useRef(caretLine);
   const readStored = useRef(() => {});
 
@@ -91,7 +101,7 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
 
   const save = async () => {
     const area = textArea.current;
-    if (area === null || !everLoaded.current || inFlight.current) return;
+    if (area === null || !everLoaded.current || inFlight.current || offer !== null) return;
     const text = area.value;
     const errors = documentErrors(text);
     if (errors.length > 0) {
@@ -110,11 +120,26 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
       base.current = text;
       setOutcome({ kind: 'saved' });
     } else if (reply.kind === 'invalid') setOutcome({ kind: 'errors', errors: documentErrors(text) });
-    else if (reply.kind === 'changed') setOutcome({ kind: 'changed' });
+    else if (reply.kind === 'changed') {
+      setOutcome({ kind: 'changed' });
+      setOffer({ parts: mergeTexts(base.current, text, reply.document), stored: reply.document });
+    }
     // Chrome refused the write, or no reply came and it may have landed: either way the texts stay as they
     // were, so the next Save applies if nothing landed and is refused if it did, never overwriting it (G21).
     else setOutcome({ kind: 'failed', message: reply.message });
     readStored.current();
+  };
+
+  // The merge, with the versions chosen, becomes the draft and the stored text it merged the base, so the next
+  // Save stores both sides' changes, or is refused again if the document changed since. Nothing is stored here.
+  const bringIn = (merged: string) => {
+    const area = textArea.current;
+    if (area === null || offer === null) return;
+    area.value = merged;
+    base.current = offer.stored;
+    setOffer(null);
+    setOutcome({ kind: 'merged' });
+    placeCaret(area, 0, true);
   };
 
   // The caret at the start of `line` of the text as the text area holds it now, the line in view (G17).
@@ -123,24 +148,7 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
     if (area !== null) placeCaret(area, textAreaLineStart(area.value, line), true);
   };
 
-  const enter =
-    focused === 'text'
-      ? !loaded
-        ? 'Enter does nothing until the document is read'
-        : saving
-          ? 'Saving · Enter does nothing until it is stored'
-          : 'Enter starts a new line'
-      : focused === 'save'
-        ? saving
-          ? 'Saving · Enter does nothing until it is stored'
-          : loaded
-            ? 'Enter saves the text'
-            : 'Enter does nothing until the document is read'
-        : focused === 'copy'
-          ? "Enter copies the tab's address"
-          : focused !== null
-            ? `Enter moves the caret to line ${focused.line}`
-            : 'Enter does nothing';
+  const enter = offerSays ?? whatEnterDoes(focused, { loaded, saving, offered: offer !== null });
   useEffect(() => sayWhatEnterDoes?.(enter), [enter, sayWhatEnterDoes]);
 
   return (
@@ -158,8 +166,9 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
         spellCheck={false}
         autoComplete="off"
         autoCapitalize="off"
-        // Read-only until it holds the stored document, and from Save until the worker's reply.
-        readOnly={!loaded || saving}
+        // Read-only until it holds the stored document, from Save until the worker's reply, and while a change
+        // is offered, whose merge is of the text submitted.
+        readOnly={!loaded || saving || offer !== null}
         onInput={() => setOutcome((shown) => (shown?.kind === 'saved' ? null : shown))}
         onFocus={() => setFocused('text')}
         onBlur={() => setFocused(null)}
@@ -168,7 +177,7 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
         <button
           type="button"
           className="settings-button"
-          aria-disabled={!loaded || saving}
+          aria-disabled={!loaded || saving || offer !== null}
           onClick={() => void save()}
           onFocus={() => setFocused('save')}
           onBlur={() => setFocused(null)}
@@ -180,9 +189,21 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab }: SettingsVie
       <p className="text-view-status" role="status">
         {saving ? 'Saving…' : outcome === null ? '' : outcomeText(outcome)}
       </p>
+      {offer !== null && <MergeOffer parts={offer.parts} onBringIn={bringIn} onSayEnter={setOfferSays} />}
       {outcome?.kind === 'errors' && <TextErrors errors={outcome.errors} onShow={showLine} onFocusLine={(line) => setFocused(line === null ? null : { line })} />}
     </div>
   );
+}
+
+/** What Enter does where the focus is (L2), given whether the document is read, a Save is under way, and a change is offered. */
+function whatEnterDoes(focused: Focused, { loaded, saving, offered }: { loaded: boolean; saving: boolean; offered: boolean }): string {
+  if (focused === null) return 'Enter does nothing';
+  if (focused === 'copy') return "Enter copies the tab's address";
+  if (typeof focused === 'object') return `Enter moves the caret to line ${focused.line}`;
+  if (!loaded) return 'Enter does nothing until the document is read';
+  if (saving) return 'Saving · Enter does nothing until it is stored';
+  if (offered) return 'Enter does nothing until the change is brought in';
+  return focused === 'text' ? 'Enter starts a new line' : 'Enter saves the text';
 }
 
 function outcomeText(outcome: Outcome): string {
@@ -193,6 +214,8 @@ function outcomeText(outcome: Outcome): string {
       return 'Not saved';
     case 'changed':
       return 'Not saved: the stored document changed after this text was loaded, in another view or window. Your text is kept as you typed it.';
+    case 'merged':
+      return "The stored document's change is in your text. It is not stored until you save.";
     case 'failed':
       return `Not saved: your text is kept as you typed it. Chrome said: ${outcome.message}`;
     case 'unread':

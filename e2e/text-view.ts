@@ -1,5 +1,5 @@
 // The Text view as a check reaches it, re-exported by e2e/extension.ts: its parts found by their names, the
-// view opened in the popup's settings or on the options page once its text area holds the stored document,
+// offer to bring in a change and its versions, the view opened in the popup's settings or on the options page once its text area holds the stored document,
 // typing into a line as a user does, where the caret is, the requests the worker receives, a page's reads of
 // storage answered late, and the clipboard, which *Copy tab URL* writes, read back from a web page.
 import { expect, type BrowserContext, type Locator, type Page, type Worker } from '@playwright/test';
@@ -13,7 +13,17 @@ export function textView(page: Page) {
     status: page.locator('.text-view-status'),
     errors: page.getByRole('list', { name: 'Errors' }).getByRole('button'),
     copyTabUrl: page.getByRole('button', { name: 'Copy tab URL' }),
+    /** The offer a Save refused because the stored document changed makes: to bring that change into the text. */
+    offer: page.getByRole('region', { name: "Bring in the stored document's change" }),
+    /** The offer's parts changed in both, in order, each with its two versions (`version`). */
+    conflicts: page.getByRole('group', { name: /^Changed in both/ }),
+    bringIn: page.getByRole('button', { name: 'Bring in the change' }),
   };
+}
+
+/** The stored document's version, or the text's (`yours`), of `conflict`, one of `TextView['conflicts']`. */
+export function version(conflict: Locator, side: 'stored' | 'yours'): Locator {
+  return conflict.getByRole('button', { name: side === 'stored' ? /^Stored document/ : /^Your text/ });
 }
 
 export type TextView = ReturnType<typeof textView>;

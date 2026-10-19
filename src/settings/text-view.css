@@ -1,5 +1,5 @@
 /* The Text view, as both hosts show it: the grammar hint, the text area, Save and what it came to, the list
-   of errors, and in the popup *Copy tab URL*. The text area has a fixed whole-pixel height and scrolls inside
+   of errors, the offer to bring in a change made since the text was loaded, and in the popup *Copy tab URL*. The text area has a fixed whole-pixel height and scrolls inside
    itself, so the popup's view scrolls only for a long list of errors (G7); its lines do not wrap, so each
    line of the document is one row. Every color is a token of src/theme.css, and every line height a whole
    number of pixels. */
@@ -60,4 +60,71 @@
   padding: 2px 8px;
   cursor: pointer;
   overflow-wrap: anywhere;
+}
+
+/* The offer: each part changed in both, its two versions drawn as buttons whose lines wrap, so a long line is
+   never cut off (G7), and the chosen one marked. */
+.merge-offer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.merge-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.merge-conflict-heading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.merge-version {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.merge-version:hover {
+  background: var(--bg-hover);
+}
+
+.merge-version[aria-pressed="true"] {
+  background: var(--bg-selected);
+}
+
+.merge-version[aria-pressed="true"] .merge-version-label {
+  font-weight: 600;
+}
+
+.merge-lines {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.merge-line {
+  display: block;
+  min-height: 16px;
+}
+
+.merge-version-none {
+  color: var(--text-muted);
+  font-style: italic;
 }
