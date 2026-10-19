@@ -20,7 +20,8 @@ export async function jump(request: JumpRequest): Promise<JumpReply> {
   }
 
   try {
-    if (request.mode === 'new-tab') await chrome.tabs.create({ url, active: request.active });
+    // In the window the user acted in: by now another window may have the focus.
+    if (request.mode === 'new-tab') await chrome.tabs.create({ url, active: request.active, ...(request.windowId === undefined ? {} : { windowId: request.windowId }) });
     else await chrome.tabs.update(request.tabId, { url });
   } catch (error) {
     return { kind: 'failed', message: chromeMessage(error) };

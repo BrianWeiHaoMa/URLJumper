@@ -30,9 +30,10 @@ interface Stored {
   theme: Theme;
 }
 
-/** The tab the popup was opened on: its id, and its address and title when Chrome granted them (E5). */
+/** The tab the popup was opened on: its id and window, and its address and title when Chrome granted them (E5). */
 interface Opener {
   tabId: number | undefined;
+  windowId: number | undefined;
   url: string | undefined;
   title: string | undefined;
   mode: OpenMode;
@@ -137,7 +138,7 @@ export function Popup() {
 
   const jump = async (row: MappingRow, mode: OpenMode) => {
     if (!ready) return;
-    const request = jumpRequest(row, mode, state.opener?.tabId);
+    const request = jumpRequest(row, mode, state.opener);
     if (request === undefined) {
       dispatch({ kind: 'message', message: 'Not opened: Chrome did not say which tab this popup was opened on.' });
       return;
@@ -444,9 +445,9 @@ async function findOpener(): Promise<Opener> {
     // popup in this window, the toolbar's included, can honor the record again.
     if (intent !== undefined) await send({ kind: 'remove-intent', windowId: intent.windowId, time: intent.time });
     const url = tab?.url || undefined;
-    return { tabId: tab?.id, url, title: tab?.title, mode: startMode(intent), asks: askedSubject(intent, url, tab?.title) };
+    return { tabId: tab?.id, windowId: tab?.windowId, url, title: tab?.title, mode: startMode(intent), asks: askedSubject(intent, url, tab?.title) };
   } catch {
-    return { tabId: undefined, url: undefined, title: undefined, mode: startMode(undefined), asks: undefined };
+    return { tabId: undefined, windowId: undefined, url: undefined, title: undefined, mode: startMode(undefined), asks: undefined };
   }
 }
 
@@ -457,13 +458,13 @@ function askedSubject(intent: OpenIntent | undefined, url: string | undefined, t
   return undefined;
 }
 
-/** The jump for `row` in `mode`: the mapping as stored, and the argument only for the argument row (G6). */
-function jumpRequest(row: MappingRow, mode: OpenMode, openerTabId: number | undefined): JumpRequest | undefined {
+/** The jump for `row` in `mode`: the mapping as stored, the argument only for the argument row (G6), in the popup's window or tab. */
+function jumpRequest(row: MappingRow, mode: OpenMode, opener: Opener | undefined): JumpRequest | undefined {
   const { name, url } = row.mapping;
   const argument = row.group === 'argument' ? row.argument : null;
-  if (mode === 'new-tab') return { kind: 'jump', name, url, argument, mode, active: true };
-  if (openerTabId === undefined) return undefined;
-  return { kind: 'jump', name, url, argument, mode, tabId: openerTabId };
+  if (mode === 'new-tab') return { kind: 'jump', name, url, argument, mode, active: true, ...(opener?.windowId === undefined ? {} : { windowId: opener.windowId }) };
+  if (opener?.tabId === undefined) return undefined;
+  return { kind: 'jump', name, url, argument, mode, tabId: opener.tabId };
 }
 
 function notOpened(reply: Exclude<JumpReply, { kind: 'opened' }>): string {

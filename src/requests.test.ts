@@ -69,6 +69,7 @@ test("a request to remove an intent resolves to the worker's reply for it", asyn
 test('the worker accepts only a request declared here', () => {
   expect(isRequest(JUMP)).toBe(true);
   expect(isRequest({ ...JUMP, argument: 'lo-fi beats' })).toBe(true);
+  expect(isRequest({ ...JUMP, windowId: 7 })).toBe(true);
   expect(isRequest({ kind: 'jump', name: 'a', url: 'https://a.example/', argument: null, mode: 'this-tab', tabId: 4 })).toBe(true);
   expect(isRequest(REMOVE_INTENT)).toBe(true);
   for (const value of [
@@ -83,6 +84,8 @@ test('the worker accepts only a request declared here', () => {
     { ...JUMP, url: 1 },
     { ...JUMP, argument: undefined },
     { ...JUMP, active: undefined },
+    { ...JUMP, windowId: 1.5 },
+    { ...JUMP, windowId: '7' },
     { ...JUMP, mode: 'window' },
     { kind: 'jump', name: 'a', url: 'https://a.example/', argument: null, mode: 'this-tab', tabId: 1.5 },
     { kind: 'jump', name: 'a', url: 'https://a.example/', argument: null, mode: 'this-tab' },

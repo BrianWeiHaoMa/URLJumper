@@ -193,6 +193,24 @@ test('a record a command writes while a popup is having its own removed stays', 
   expect((await extension.readStorage()).openIntent).toEqual({ kind: 'this-tab', windowId: tab.windowId, time: expect.any(Number) });
 });
 
+test('a command that waits on the queue behind a slow request is stamped when its record is written, so its popup honors it', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
+  const requests = await extension.openRequestPage();
+  const page = await extension.context.newPage();
+  await page.goto(site.pageUrl('Behind a slow request'));
+  const tab = await extension.frontTab(page);
+  // A request that reads the document for longer than a record stays fresh holds the worker's queue.
+  await slowWorkerReads(extension.worker, 'mappings', 11_000);
+  const blocker = requests.send({ kind: 'load-example' });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const popup = await extension.popupOpenedBy(async () => {
+    await extension.dispatchEvent('commands.onCommand', 'open-same-tab', tab);
+    expect(await blocker).toEqual({ kind: 'not-empty' });
+  });
+  await expect(popup.locator('footer')).not.toHaveText(/until the popup is ready/);
+  await expect(popup.locator('.chip')).toHaveText('This tab');
+});
+
 test('a popup shows the mode it honored only once its record is gone, so the toolbar opens the next one in New tab', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
   const page = await extension.context.newPage();

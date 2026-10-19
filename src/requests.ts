@@ -12,7 +12,13 @@ export type JumpRequest = {
   /** The argument row's argument, filled in for every `%s`; null for every other row, an argument alias's included. */
   argument: string | null;
 } & (
-  | { mode: 'new-tab'; /** Whether the new tab becomes the active one. */ active: boolean }
+  | {
+      mode: 'new-tab';
+      /** Whether the new tab becomes the active one. */
+      active: boolean;
+      /** The window the user acted in, which the tab opens in; absent, the window last focused when it opens. */
+      windowId?: number;
+    }
   | { mode: 'this-tab'; /** The tab to navigate. */ tabId: number }
 );
 
@@ -131,7 +137,7 @@ export function isRequest(value: unknown): value is Request {
   }
   const { name, url, argument, mode } = value;
   if (typeof name !== 'string' || typeof url !== 'string' || (argument !== null && typeof argument !== 'string')) return false;
-  if (mode === 'new-tab') return typeof value.active === 'boolean';
+  if (mode === 'new-tab') return typeof value.active === 'boolean' && (value.windowId === undefined || Number.isInteger(value.windowId));
   return mode === 'this-tab' && Number.isInteger(value.tabId);
 }
 

@@ -91,3 +91,12 @@ test("the upload's manifest declares exactly URLJumper 2.0's keys and values", (
   // F1: the product is URLJumper in every string; 1.x wrote "URL Jumper".
   expect(JSON.stringify(manifest)).not.toMatch(/URL\s+Jumper/i);
 });
+
+// R6 is kept by what the upload holds, not only by src/: a bundler may add code of its own, as Vite's
+// module-preload polyfill does with `fetch`.
+test('no script in the upload calls fetch, XMLHttpRequest, or WebSocket', () => {
+  const calls = [...readZip(zipPath)]
+    .filter(([name]) => name.endsWith('.js'))
+    .flatMap(([name, data]) => [...data.toString('utf8').matchAll(/\bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b/g)].map((call) => `${name}: ${call[0]}`));
+  expect(calls).toEqual([]);
+});

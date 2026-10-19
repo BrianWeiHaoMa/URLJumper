@@ -36,16 +36,20 @@ export function listInAddressBar(text: string, suggest: Suggest): Promise<void> 
 
 /** Opens what `text` names (How G28) in the tab `disposition` asks for; nothing when it names nothing. */
 export function openFromAddressBar(text: string, disposition: Disposition): Promise<void> {
+  // The tab and window Enter was pressed in are those in front as Enter arrives, asked for before the queue:
+  // while earlier operations run, the user can bring another tab or window to the front.
+  const front = chrome.tabs.query({ active: true, lastFocusedWindow: true }).catch(() => []);
   return enqueue(async () => {
     const { omnibox, ...items } = await chrome.storage.local.get(['omnibox', ...SEARCH_KEYS]);
     const target = enteredTarget(text, readAddressBarRecord(omnibox), searchInputs(items));
     if (target === undefined) return;
+    const [tab] = await front;
     // Called directly, not through `perform`: this operation is already on the queue, and would wait for itself.
     if (disposition !== 'currentTab') {
-      await jump({ kind: 'jump', ...target, mode: 'new-tab', active: disposition === 'newForegroundTab' });
+      const active = disposition === 'newForegroundTab';
+      await jump({ kind: 'jump', ...target, mode: 'new-tab', active, ...(tab === undefined ? {} : { windowId: tab.windowId }) });
       return;
     }
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (tab?.id !== undefined) await jump({ kind: 'jump', ...target, mode: 'this-tab', tabId: tab.id });
   }).catch(() => undefined);
 }

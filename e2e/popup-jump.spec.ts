@@ -2,7 +2,7 @@
 // Shift in the other, the chip starts as the popup's opening asked, and when nothing opens the popup stays
 // and says why.
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, test, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, slowWorkerReads, test, type LoadedExtension } from './extension.ts';
 
 const chip = (popup: Page) => popup.locator('.chip');
 const footer = (popup: Page) => popup.locator('footer');
@@ -317,6 +317,27 @@ test('after a new install the popup is in Smart order: a mapping just jumped to 
   popup = await extension.clickToolbarButton(page);
   await expect.poll(() => names(popup)).toEqual(['m18', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
   await expect(popup.locator('[role=option][aria-selected=true]')).toHaveCount(0);
+});
+
+test("a New tab jump opens in the popup's window, though another window takes the focus while the worker is busy", async ({ extension, site }) => {
+  const target = site.pageUrl('Mail');
+  await extension.seedStorage({ mappings: `mail  ${target}\n` });
+  const { page, popup } = await popupOnNewPage(extension, site, 'In the popup window');
+  const tabs = () => extension.worker.evaluate(async () => (await chrome.tabs.query({})).map((tab) => ({ id: tab.id!, windowId: tab.windowId, url: tab.url })));
+  const { windowId } = (await tabs()).find((tab) => tab.url === page.url())!;
+  const opened = extension.context.waitForEvent('page');
+  const other = (await extension.worker.evaluate((url) => chrome.windows.create({ url, focused: false }), site.pageUrl('In another window')))!;
+  await (await opened).waitForLoadState();
+  await popup.keyboard.type('mail');
+  await expect(footer(popup)).toHaveText(/^Enter opens it in a new tab/);
+  const before = new Set((await tabs()).map(({ id }) => id));
+  // The worker reads the document for a second before it records the use and opens the tab.
+  await slowWorkerReads(extension.worker, 'mappings', 1_000);
+  await popup.keyboard.press('Enter');
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await extension.worker.evaluate((id) => chrome.windows.update(id, { focused: true }), other.id!);
+  await expect.poll(async () => (await extension.tabUrls()).includes(target)).toBe(true);
+  expect((await tabs()).filter(({ id }) => !before.has(id)).map((tab) => tab.windowId)).toEqual([windowId]);
 });
 
 test('nothing opens without Enter or a click, and Escape closes the popup', async ({ extension, site }) => {

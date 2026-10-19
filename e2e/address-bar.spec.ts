@@ -11,6 +11,7 @@ import {
   expect,
   popupOnNewPage,
   restartWorker,
+  slowWorkerReads,
   test,
   type LoadedExtension,
   type LocalSite,
@@ -372,6 +373,57 @@ test("Enter opens in the tab Chrome's disposition asks for: the front tab, a new
   expect(background.active).toBe(frontId);
   expect((await usageOf(extension))![`mail\n${url}`]).toHaveLength(3);
 });
+
+test('Enter in the front tab opens there, though another tab comes to the front while the worker is still busy', async ({ extension, site }) => {
+  const url = site.pageUrl('Mail');
+  await extension.seedStorage({ mappings: `mail                 ${url}\n` });
+  const bar = addressBar(extension.worker, await extension.openRequestPage());
+  const typedIn = await extension.context.newPage();
+  await typedIn.goto(site.pageUrl('Where Enter is pressed'));
+  const other = await extension.context.newPage();
+  const otherUrl = site.pageUrl('Brought to the front after Enter');
+  await other.goto(otherUrl);
+  await extension.frontTab(typedIn);
+  await bar.type('mail');
+  // The worker reads the list's record for a second, as a queue of earlier inputs would keep it waiting.
+  await slowWorkerReads(extension.worker, 'omnibox', 1_000);
+  extension.expectExtensionRequest(url);
+  const entered = bar.enter('mail', 'currentTab');
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await extension.frontTab(other);
+  await entered;
+  await expect(typedIn).toHaveURL(url);
+  await expect(other).toHaveURL(otherUrl);
+});
+
+for (const disposition of ['newForegroundTab', 'newBackgroundTab'] as const) {
+  test(`Enter for ${disposition} opens the tab in the window Enter was pressed in, though another window takes the focus while the worker is busy`, async ({ extension, site }) => {
+    const url = site.pageUrl('Mail');
+    await extension.seedStorage({ mappings: `mail                 ${url}\n` });
+    const bar = addressBar(extension.worker, await extension.openRequestPage());
+    const typedIn = await extension.context.newPage();
+    await typedIn.goto(site.pageUrl('Where Enter is pressed'));
+    const { windowId } = await extension.frontTab(typedIn);
+    const opened = extension.context.waitForEvent('page');
+    const other = (await extension.worker.evaluate((url) => chrome.windows.create({ url, focused: false }), site.pageUrl('In another window')))!;
+    const otherPage = await opened;
+    await otherPage.waitForLoadState();
+    expect((await extension.frontTab(typedIn)).windowId).toBe(windowId);
+    await bar.type('mail');
+    const tabIds = () => extension.worker.evaluate(async () => (await chrome.tabs.query({})).map((tab) => ({ id: tab.id!, windowId: tab.windowId })));
+    const before = new Set((await tabIds()).map(({ id }) => id));
+    // The worker reads the list's record for a second, as a queue of earlier inputs would keep it waiting.
+    await slowWorkerReads(extension.worker, 'omnibox', 1_000);
+    const entered = bar.enter('mail', disposition);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    // Headless, bringing a page to the front leaves the focused window as it was: its window is focused first.
+    await extension.worker.evaluate((id) => chrome.windows.update(id, { focused: true }), other.id!);
+    expect((await extension.frontTab(otherPage)).windowId).toBe(other.id);
+    await entered;
+    await expect.poll(() => tabsAt(extension, url)).toBe(1);
+    expect((await tabIds()).filter(({ id }) => !before.has(id)).map((tab) => tab.windowId)).toEqual([windowId]);
+  });
+}
 
 test('an alias with 500 %s filled by a long argument keeps a small record, and its content still opens the filled URL', async ({ extension }) => {
   const url = `https://big.example/?${'p=%s&'.repeat(500)}`;

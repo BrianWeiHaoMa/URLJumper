@@ -10,9 +10,14 @@ import { enqueue } from './queue';
 const INACTIVE_WINDOW = 'Cannot show popup for an inactive window.';
 
 export async function openPopupFor(subject: IntentSubject, windowId: number): Promise<void> {
-  const intent: OpenIntent = { ...subject, windowId, time: Date.now() };
+  let intent: OpenIntent;
   try {
-    await enqueue(() => chrome.storage.local.set({ openIntent: intent }));
+    // Stamped as it is written: a record that waited on the queue behind a slow request is not old on arrival.
+    intent = await enqueue(async () => {
+      const written: OpenIntent = { ...subject, windowId, time: Date.now() };
+      await chrome.storage.local.set({ openIntent: written });
+      return written;
+    });
   } catch {
     // Without its record the popup would open in search in New tab mode, wrong for This tab and for the Name
     // form: open nothing.

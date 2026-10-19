@@ -4,5 +4,10 @@ import manifest from './manifest.config.ts';
 
 export default defineConfig({
   plugins: [crx({ manifest })],
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    // Chrome preloads modules itself; Vite's polyfill for browsers that cannot would ship a `fetch` call (R6).
+    modulePreload: { polyfill: false },
+  },
 });
