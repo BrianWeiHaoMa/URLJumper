@@ -1,7 +1,8 @@
 // How a Text view keeps its unsaved text as the draft (G19; State `draft`): it asks the worker, the only writer
 // of `draft` (R1), to keep what the text area holds as the user types, coalescing the changes of 300 ms and
 // those made while its previous request awaits a reply, and to discard the draft once the stored document holds
-// the text. Every draft request of a page waits for the reply to the one before, since the order in which one
+// the text, as a read made since the text was made shows: a read made before can show a document another page
+// has changed since, so the text stays kept and the view reads again. Every draft request of a page waits for the reply to the one before, since the order in which one
 // page's messages reach the worker is not relied on: the worker gets them in the order the page made them, and a
 // Text view opened again in the same page reads `draft` only once the requests the closed one made have their
 // replies.
@@ -29,25 +30,34 @@ export async function draftRequestsAnswered(): Promise<void> {
   } while (seen !== turn);
 }
 
-/**
- * Removes the draft `name` names, once this page's earlier draft requests have their replies (Composition,
- * *draft discard*): as the user asked, or, given `ifStored`, only while the stored document is that text.
- */
-export function discardDraft(name: DraftName, ifStored?: string): Promise<DraftDiscardReply> {
-  return inTurn(() => send({ kind: 'draft-discard', ...name, ...(ifStored === undefined ? {} : { ifStored }) }));
+/** Removes the draft `name` names, once this page's earlier draft requests have their replies (Composition, *draft discard*). */
+export function discardDraft(name: DraftName): Promise<DraftDiscardReply> {
+  return inTurn(() => send({ kind: 'draft-discard', ...name }));
 }
 
 export interface DraftKeeping {
   /**
-   * The user made the text area hold `text`, typed against `base`, with the stored document last read as
-   * `stored`: kept as the draft within 300 ms, or once the previous request has its reply; or, when `stored`
-   * holds the text, the draft goes. `madeAt` is when the edit was made, now unless given.
+   * The user made the text area hold `text`, typed against `base`, at `madeAt`, now unless given: kept as the
+   * draft within 300 ms, or once the previous request has its reply. When the stored document as last read,
+   * `stored`, holds the text, that read was made before the text, so the view reads again (`readAgain`).
    */
   edited(text: string, base: string, stored: string, madeAt?: number): void;
-  /** The stored document was read as `stored` while the text area holds `text`, typed against `base`: when it holds the text, the draft goes. */
-  storedRead(stored: string, text: string, base: string): void;
+  /** A read of the stored document is made now: what `storedRead` is given with its answer. */
+  reading(): number;
+  /**
+   * The stored document was read as `stored`, by the read `reading` gave `read` for. Holding the text the view
+   * holds, by a read made since the text was, it shows the text no unsaved edit: the draft goes, and nothing of
+   * it is kept again. By a read made before, it leaves that in doubt, and the view reads again, unless a later
+   * read was made since this one (`latest` false), whose answer then says.
+   */
+  storedRead(stored: string, read: number, latest: boolean): void;
   /** The view took over `draft`, resumed or replaced by Import, and has sent none of its own since: the draft a discard names. */
   holds(draft: Draft): void;
+  /**
+   * The text area holds the stored document, which the view's Save just stored or a read just loaded over a text
+   * with no change since the last load: nothing is unsaved, and each draft the view holds goes.
+   */
+  settled(): void;
   /** Sends the change not yet sent, if any, and resolves once the page's draft requests have their replies. */
   flush(): Promise<void>;
 }
@@ -57,21 +67,20 @@ type Edit = { text: string; base: string; time: number };
 /**
  * The keeping of one Text view opened, under an identifier of its own (Composition, *draft set*). `notKept` is
  * told Chrome's message when the worker did not store the view's draft, and null once it did, or once there
- * is nothing to keep.
+ * is nothing to keep; `readAgain` makes a read of the stored document, whose answer the view gives `storedRead`.
  */
-export function keepDraft(notKept: (message: string | null) => void): DraftKeeping {
+export function keepDraft(notKept: (message: string | null) => void, readAgain: () => void): DraftKeeping {
   const view = crypto.randomUUID();
   let number = 0;
   // The change not yet sent, with the time it was made in the page: the edit's time, never the sending's.
   let unsent: Edit | null = null;
-  // When the text the view holds was made: by its last edit, or the draft it took over.
-  let madeAt: number | undefined;
+  // The text the view holds, as its last edit made it or the draft it took over, and how many edits came so far:
+  // a read the view made when as many had come shows the stored document after this text was made.
+  let current: string | undefined;
+  let edits = 0;
   // Every draft of this view's that `draft` may hold: the last one stored, and any sent since whose reply has
   // not said it was, which a set Chrome refused or one that got no reply leaves in doubt.
   let held: DraftName[] = [];
-  // The text let go because a read showed the stored document holding it, until the worker confirms it does:
-  // a read answered late can show a document already changed again, and then the text is kept after all.
-  let letGone: Edit | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   // A request is waiting for its turn; it sends `unsent` as its turn comes, so changes made meanwhile go with it.
   let waiting = false;
@@ -109,52 +118,41 @@ export function keepDraft(notKept: (message: string | null) => void): DraftKeepi
     if (timer === undefined && !waiting) timer = setTimeout(sendUnsent, COALESCE_MS);
   };
 
-  // The stored document holds the text: the change not yet sent is dropped, and each draft the view holds is
-  // discarded once the requests before have their replies, only while the stored document still is the text.
-  const letGo = (edit: Edit) => {
+  // The stored document held the text after it was made, so the text is no unsaved edit (G19, "as after its
+  // Save"): the change not yet sent is dropped, and each draft the view holds is discarded by name once the
+  // requests before have their replies; nothing of it is kept again, though the document changes since.
+  const letGo = () => {
     clearTimeout(timer);
     timer = undefined;
     unsent = null;
     lettings++;
-    letGone = edit;
     const names = held;
     held = [];
     notKept(null);
-    for (const name of names) {
-      void discardDraft(name, edit.text).then((reply) => {
-        if (reply.kind === 'changed') {
-          held.push(name);
-          keepAgain(edit);
-        } else if (reply.kind === 'done' && letGone === edit) letGone = null;
-      });
-    }
-  };
-
-  // Sent at once, so a flush under way, as before Save, waits for it.
-  const keepAgain = (edit: Edit) => {
-    if (letGone !== edit) return;
-    letGone = null;
-    unsent = edit;
-    sendUnsent();
+    for (const name of names) void discardDraft(name);
   };
 
   return {
-    edited(text, base, stored, at = Date.now()) {
-      madeAt = at;
-      letGone = null;
-      const edit = { text, base, time: madeAt };
-      if (documentHolds(stored, text)) letGo(edit);
-      else keep(edit);
+    edited(text, base, stored, madeAt = Date.now()) {
+      current = text;
+      edits++;
+      keep({ text, base, time: madeAt });
+      if (documentHolds(stored, text)) readAgain();
     },
-    storedRead(stored, text, base) {
-      if (documentHolds(stored, text)) {
-        if (unsent !== null || held.length > 0) letGo({ text, base, time: madeAt ?? Date.now() });
-      } else if (letGone !== null && letGone.text === text) keepAgain(letGone);
+    reading: () => edits,
+    storedRead(stored, read, latest) {
+      // Nothing kept: the text was let go, or none was typed.
+      if ((unsent === null && held.length === 0) || current === undefined || !documentHolds(stored, current)) return;
+      if (read === edits) letGo();
+      else if (latest) readAgain();
     },
     holds(draft) {
       held = [{ view: draft.view, number: draft.number }];
-      madeAt = draft.time;
-      letGone = null;
+      current = draft.text;
+      edits++;
+    },
+    settled() {
+      letGo();
     },
     flush() {
       if (unsent !== null) sendUnsent();

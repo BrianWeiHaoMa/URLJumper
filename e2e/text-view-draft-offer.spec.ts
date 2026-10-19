@@ -62,7 +62,7 @@ test('a kept draft offered and discarded goes; resumed, then made the stored tex
   expect(await storedDraft(extension.worker)).toEqual(draft);
   await second.area.fill(DOC);
   await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
-  expect((await discards()).slice(1)).toEqual([{ kind: 'draft-discard', view: 'view-x', number: 7, ifStored: DOC }]);
+  expect((await discards()).slice(1)).toEqual([{ kind: 'draft-discard', view: 'view-x', number: 7 }]);
   expect((await extension.readStorage()).mappings).toBe(DOC);
 });
 
@@ -72,7 +72,26 @@ test('a kept draft the stored document holds is dropped as the view opens, witho
   const view = await textViewOnOptionsPage(extension);
   await expect(view.area).toHaveValue(DOC);
   await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
-  expect(await discards()).toEqual([{ kind: 'draft-discard', view: 'view-x', number: 3, ifStored: DOC }]);
+  expect(await discards()).toEqual([{ kind: 'draft-discard', view: 'view-x', number: 3 }]);
+});
+
+test('a kept draft found equal to the stored document as the view opens is dropped, though another page changes the document before the drop reaches the worker', async ({ extension }) => {
+  const text = `${DOC}c  https://c/\n`;
+  await extension.seedStorage({ mappings: text, draft: kept(text, DOC, 'view-x', 3) });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const page = await extension.context.newPage();
+  await page.goto(extension.url('options.html#view=preferences'));
+  const discards = await holdPageRequests(page, 'draft-discard');
+  await page.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'Text', exact: true }).click();
+  const view = textView(page);
+  await expect.poll(discards.held).toBe(1);
+  expect(await extension.sendRequest({ kind: 'insert', name: 'other', url: 'https://other/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
+  await discards.release();
+  await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
+  await expect(view.area).toHaveValue(`${text}other https://other/\n`);
+  await expect(view.keptOffer).toHaveCount(0);
+  await expect(view.area).toBeEditable();
 });
 
 test("on a CRLF document a kept draft of the text area's LF text is a change, offered and not dropped", async ({ extension }) => {
@@ -152,7 +171,7 @@ test("of two Text views the newer edit is kept, and one view's discard removes o
 
   const discards = await watchRequests(extension.worker, 'draft-discard');
   await a.area.fill(DOC);
-  await expect.poll(discards).toEqual([{ kind: 'draft-discard', view: ofA.view, number: ofA.number, ifStored: DOC }]);
+  await expect.poll(discards).toEqual([{ kind: 'draft-discard', view: ofA.view, number: ofA.number }]);
   expect(await storedDraft(extension.worker)).toEqual(ofB);
 });
 

@@ -73,11 +73,9 @@ export type DraftSetRequest = { kind: 'draft-set' } & Draft;
 
 /**
  * Removes the draft named by its view and number, only while `draft` is still that edit, so a discard removes
- * exactly the draft it names and never a later one (Composition, *draft discard*). `ifStored` is given when the
- * discard rests on the stored document holding that text, as a view read it: then the draft goes only while the
- * stored document still is that text, so a read answered late never discards an unsaved change (G19).
+ * exactly the draft it names and never a later one (Composition, *draft discard*).
  */
-export type DraftDiscardRequest = { kind: 'draft-discard'; ifStored?: string } & DraftName;
+export type DraftDiscardRequest = { kind: 'draft-discard' } & DraftName;
 
 export type Request =
   | JumpRequest
@@ -142,12 +140,8 @@ export type ResetUsageReply = { kind: 'done' } | StorageFailed;
 /** `done` once `draft` holds the edit sent or a newer one. */
 export type DraftSetReply = { kind: 'done' } | StorageFailed;
 
-export type DraftDiscardReply =
-  /** `draft` no longer holds the edit named, whether or not it was there to remove; with `ifStored`, the stored document is that text. */
-  | { kind: 'done' }
-  /** The stored document is not `ifStored`: nothing was removed. */
-  | { kind: 'changed' }
-  | StorageFailed;
+/** `done` once `draft` no longer holds the edit named, whether or not it was there to remove. */
+export type DraftDiscardReply = { kind: 'done' } | StorageFailed;
 
 export type ReplyTo<R extends Request> = R extends JumpRequest
   ? JumpReply
@@ -204,7 +198,7 @@ export function isRequest(value: unknown): value is Request {
     case 'draft-set':
       return isDraft(value);
     case 'draft-discard':
-      return isDraftName(value) && (value.ifStored === undefined || typeof value.ifStored === 'string');
+      return isDraftName(value);
     case 'jump':
       break;
     default:
@@ -238,9 +232,8 @@ function isReplyTo(request: Request, value: unknown): boolean {
     case 'remove-intent':
     case 'reset-usage':
     case 'draft-set':
-      return value.kind === 'done';
     case 'draft-discard':
-      return value.kind === 'done' || value.kind === 'changed';
+      return value.kind === 'done';
     case 'insert':
       if (value.kind === 'applied') return isLineNumber(value.line) && typeof value.text === 'string' && typeof value.headingMissing === 'boolean';
       if (value.kind === 'invalid') return typeof value.field === 'string' && typeof value.rule === 'string';

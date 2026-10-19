@@ -249,12 +249,10 @@ test("a replace resolves to the worker's reply for it: stored, refused over a ch
   expect(await send(REPLACE)).toEqual({ kind: 'storage-failed', message: 'Message length exceeded maximum allowed length.' });
 });
 
-test('a draft set is the text, its base, the time of the edit, and the view and number that name it; a draft discard is that name, with the stored text it rests on when it rests on one', () => {
+test('a draft set is the text, its base, the time of the edit, and the view and number that name it; a draft discard is that name', () => {
   expect(isRequest(DRAFT_SET)).toBe(true);
   expect(isRequest({ ...DRAFT_SET, text: '', base: '' })).toBe(true);
   expect(isRequest(DRAFT_DISCARD)).toBe(true);
-  expect(isRequest({ ...DRAFT_DISCARD, ifStored: 'a  https://a.example/\n' })).toBe(true);
-  expect(isRequest({ ...DRAFT_DISCARD, ifStored: '' })).toBe(true);
   for (const value of [
     { ...DRAFT_SET, text: undefined },
     { ...DRAFT_SET, text: ['a'] },
@@ -272,8 +270,6 @@ test('a draft set is the text, its base, the time of the edit, and the view and 
     { ...DRAFT_DISCARD, view: 3 },
     { ...DRAFT_DISCARD, number: undefined },
     { ...DRAFT_DISCARD, number: -1 },
-    { ...DRAFT_DISCARD, ifStored: null },
-    { ...DRAFT_DISCARD, ifStored: ['a'] },
     { kind: 'draft-discard' },
   ]) {
     expect(isRequest(value), JSON.stringify(value)).toBe(false);
@@ -281,19 +277,13 @@ test('a draft set is the text, its base, the time of the edit, and the view and 
 });
 
 test("a draft set or discard resolves to the worker's reply for it, and to no other", async () => {
-  // Refused because the stored document is not the text the discard rests on.
-  const sent = chromeWhoseSendMessage(async () => ({ kind: 'changed' }));
-  expect(await send({ ...DRAFT_DISCARD, ifStored: 'a  https://a.example/\n' })).toEqual({ kind: 'changed' });
-  expect(sent).toEqual([{ ...DRAFT_DISCARD, ifStored: 'a  https://a.example/\n' }]);
-  chromeWhoseSendMessage(async () => ({ kind: 'changed' }));
-  expect(await send(DRAFT_SET)).toEqual(NO_REPLY);
   for (const request of [DRAFT_SET, DRAFT_DISCARD]) {
     for (const reply of [{ kind: 'done' }, { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' }]) {
       const sent = chromeWhoseSendMessage(async () => reply);
       expect(await send(request)).toEqual(reply);
       expect(sent).toEqual([request]);
     }
-    for (const reply of [undefined, { kind: 'applied' }, { kind: 'opened' }, { kind: 'stale', document: '' }, { kind: 'storage-failed' }]) {
+    for (const reply of [undefined, { kind: 'applied' }, { kind: 'opened' }, { kind: 'changed' }, { kind: 'stale', document: '' }, { kind: 'storage-failed' }]) {
       chromeWhoseSendMessage(async () => reply);
       expect(await send(request), JSON.stringify(reply)).toEqual(NO_REPLY);
     }

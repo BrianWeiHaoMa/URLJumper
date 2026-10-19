@@ -105,6 +105,9 @@ export async function watchDraftSets(worker: Worker): Promise<() => Promise<{ re
 /** Activates Import on the options page `page` shows and chooses a file named `name` holding `bytes`, through the file chooser it opens. */
 export async function importFile(page: Page, name: string, bytes: Buffer, activate: () => Promise<void> = () => page.getByRole('button', { name: 'Import…' }).click()) {
   const chooser = page.waitForEvent('filechooser');
+  // Playwright turns its interception of the chooser on without waiting for it: a key pressed at once can open
+  // the chooser before it is intercepted, and no event comes. A round trip to the page lets it take effect.
+  await page.evaluate(() => undefined);
   await activate();
   await (await chooser).setFiles({ name, mimeType: 'text/plain', buffer: bytes });
 }

@@ -8,6 +8,7 @@ import type { Draft } from '../src/draft.ts';
 import {
   expect,
   holdPageReads,
+  holdPageRequests,
   popupOnNewPage,
   refuseWorkerStorage,
   slowWorkerReads,
@@ -39,6 +40,17 @@ async function noDraft(extension: LoadedExtension) {
   await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
 }
 
+/** Another page's Save of `text` over `base`, applied. */
+async function savedElsewhere(extension: LoadedExtension, base: string, text: string) {
+  expect(await extension.sendRequest({ kind: 'replace', text, base })).toMatchObject({ kind: 'applied' });
+}
+
+/** Answers every read the page made that `reads` holds, oldest first, once the page has made at least one. */
+async function answerReads(reads: { held(): Promise<number>; release(): Promise<void> }) {
+  await expect.poll(reads.held).toBeGreaterThan(0);
+  while ((await reads.held()) > 0) await reads.release();
+}
+
 test('the worker stores a draft set unless the stored draft is newer, the later of the same millisecond kept', async ({ extension }) => {
   const newer = kept('newer', DOC, 'view-y', 2, 2_000);
   await extension.seedStorage({ mappings: DOC, draft: newer });
@@ -64,22 +76,6 @@ test('a draft discard removes the draft only when it names it by both view and n
   expect(await storedDraft(extension.worker)).toBeUndefined();
   expect(await extension.sendRequest({ kind: 'draft-discard', view: 'view-x', number: 5 })).toEqual({ kind: 'done' });
   // Every change has reached the worker's listeners once a read made after them is answered.
-  await extension.readStorage();
-  expect(await changes()).toEqual([{ draft: { oldValue: draft } }]);
-});
-
-test('a draft discard resting on a stored text removes the draft only while the stored document is that text', async ({ extension }) => {
-  const draft = kept(`${DOC}c  https://c/\n`, DOC, 'view-x', 5);
-  await extension.seedStorage({ mappings: DOC, draft });
-  const changes = await extension.watchStorage();
-  for (const ifStored of [`${DOC}c  https://c/\n`, DOC.replaceAll('\n', '\r\n')]) {
-    expect(await extension.sendRequest({ kind: 'draft-discard', view: 'view-x', number: 5, ifStored })).toEqual({ kind: 'changed' });
-    expect(await storedDraft(extension.worker)).toEqual(draft);
-  }
-  expect(await extension.sendRequest({ kind: 'draft-discard', view: 'view-y', number: 5, ifStored: DOC })).toEqual({ kind: 'done' });
-  expect(await storedDraft(extension.worker)).toEqual(draft);
-  expect(await extension.sendRequest({ kind: 'draft-discard', view: 'view-x', number: 5, ifStored: DOC })).toEqual({ kind: 'done' });
-  expect(await storedDraft(extension.worker)).toBeUndefined();
   await extension.readStorage();
   expect(await changes()).toEqual([{ draft: { oldValue: draft } }]);
 });
@@ -294,6 +290,237 @@ test('a Save applied leaves no draft, and the next Text view offers none', async
   await popup.close();
   await textViewInPopup(await extension.clickToolbarButton(page));
   expect((await extension.readStorage()).mappings).toBe(`${DOC}c  https://c/\n`);
+});
+
+test('a Save applied keeps no draft of its text even when another page changes the document before the view lets the draft go: the view left before reading that change, the next Text view offers none', async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const view = await textViewOnOptionsPage(extension);
+  await typeAtEnd(view, 'c  https://c/\n');
+  const saved = `${DOC}c  https://c/\n`;
+  await draftLanded(extension, saved);
+  const reads = await holdPageReads(view.page);
+  const discards = await holdPageRequests(view.page, 'draft-discard');
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  await noDraft(extension);
+  // The view's reads of the document it saved are answered; its discard of its draft is sent late, after another
+  // page's change, and the view's read of that change is answered only after the view is left.
+  while ((await reads.held()) > 0) await reads.release();
+  await expect.poll(discards.held).toBe(1);
+  expect(await extension.sendRequest({ kind: 'insert', name: 'other', url: 'https://other/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
+  await expect.poll(reads.held).toBe(1);
+  await discards.release();
+  const nav = view.page.getByRole('navigation', { name: 'Settings views' });
+  await nav.getByRole('button', { name: 'Preferences', exact: true }).click();
+  await nav.getByRole('button', { name: 'Text', exact: true }).click();
+  // Shown again, the Text view reads once the page's draft requests have their replies; every read is answered.
+  await expect
+    .poll(async () => {
+      while ((await reads.held()) > 0) await reads.release();
+      return (await view.keptOffer.count()) > 0 || (await view.area.isEditable());
+    })
+    .toBe(true);
+  await expect(view.area).toHaveValue(`${saved}other https://other/\n`);
+  await expect(view.keptOffer).toHaveCount(0);
+  await expect(view.area).toBeEditable();
+  expect(await storedDraft(extension.worker)).toBeUndefined();
+});
+
+test("a Save's discard of its view's draft, reaching the worker after another page typed, leaves that page's newer draft", async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const view = await textViewOnOptionsPage(extension);
+  const other = await textViewOnOptionsPage(extension);
+  const saved = `${DOC}x  https://x/\n`;
+  await view.area.fill(saved);
+  await draftLanded(extension, saved);
+  const own = (await storedDraft(extension.worker))!;
+  const discards = await holdPageRequests(view.page, 'draft-discard');
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  await expect.poll(discards.held).toBe(1);
+  await noDraft(extension);
+  await expect(other.area).toHaveValue(saved);
+  await typeAtEnd(other, 'y  https://y/\n');
+  await draftLanded(extension, `${saved}y  https://y/\n`);
+  const newer = (await storedDraft(extension.worker))!;
+  const received = await watchRequests(extension.worker, 'draft-discard');
+  await discards.release();
+  await expect.poll(received).toEqual([{ kind: 'draft-discard', view: own.view, number: own.number }]);
+  // Queued after the discard, so the worker has performed it.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  expect(await storedDraft(extension.worker)).toEqual(newer);
+});
+
+test('a text another page saved after it was typed is no unsaved edit: changed again before the view lets its draft go, it is not kept again, and the view shown again offers none', async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const view = await textViewOnOptionsPage(extension);
+  const other = await textViewOnOptionsPage(extension);
+  const typed = `${DOC}x  https://x/\n`;
+  await view.area.fill(typed);
+  await draftLanded(extension, typed);
+  const reads = await holdPageReads(view.page);
+  const discards = await holdPageRequests(view.page, 'draft-discard');
+  await other.area.fill(typed);
+  await other.save.click();
+  await expect(other.status).toHaveText('Saved');
+  await noDraft(extension);
+  // The view reads the document holding its text and lets its draft go; that discard is sent late, after a
+  // further change, and the view's read of that change is answered only after the view is left.
+  await expect.poll(reads.held).toBe(1);
+  await reads.release();
+  await expect.poll(discards.held).toBe(1);
+  expect(await extension.sendRequest({ kind: 'insert', name: 'other', url: 'https://other/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
+  await expect.poll(reads.held).toBe(1);
+  await discards.release();
+  const nav = view.page.getByRole('navigation', { name: 'Settings views' });
+  await nav.getByRole('button', { name: 'Preferences', exact: true }).click();
+  await nav.getByRole('button', { name: 'Text', exact: true }).click();
+  await expect
+    .poll(async () => {
+      while ((await reads.held()) > 0) await reads.release();
+      return (await view.keptOffer.count()) > 0 || (await view.area.isEditable());
+    })
+    .toBe(true);
+  await expect(view.area).toHaveValue(`${typed}other https://other/\n`);
+  await expect(view.keptOffer).toHaveCount(0);
+  await expect(view.area).toBeEditable();
+  expect(await storedDraft(extension.worker)).toBeUndefined();
+});
+
+test('an edit made after another page changed the document, equal to the document as the view last read it, is still kept: closed, the next Text view offers it', async ({ extension }) => {
+  const x = `${DOC}x  https://x/\n`;
+  const t = `${DOC}t  https://t/\n`;
+  const u = `${DOC}u  https://u/\n`;
+  await extension.seedStorage({ mappings: DOC });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const view = await textViewOnOptionsPage(extension);
+  await view.area.fill(x);
+  await draftLanded(extension, x);
+  const reads = await holdPageReads(view.page);
+  // Other pages store the view's text, then t; the view reads each, its text and base as they were.
+  await savedElsewhere(extension, DOC, x);
+  await noDraft(extension);
+  await answerReads(reads);
+  await savedElsewhere(extension, x, t);
+  await answerReads(reads);
+  await expect(view.area).toHaveValue(x);
+  // A further change, u, which the view reads late; meanwhile the user makes the text t, typed after u was stored.
+  await savedElsewhere(extension, t, u);
+  await expect.poll(reads.held).toBe(1);
+  await view.area.fill(t);
+  await draftLanded(extension, t);
+  expect(await storedDraft(extension.worker)).toMatchObject({ text: t, base: DOC });
+  await view.page.close();
+  const next = await textViewOnOptionsPage(extension, '#view=text', 'offering');
+  await expect(next.area).toHaveValue(u);
+  await next.resume.click();
+  await expect(next.area).toHaveValue(t);
+});
+
+test("a text another page saved after it was typed is no unsaved edit, though the view's discard of its earlier draft is still on its way: changed again, it is not kept again", async ({ extension }) => {
+  const x = `${DOC}x  https://x/\n`;
+  const t = `${DOC}t  https://t/\n`;
+  const u = `${DOC}u  https://u/\n`;
+  const v = `${DOC}v  https://v/\n`;
+  await extension.seedStorage({ mappings: DOC });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const view = await textViewOnOptionsPage(extension);
+  await view.area.fill(x);
+  await draftLanded(extension, x);
+  const reads = await holdPageReads(view.page);
+  await savedElsewhere(extension, DOC, t);
+  await answerReads(reads);
+  // The user makes the text t, the document as the view read it; the view's discards are sent late.
+  const discards = await holdPageRequests(view.page, 'draft-discard');
+  await view.area.fill(t);
+  // Other pages store u, then t again, a Save of the view's text after it was typed, then v.
+  await savedElsewhere(extension, t, u);
+  await savedElsewhere(extension, u, t);
+  await answerReads(reads);
+  await savedElsewhere(extension, t, v);
+  await answerReads(reads);
+  while ((await discards.held()) > 0) await discards.release();
+  await noDraft(extension);
+  // Time for a draft set, had the view kept the text again, to reach the worker.
+  await view.page.waitForTimeout(400);
+  expect(await storedDraft(extension.worker)).toBeUndefined();
+  await view.page.close();
+  const next = await textViewOnOptionsPage(extension);
+  await expect(next.area).toHaveValue(v);
+  await expect(next.keptOffer).toHaveCount(0);
+});
+
+test('a text another page saved after it was typed, which the view held no draft of, is not kept when the document changes again', async ({ extension }) => {
+  const x = `${DOC}x  https://x/\n`;
+  const t = `${DOC}t  https://t/\n`;
+  const u = `${DOC}u  https://u/\n`;
+  const v = `${DOC}v  https://v/\n`;
+  await extension.seedStorage({ mappings: DOC });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const view = await textViewOnOptionsPage(extension);
+  await view.area.fill(x);
+  await draftLanded(extension, x);
+  const reads = await holdPageReads(view.page);
+  // Another page saves the view's text, which lets its draft go, then t.
+  await savedElsewhere(extension, DOC, x);
+  await answerReads(reads);
+  await noDraft(extension);
+  await savedElsewhere(extension, x, t);
+  await answerReads(reads);
+  // The user makes the text t, the document as the view read it; any read the view makes of it is then answered.
+  await view.area.fill(t);
+  await view.page.waitForTimeout(400);
+  while ((await reads.held()) > 0) await reads.release();
+  await noDraft(extension);
+  // Other pages store u, then t again, a Save of the view's text after it was typed; the view reads u late, then v.
+  await savedElsewhere(extension, t, u);
+  await expect.poll(reads.held).toBe(1);
+  await savedElsewhere(extension, u, t);
+  await answerReads(reads);
+  await savedElsewhere(extension, t, v);
+  await answerReads(reads);
+  // Time for a draft set, had the view kept the text again, to reach the worker.
+  await view.page.waitForTimeout(400);
+  expect(await storedDraft(extension.worker)).toBeUndefined();
+  await view.page.close();
+  const next = await textViewOnOptionsPage(extension);
+  await expect(next.area).toHaveValue(v);
+  await expect(next.keptOffer).toHaveCount(0);
+});
+
+test("a draft set sent late, of a text another page saved after it was typed, goes, though the view's read of that save is answered after a later one was made", async ({ extension }) => {
+  const x = `${DOC}x  https://x/\n`;
+  const u = `${DOC}u  https://u/\n`;
+  await extension.seedStorage({ mappings: DOC });
+  // The other page's request page, opened first.
+  await extension.sendRequest({ kind: 'reset-usage' });
+  const view = await textViewOnOptionsPage(extension);
+  const sets = await holdPageRequests(view.page, 'draft-set');
+  const reads = await holdPageReads(view.page);
+  await view.area.fill(x);
+  await expect.poll(sets.held).toBe(1);
+  // Another page saves the view's text, then u; the view reads both, the read of x answered after u's was made.
+  await savedElsewhere(extension, DOC, x);
+  await expect.poll(reads.held).toBe(1);
+  await savedElsewhere(extension, x, u);
+  await expect.poll(reads.held).toBe(2);
+  await answerReads(reads);
+  await sets.release();
+  await noDraft(extension);
+  // Time for a draft set, had the view kept the text again, to reach the worker.
+  await view.page.waitForTimeout(400);
+  expect(await storedDraft(extension.worker)).toBeUndefined();
+  await view.page.close();
+  const next = await textViewOnOptionsPage(extension);
+  await expect(next.area).toHaveValue(u);
+  await expect(next.keptOffer).toHaveCount(0);
 });
 
 test('a Save made within 300 ms of the last keystroke and cut short by the popup closing leaves the submitted text kept, with its old base, for the next Text view', async ({ extension, site }) => {

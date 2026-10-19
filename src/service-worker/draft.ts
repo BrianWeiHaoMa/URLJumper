@@ -12,11 +12,9 @@ export async function setDraft({ text, base, time, view, number }: DraftSetReque
   return { kind: 'done' };
 }
 
-/** Removes `draft` only while it is the edit named and, given `ifStored`, while the stored document is that text. */
-export async function discardDraft({ view, number, ifStored }: DraftDiscardRequest): Promise<DraftDiscardReply> {
-  const { draft, mappings } = await chrome.storage.local.get(['draft', 'mappings']);
-  if (ifStored !== undefined && !documentHolds(typeof mappings === 'string' ? mappings : '', ifStored)) return { kind: 'changed' };
-  if (isDraft(draft) && isNamed(draft, { view, number })) await chrome.storage.local.remove('draft');
+/** Removes `draft` only while it is the edit named. */
+export async function discardDraft({ view, number }: DraftDiscardRequest): Promise<DraftDiscardReply> {
+  if (isNamed(await readDraft(), { view, number })) await chrome.storage.local.remove('draft');
   return { kind: 'done' };
 }
 

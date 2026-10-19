@@ -87,9 +87,12 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
   useEffect(() => {
     let open = true;
     mounted.current = true;
-    const keeper = keepDraft((message) => {
-      if (open) setNotKept(message);
-    });
+    const keeper = keepDraft(
+      (message) => {
+        if (open) setNotKept(message);
+      },
+      () => void read(),
+    );
     keeping.current = keeper;
     const landed = (storedText: string, draft: Draft | undefined) => {
       const area = textArea.current;
@@ -105,8 +108,8 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
         loadedText.current = area.value;
         area.setSelectionRange(Math.min(start, area.value.length), Math.min(end, area.value.length));
         setOutcome(null);
+        keeper.settled();
       }
-      keeper.storedRead(storedText, area.value, base.current);
     };
     let reads = 0;
     const read = async () => {
@@ -114,15 +117,20 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
       // A Text view opened again in this page reads `draft` once the closed one's requests have landed (G19).
       if (!everLoaded.current) await draftRequestsAnswered();
       let items: Record<string, unknown>;
+      // Storage answers with what it holds then or later, after every edit the keeper has been told of so far.
+      const seen = keeper.reading();
       try {
         items = await chrome.storage.local.get(['mappings', 'draft']);
       } catch (error) {
         if (open && !everLoaded.current) setOutcome({ kind: 'unread', message: chromeMessage(error) });
         return;
       }
-      // Answered after a later read was made, it shows an older state than the later one, which lands instead.
-      if (made !== reads) return;
-      landed(typeof items.mappings === 'string' ? items.mappings : '', isDraft(items.draft) ? items.draft : undefined);
+      const storedText = typeof items.mappings === 'string' ? items.mappings : '';
+      // Every answer tells the keeper whether the stored document held the text after it was made (G19), even
+      // after the view has closed, except during a Save, whose reply is followed by a read. One answered after a
+      // later read was made shows an older state than the later one, which lands instead.
+      if (!inFlight.current) keeper.storedRead(storedText, seen, made === reads);
+      if (made === reads) landed(storedText, isDraft(items.draft) ? items.draft : undefined);
     };
     readStored.current = () => void read();
     const changed = (changes: Record<string, unknown>, area: string) => {
@@ -168,17 +176,12 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
     setKept(draft);
   };
 
-  // A kept draft the stored document holds goes, only while it still does: if the worker finds the document
-  // changed since it was read, the draft is an unsaved change, offered while nothing is typed, or asked about
-  // when Import's file waits, which goes in only once the draft has gone.
+  // A kept draft the stored document holds goes without asking (How G19), by its name alone: read with it, the
+  // document held its text after it was typed, so a change landing since leaves it no unsaved edit. Import's file
+  // goes in once the draft has gone.
   const drop = (draft: Draft) => {
-    void discardDraft(nameOf(draft), draft.text).then((reply) => {
-      const area = textArea.current;
-      if (!mounted.current || area === null) return;
-      if (reply.kind === 'changed' && keptNow.current === null && (importing.current !== null || (area.value === loadedText.current && !inFlight.current))) {
-        showKept(draft);
-        readStored.current();
-      } else if (reply.kind !== 'changed' && importing.current !== null && keptNow.current === null) takeImport();
+    void discardDraft(nameOf(draft)).then(() => {
+      if (mounted.current && importing.current !== null && keptNow.current === null) takeImport();
     });
   };
 
@@ -288,6 +291,7 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
     loadedText.current = reply.kind === 'applied' ? text : null;
     if (reply.kind === 'applied') {
       base.current = text;
+      keeping.current?.settled();
       setOutcome({ kind: 'saved' });
     } else if (reply.kind === 'invalid') setOutcome({ kind: 'errors', errors: documentErrors(text) });
     else if (reply.kind === 'changed') {

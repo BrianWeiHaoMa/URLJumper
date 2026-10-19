@@ -30,7 +30,7 @@ afterEach(() => {
 test('changes within 300 ms go as one draft set, with the last text and the time of the last change', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  const keeper = keepDraft(() => {}, () => {});
   keeper.edited('a', 'base', STORED);
   await vi.advanceTimersByTimeAsync(100);
   keeper.edited('ab', 'base', STORED);
@@ -44,7 +44,7 @@ test('changes within 300 ms go as one draft set, with the last text and the time
 test('no draft set is sent while the previous one awaits its reply; the changes made meanwhile go as one once it comes', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  const keeper = keepDraft(() => {}, () => {});
   keeper.edited('a', 'base', STORED);
   await vi.advanceTimersByTimeAsync(300);
   expect(sent).toHaveLength(1);
@@ -65,7 +65,7 @@ test('no draft set is sent while the previous one awaits its reply; the changes 
 test('flush sends the change not yet sent at once and resolves once it has its reply', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  const keeper = keepDraft(() => {}, () => {});
   keeper.edited('a', 'base', STORED);
   let flushed = false;
   void keeper.flush().then(() => (flushed = true));
@@ -80,82 +80,95 @@ test('flush sends the change not yet sent at once and resolves once it has its r
   expect(sent).toHaveLength(1);
 });
 
-test('typed back to the stored document, the change not yet sent is dropped and the draft sent is discarded once it has its reply, only while the stored document is that text', async () => {
+test('typed back to the stored document as last read, the view reads again; that read, showing the document holding the text, drops the change not yet sent and discards the draft sent, by name, once it has its reply', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  let readsAsked = 0;
+  const keeper = keepDraft(() => {}, () => readsAsked++);
   keeper.edited('ab', 'base', STORED);
   await vi.advanceTimersByTimeAsync(300);
   keeper.edited('abc', 'base', STORED);
+  expect(readsAsked).toBe(0);
   keeper.edited(STORED, 'base', STORED);
+  expect(readsAsked).toBe(1);
+  keeper.storedRead(STORED, keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(1_000);
   expect(sent).toHaveLength(1);
   sent[0]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(0);
   const { view } = sent[0]!.request as { view: string };
-  expect(sent.map(({ request }) => request)).toEqual([expect.objectContaining({ kind: 'draft-set', text: 'ab' }), { kind: 'draft-discard', view, number: 1, ifStored: STORED }]);
+  expect(sent.map(({ request }) => request)).toEqual([expect.objectContaining({ kind: 'draft-set', text: 'ab' }), { kind: 'draft-discard', view, number: 1 }]);
   sent[1]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(0);
   // Discarded, there is nothing to name: the next read of the same document sends nothing.
-  keeper.storedRead(STORED, STORED, 'base');
+  keeper.storedRead(STORED, keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(1_000);
   expect(sent).toHaveLength(2);
+  expect(readsAsked).toBe(1);
 });
 
-test('a read of a document that comes to hold the text discards the draft; one that holds no unsaved text sends nothing', async () => {
+test('a read made after the text, of a document that comes to hold it, discards the draft by name alone and keeps nothing again; one that holds no unsaved text sends nothing', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
-  keeper.storedRead(STORED, STORED, STORED);
+  const keeper = keepDraft(() => {}, () => {});
+  keeper.storedRead(STORED, keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(1_000);
   expect(sent).toEqual([]);
   keeper.edited('typed', STORED, STORED);
   await vi.advanceTimersByTimeAsync(300);
   sent[0]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(0);
-  keeper.storedRead('other', 'typed', STORED);
+  keeper.storedRead('other', keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(1_000);
   expect(sent).toHaveLength(1);
-  keeper.storedRead('typed', 'typed', STORED);
+  // Another page stored the text after it was typed: it is no unsaved edit, whatever the document becomes since.
+  keeper.storedRead('typed', keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(0);
-  expect(sent[1]!.request).toEqual({ kind: 'draft-discard', view: (sent[0]!.request as { view: string }).view, number: 1, ifStored: 'typed' });
+  expect(sent[1]!.request).toEqual({ kind: 'draft-discard', view: (sent[0]!.request as { view: string }).view, number: 1 });
+  sent[1]!.answer({ kind: 'done' });
+  keeper.storedRead('changed again', keeper.reading(), true);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(2);
 });
 
-test('a discard the worker refuses because the stored document changed since it was read keeps the text again, with its base and the time it was made', async () => {
+test('a read made before the text, answered late, that shows the document holding it discards nothing: the view reads again, unless a later read was made since', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  let readsAsked = 0;
+  const keeper = keepDraft(() => {}, () => readsAsked++);
+  const before = keeper.reading();
   keeper.edited('typed', 'base', STORED);
   await vi.advanceTimersByTimeAsync(300);
   sent[0]!.answer({ kind: 'done' });
-  await vi.advanceTimersByTimeAsync(5_000);
-  // A read answered late shows the document holding the text.
-  keeper.storedRead('typed', 'typed', 'base');
   await vi.advanceTimersByTimeAsync(0);
-  expect(sent[1]!.request).toMatchObject({ kind: 'draft-discard', number: 1, ifStored: 'typed' });
-  sent[1]!.answer({ kind: 'changed' });
-  await vi.advanceTimersByTimeAsync(300);
-  expect(sent[2]!.request).toMatchObject({ kind: 'draft-set', text: 'typed', base: 'base', time: 1_700_000_000_000, number: 2 });
+  keeper.storedRead('typed', before, false);
+  expect(readsAsked).toBe(0);
+  keeper.storedRead('typed', before, true);
+  expect(readsAsked).toBe(1);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(1);
+  // The read made again shows the document changed since: the text stays kept.
+  keeper.storedRead('changed', keeper.reading(), true);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(1);
+  expect(readsAsked).toBe(1);
 });
 
-test("Save's flush waits for a text kept again because the worker refused its discard while the flush was under way", async () => {
+test("a text equal to the stored document as last read stays kept until a read made since shows it held: Save's flush sends it", async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  const keeper = keepDraft(() => {}, () => {});
   keeper.edited('old', 'base', STORED);
   await vi.advanceTimersByTimeAsync(300);
   sent[0]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(0);
   keeper.edited('typed', 'base', 'typed');
-  await vi.advanceTimersByTimeAsync(0);
-  expect(sent[1]!.request).toMatchObject({ kind: 'draft-discard', number: 1, ifStored: 'typed' });
   let flushed = false;
   void keeper.flush().then(() => (flushed = true));
-  sent[1]!.answer({ kind: 'changed' });
   await vi.advanceTimersByTimeAsync(0);
-  expect(sent[2]!.request).toMatchObject({ kind: 'draft-set', text: 'typed', base: 'base', number: 2 });
+  expect(sent[1]!.request).toMatchObject({ kind: 'draft-set', text: 'typed', base: 'base', number: 2 });
   expect(flushed).toBe(false);
-  sent[2]!.answer({ kind: 'done' });
+  sent[1]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(0);
   expect(flushed).toBe(true);
 });
@@ -163,21 +176,21 @@ test("Save's flush waits for a text kept again because the worker refused its di
 test('an edit given the time it was made is sent with that time', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  keepDraft(() => {}).edited('imported', 'base', STORED, 1_600_000_000_000);
+  keepDraft(() => {}, () => {}).edited('imported', 'base', STORED, 1_600_000_000_000);
   await vi.advanceTimersByTimeAsync(300);
   expect(sent[0]!.request).toMatchObject({ kind: 'draft-set', text: 'imported', time: 1_600_000_000_000 });
 });
 
-test('a text let go with no draft to discard is kept again once a read shows the stored document does not hold it', async () => {
+test('a text equal to the stored document as last read, with no draft sent, is kept within 300 ms while no read made since shows it held', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
-  keeper.edited('typed', 'base', STORED);
-  // Within 300 ms, a read answered late shows the document holding it: nothing was sent, nothing is discarded.
-  keeper.storedRead('typed', 'typed', 'base');
-  await vi.advanceTimersByTimeAsync(1_000);
-  expect(sent).toEqual([]);
-  keeper.storedRead('changed again', 'typed', 'base');
+  let readsAsked = 0;
+  const keeper = keepDraft(() => {}, () => readsAsked++);
+  const before = keeper.reading();
+  keeper.edited('typed', 'base', 'typed');
+  expect(readsAsked).toBe(1);
+  // A read made before the edit, answered late, shows the document holding it too.
+  keeper.storedRead('typed', before, false);
   await vi.advanceTimersByTimeAsync(300);
   expect(sent.map(({ request }) => request)).toEqual([expect.objectContaining({ kind: 'draft-set', text: 'typed', base: 'base', time: 1_700_000_000_000 })]);
 });
@@ -186,7 +199,7 @@ test('a set Chrome refused leaves the draft before it stored: a discard names bo
   const sent = chromeAnsweringOnRequest();
   const said: (string | null)[] = [];
   const { keepDraft } = await keeping();
-  const keeper = keepDraft((message) => said.push(message));
+  const keeper = keepDraft((message) => said.push(message), () => {});
   keeper.edited('a', 'base', STORED);
   await vi.advanceTimersByTimeAsync(300);
   sent[0]!.answer({ kind: 'done' });
@@ -203,23 +216,70 @@ test('a set Chrome refused leaves the draft before it stored: a discard names bo
   sent[2]!.answer({ kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' });
   await vi.advanceTimersByTimeAsync(0);
   keeper.edited(STORED, 'base', STORED);
+  keeper.storedRead(STORED, keeper.reading(), true);
   expect(said.at(-1)).toBeNull();
   for (let at = 3; at < 6; at++) {
     await vi.advanceTimersByTimeAsync(0);
     sent[at]?.answer({ kind: 'done' });
   }
   const { view } = sent[0]!.request as { view: string };
-  expect(sent.slice(3).map(({ request }) => request)).toEqual([1, 2, 3].map((number) => ({ kind: 'draft-discard', view, number, ifStored: STORED })));
+  expect(sent.slice(3).map(({ request }) => request)).toEqual([1, 2, 3].map((number) => ({ kind: 'draft-discard', view, number })));
+});
+
+test("settled, as after the view's Save stored its text, each draft the view holds goes by name alone, and a later read of a document changed since keeps nothing again", async () => {
+  const sent = chromeAnsweringOnRequest();
+  const said: (string | null)[] = [];
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft((message) => said.push(message), () => {});
+  keeper.edited('a', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  keeper.edited('ab', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[1]!.answer({ kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' });
+  await vi.advanceTimersByTimeAsync(0);
+  keeper.settled();
+  expect(said.at(-1)).toBeNull();
+  for (let at = 2; at < 4; at++) {
+    await vi.advanceTimersByTimeAsync(0);
+    sent[at]?.answer({ kind: 'done' });
+  }
+  const { view } = sent[0]!.request as { view: string };
+  expect(sent.slice(2).map(({ request }) => request)).toEqual([1, 2].map((number) => ({ kind: 'draft-discard', view, number })));
+  // Read again over a document another page changed, the saved text is no unsaved change of the view's.
+  keeper.storedRead('ab  https://other/\n', keeper.reading(), true);
+  keeper.storedRead('ab', keeper.reading(), true);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(sent).toHaveLength(4);
+});
+
+test('a read answered after a later one was made, made since the text and showing the document holding it, still lets the draft go, after a set still on its way', async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  keeper.edited('typed', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  expect(sent).toHaveLength(1);
+  keeper.storedRead('typed', keeper.reading(), false);
+  sent[0]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  const { view } = sent[0]!.request as { view: string };
+  expect(sent.slice(1).map(({ request }) => request)).toEqual([{ kind: 'draft-discard', view, number: 1 }]);
+  sent[1]!.answer({ kind: 'done' });
+  // A later read of a document changed since keeps nothing again.
+  keeper.storedRead('changed', keeper.reading(), true);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(2);
 });
 
 test('a draft the view took over is the one a discard names, until the view sends one of its own', async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft } = await keeping();
-  const keeper = keepDraft(() => {});
+  const keeper = keepDraft(() => {}, () => {});
   keeper.holds({ text: 'theirs', base: 'base', time: 1, view: 'earlier-view', number: 7 });
-  keeper.storedRead('theirs', 'theirs', 'base');
+  keeper.storedRead('theirs', keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(0);
-  expect(sent.map(({ request }) => request)).toEqual([{ kind: 'draft-discard', view: 'earlier-view', number: 7, ifStored: 'theirs' }]);
+  expect(sent.map(({ request }) => request)).toEqual([{ kind: 'draft-discard', view: 'earlier-view', number: 7 }]);
   sent[0]!.answer({ kind: 'done' });
 
   keeper.holds({ text: 'theirs', base: 'base', time: 1, view: 'earlier-view', number: 8 });
@@ -228,15 +288,16 @@ test('a draft the view took over is the one a discard names, until the view send
   sent[1]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(0);
   keeper.edited(STORED, 'base', STORED);
+  keeper.storedRead(STORED, keeper.reading(), true);
   await vi.advanceTimersByTimeAsync(0);
-  expect(sent[2]!.request).toEqual({ kind: 'draft-discard', view: (sent[1]!.request as { view: string }).view, number: 1, ifStored: STORED });
+  expect(sent[2]!.request).toEqual({ kind: 'draft-discard', view: (sent[1]!.request as { view: string }).view, number: 1 });
 });
 
 test("each view opened has an identifier of its own, and the page sends its views' draft requests one after another", async () => {
   const sent = chromeAnsweringOnRequest();
   const { keepDraft, draftRequestsAnswered, discardDraft } = await keeping();
-  const first = keepDraft(() => {});
-  const second = keepDraft(() => {});
+  const first = keepDraft(() => {}, () => {});
+  const second = keepDraft(() => {}, () => {});
   first.edited('one', 'base', STORED);
   void first.flush();
   second.edited('two', 'base', STORED);
