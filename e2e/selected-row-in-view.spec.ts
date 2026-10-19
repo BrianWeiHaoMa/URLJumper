@@ -272,6 +272,56 @@ test('Up from a selection held back wraps to the last row, the window following 
   await expectEnterOpens(opened, 'm8');
 });
 
+test('Down and Up move the selection with the focus on any button of search, which keeps the focus while it is in view', async ({ extension, site }) => {
+  const opened = await search(extension, site);
+  const { popup } = opened;
+  const chip = popup.locator('.chip');
+  const gear = popup.getByRole('button', { name: /settings/i });
+  const namePage = popup.getByRole('button', { name: 'Name this page' });
+  await popup.keyboard.press('Tab');
+  await expect(chip).toBeFocused();
+  await popup.keyboard.press('ArrowDown');
+  await expectSelected(popup, 'm2');
+  await expect(chip).toBeFocused();
+  await popup.keyboard.press('Tab');
+  await expect(gear).toBeFocused();
+  await popup.keyboard.press('ArrowUp');
+  await expectSelected(popup, 'm1');
+  await expect(gear).toBeFocused();
+
+  // On a row's pencil the view does not scroll by the key: the selection moves, and the pencil keeps the focus.
+  const pencil = popup.getByRole('button', { name: 'Edit "m1"' });
+  await tabTo(popup, pencil);
+  await expect(footer(popup)).toHaveText('Enter edits line 1');
+  await popup.keyboard.press('ArrowDown');
+  await expectSelected(popup, 'm2');
+  expect(await scrollTop(popup)).toBe(0);
+  await expect(pencil).toBeFocused();
+  await expect(footer(popup)).toHaveText('Enter edits line 1');
+  await checkFitAndAccessibility(popup);
+
+  // On This page is's pencil, which the view scrolled to past the rows, the selection held back moves to the
+  // next row and comes into view; the focus, whose pencil that scrolls out, goes to the search box (G32).
+  await tabTo(popup, thisPagePencil(popup));
+  await expect(selected(popup)).toHaveCount(0);
+  await popup.keyboard.press('ArrowDown');
+  await expectSelected(popup, 'm3');
+  await expect(searchBox(popup)).toBeFocused();
+
+  // From *Name this page*, below the view, Up wraps at the top to the last row, the window following it.
+  await popup.keyboard.press('ArrowUp');
+  await popup.keyboard.press('ArrowUp');
+  await namePage.focus();
+  await popup.keyboard.press('ArrowUp');
+  await expectSelected(popup, 'm8');
+  await expect(popup.locator('[role=option] .row-name')).toHaveText(['m2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8']);
+  await expect(namePage).toBeFocused();
+  await expect(footer(popup)).toHaveText('Enter opens the Name form');
+  await checkFitAndAccessibility(popup);
+  await searchBox(popup).focus();
+  await expectEnterOpens(opened, 'm8');
+});
+
 test('in a one-row list scrolled out of view, Down selects that row and brings it into view', async ({ extension, site }) => {
   // A name long enough that the view scrolls below one row, its text still shorter than the view.
   const opened = await search(extension, site, { letters: 900, typed: 'm1' });

@@ -188,7 +188,8 @@ export function Popup() {
 
   // Search's keys, wherever the focus is (the search box, the view when Chrome lets it take focus to scroll,
   // or nothing), so the footer is true for all of them; on a button, Enter and Space activate it instead, but
-  // Ctrl+E edits the selected row from there too (P1). In the first run, Enter starts *Name this page* (G30).
+  // Up and Down move the selection and Ctrl+E edits the selected row from there too (G3, P1). In the first
+  // run, Enter starts *Name this page* (G30).
   // The Name form and the editor have their own Enter, and settings have their controls'; Escape closes the
   // popup from every view.
   const onKey = useRef<(event: KeyboardEvent) => void>(() => {});
@@ -203,14 +204,16 @@ export function Popup() {
       const acted = firstRun ? null : selection.actedOn();
       const selected = acted === null ? undefined : state.list.rows[acted];
       if (selected !== undefined && selected.group !== 'name') openEditor(selected.mapping.line, selected.group === 'argument' ? selected.argument : null);
+    } else if (!firstRun && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      // On a button too, which has no use for them: Up and Down move the selection wherever the focus is (G3),
+      // not the view, which Chrome would scroll for them on a pencil.
+      event.preventDefault();
+      dispatch({ kind: 'move', step: event.key === 'ArrowDown' ? 1 : -1 });
     } else if (event.target instanceof Element && event.target.closest('button')) return;
     else if (firstRun) {
       if (event.key !== 'Enter') return;
       event.preventDefault();
       openForm('');
-    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      dispatch({ kind: 'move', step: event.key === 'ArrowDown' ? 1 : -1 });
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const acted = selection.actedOn();
