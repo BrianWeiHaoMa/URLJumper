@@ -5,6 +5,7 @@ import { discardDraft, setDraft } from './draft';
 import { insert } from './insert';
 import { jump } from './jump';
 import { loadExampleDocument } from './load-example';
+import { move } from './move';
 import { removeHonoredIntent } from './open-popup';
 import { enqueue } from './queue';
 import { remove } from './remove';
@@ -31,6 +32,8 @@ function operate<R extends Request>(request: R): Promise<ReplyTo<R>> {
       return rewrite(request) as Promise<ReplyTo<R>>;
     case 'remove':
       return remove(request) as Promise<ReplyTo<R>>;
+    case 'move':
+      return move(request) as Promise<ReplyTo<R>>;
     case 'undo':
       return undo(request) as Promise<ReplyTo<R>>;
     case 'replace':

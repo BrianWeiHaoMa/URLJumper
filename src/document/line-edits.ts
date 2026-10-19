@@ -1,7 +1,7 @@
 // The single-line edits of G12 as splices of the original line strings: every line but the one concerned
-// keeps its exact text and its own ending, so it comes back byte for byte (R3). Only the document's last
-// line ever changes besides: it gains the document's line ending when a line goes after it, and loses an
-// ending when the line after it is taken away.
+// keeps its exact text and its own ending, so it comes back byte for byte (R3). Only an ending at the
+// document's end ever changes besides: the last line gains the document's line ending when a line goes after
+// it, and a line that becomes last, when the line after it is taken away or moved, loses one.
 import type { Line, LineEnding } from './lines';
 
 /**
@@ -55,6 +55,24 @@ export function removeLine(lines: readonly Line[], number: number, endingGiven?:
     const becomesLast = lines[number - 2]!;
     const given = endingGiven !== undefined && becomesLast.text + becomesLast.ending === endingGiven.text + endingGiven.ending;
     edited.splice(number - 2, 2, { text: given ? endingGiven.text : becomesLast.text, ending: '' });
+  }
+  return join(edited);
+}
+
+/**
+ * The document of `lines` with line `from` cut and pasted so that it becomes line `to` (G12): every line keeps
+ * its own ending, but when the line goes from last or to last, the line that becomes last loses its own and
+ * the one that stops being last gains the document's, as the document stands before the move.
+ */
+export function moveLine(lines: readonly Line[], from: number, to: number): string {
+  const edited: Pick<Line, 'text' | 'ending'>[] = [...lines];
+  const [moved] = edited.splice(from - 1, 1);
+  edited.splice(to - 1, 0, moved!);
+  const last = lines.length;
+  if ((from === last) !== (to === last)) {
+    const stopsBeingLast = from === last ? to - 1 : last - 2;
+    edited[stopsBeingLast] = { text: edited[stopsBeingLast]!.text, ending: documentLineEnding(lines) };
+    edited[last - 1] = { text: edited[last - 1]!.text, ending: '' };
   }
   return join(edited);
 }

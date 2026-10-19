@@ -1,7 +1,8 @@
 // Undo (G15): reverses a single-line change only while its line still stands as the change left it, in the
-// document as this queued operation read it, and, for a line put back or restored, while its name is free of
-// other lines; otherwise nothing is stored and the reply says why, with the stored text when the line no
-// longer stands.
+// document as this queued operation read it, and, for a line put back, restored, or moved back, while its
+// name is free of other lines; otherwise nothing is stored and the reply says why, with the stored text when
+// the line no longer stands.
+import { moveLineBack } from '../document/moving';
 import { reinsertLine, restoreLine } from '../document/put-back';
 import { removeMapping } from '../document/removal';
 import type { UndoReply, UndoRequest } from '../requests';
@@ -26,5 +27,7 @@ function act(document: string, request: UndoRequest) {
       return reinsertLine(document, request.line, request.text);
     case 'restore':
       return restoreLine(document, request, request.former);
+    case 'move-back':
+      return moveLineBack(document, request, request.to);
   }
 }

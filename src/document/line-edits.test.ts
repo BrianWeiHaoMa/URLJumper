@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { documentLineEnding, insertLineAfter, removeLine, replaceLine } from './line-edits';
+import { documentLineEnding, insertLineAfter, moveLine, removeLine, replaceLine } from './line-edits';
 import { splitLines } from './lines';
 
 test("the document's line ending is CRLF when its first break is, else LF, LF too with no break", () => {
@@ -51,6 +51,26 @@ test('a removed last line given what a change gave the line before: exactly that
   // The line before is not the one the change gave an ending to: its own whole ending goes.
   expect(removeLine(splitLines('z\nq\r\nnew'), 3, { text: 'p', ending: '\n' })).toBe('z\nq');
   expect(removeLine(splitLines('a\r\nb\nnew'), 3, { text: 'b', ending: '\r\n' })).toBe('a\r\nb');
+});
+
+test('a moved line keeps its own ending, and every other line its own, while neither it nor its place is last', () => {
+  expect(moveLine(splitLines('a\r\nb\nc\r\nd'), 1, 3)).toBe('b\nc\r\na\r\nd');
+  expect(moveLine(splitLines('a\r\nb\nc\r\nd'), 3, 1)).toBe('c\r\na\r\nb\nd');
+  // The empty line a final line break leaves stays last.
+  expect(moveLine(splitLines('a\nb\r\n'), 1, 2)).toBe('b\r\na\n');
+  expect(moveLine(splitLines('a\nb\r\n'), 2, 2)).toBe('a\nb\r\n');
+});
+
+test('a last line moved up gains the document ending, and the line that becomes last loses its own', () => {
+  expect(moveLine(splitLines('x\r\ny\nz'), 3, 2)).toBe('x\r\nz\r\ny');
+  expect(moveLine(splitLines('x\ny\r\nz'), 3, 1)).toBe('z\nx\ny');
+});
+
+test("a line moved to last loses its own ending, and the old last line gains the document's, not the moved line's", () => {
+  expect(moveLine(splitLines('a\nb\r\nc'), 2, 3)).toBe('a\nc\nb');
+  // The document's ending is read before the move: the moved line held its first break.
+  expect(moveLine(splitLines('a\r\nb'), 1, 2)).toBe('b\r\na');
+  expect(moveLine(splitLines('a\nb\r\nc\nd'), 1, 4)).toBe('b\r\nc\nd\na');
 });
 
 test('a replaced line keeps its own ending, and every other line its own', () => {

@@ -2,6 +2,7 @@
 // request and reply is declared here once, and pages send them only through `send`.
 import type { DocumentError } from './document/grammar';
 import type { EndingGiven } from './document/line-edits';
+import type { MoveDirection } from './document/moving';
 import type { HeadingIdentity } from './document/sections';
 import type { FieldProblem } from './document/validation';
 import { isDraft, isDraftName, type Draft, type DraftName } from './draft';
@@ -52,19 +53,28 @@ export type RewriteRequest = { kind: 'rewrite'; line: number; text: string; name
 export type RemoveRequest = { kind: 'remove'; line: number; text: string };
 
 /**
+ * Moves one mapping line (G12, G13), named and found again as a *rewrite*'s is: cut and pasted directly before
+ * the previous mapping line (`up`) or directly after the next (`down`), every other line keeping its order.
+ */
+export type MoveRequest = { kind: 'move'; line: number; text: string; direction: MoveDirection };
+
+/**
  * Reverses a change (G15) by its act, each naming a line by the number and exact text the change's reply
  * gave, found again as a *rewrite*'s is. `remove` takes away the line an insert or a `reinsert` added, and
  * when that line is last, takes back from the line before exactly `endingGiven`, which that change's reply
  * carried (absent, the line before loses its whole ending). `reinsert` puts back the exact text of a line a
  * change took away as line `line`, its former number, or after the last line when the document now has fewer
  * than `line` − 1 lines. `restore` puts `former`, the exact text the line had before a rewrite (or a
- * restore), back in its place. A `reinsert` or `restore` is refused while another mapping line has the name
- * it writes, and is `stale` when its text would not read there as one mapping line.
+ * restore), back in its place. `move-back` moves the line a move (or a move back) left back so that it is
+ * line `to`, the number it had, or the last line when the document now has fewer lines. A `reinsert` or
+ * `restore` is refused while another mapping line has the name it writes, and is `stale` when its text would
+ * not read there as one mapping line; a `move-back` is refused when it would pass a line with its name.
  */
 export type UndoRequest = { kind: 'undo'; line: number; text: string } & (
   | { act: 'remove'; endingGiven?: EndingGiven }
   | { act: 'reinsert' }
   | { act: 'restore'; former: string }
+  | { act: 'move-back'; to: number }
 );
 
 /**
@@ -101,6 +111,7 @@ export type Request =
   | InsertRequest
   | RewriteRequest
   | RemoveRequest
+  | MoveRequest
   | UndoRequest
   | ReplaceRequest
   | LoadExampleRequest
@@ -152,12 +163,27 @@ export type RemoveReply =
   | Stale
   | StorageFailed;
 
+export type MoveReply =
+  /**
+   * Stored: `from` is the number the line had where it was found, `line` its number now, and `text` its exact
+   * text now, which a lone CR it ended in, joined to an ending it gained, leaves one CR shorter.
+   */
+  | { kind: 'applied'; line: number; text: string; from: number }
+  | Stale
+  /**
+   * The document admits no such move: no mapping line before the line (up) or after it (down), or a line with
+   * its name in the way. Nothing was stored. `document` is the stored text, empty when absent.
+   */
+  | { kind: 'immovable'; document: string }
+  | StorageFailed;
+
 export type UndoReply =
   /**
-   * Stored: the number and exact text of the line taken away, put back, or restored; `endingGiven`, present
-   * when a `reinsert` put the line after the last line, goes back with its Undo.
+   * Stored: the number and exact text of the line taken away, put back, restored, or moved back; `endingGiven`,
+   * present when a `reinsert` put the line after the last line, goes back with its Undo; `from`, present for a
+   * `move-back` alone, is the number the line had where it was found, which its own Undo moves it back to.
    */
-  | { kind: 'applied'; line: number; text: string; endingGiven?: EndingGiven }
+  | { kind: 'applied'; line: number; text: string; endingGiven?: EndingGiven; from?: number }
   | Stale
   /** Another mapping line has the name the line would have again: `line` is its number. Nothing was stored. */
   | { kind: 'name-taken'; line: number }
@@ -198,19 +224,21 @@ export type ReplyTo<R extends Request> = R extends JumpRequest
         ? RewriteReply
         : R extends RemoveRequest
           ? RemoveReply
-          : R extends UndoRequest
-            ? UndoReply
-            : R extends ReplaceRequest
-              ? ReplaceReply
-              : R extends LoadExampleRequest
-                ? LoadExampleReply
-                : R extends ResetUsageRequest
-                  ? ResetUsageReply
-                  : R extends DraftSetRequest
-                    ? DraftSetReply
-                    : R extends DraftDiscardRequest
-                      ? DraftDiscardReply
-                      : never;
+          : R extends MoveRequest
+            ? MoveReply
+            : R extends UndoRequest
+              ? UndoReply
+              : R extends ReplaceRequest
+                ? ReplaceReply
+                : R extends LoadExampleRequest
+                  ? LoadExampleReply
+                  : R extends ResetUsageRequest
+                    ? ResetUsageReply
+                    : R extends DraftSetRequest
+                      ? DraftSetReply
+                      : R extends DraftDiscardRequest
+                        ? DraftDiscardReply
+                        : never;
 
 /** What a page shows when the worker gave no reply and Chrome no reason. */
 const NO_REPLY = "URLJumper's service worker did not reply.";
@@ -241,10 +269,13 @@ export function isRequest(value: unknown): value is Request {
       return isLineNumber(value.line) && typeof value.text === 'string' && typeof value.name === 'string' && typeof value.url === 'string' && typeof value.note === 'string';
     case 'remove':
       return isLineNumber(value.line) && typeof value.text === 'string';
+    case 'move':
+      return isLineNumber(value.line) && typeof value.text === 'string' && (value.direction === 'up' || value.direction === 'down');
     case 'undo':
       if (!isLineNumber(value.line) || typeof value.text !== 'string') return false;
       if (value.act === 'remove') return value.endingGiven === undefined || isEndingGiven(value.endingGiven);
       if (value.act === 'restore') return typeof value.former === 'string';
+      if (value.act === 'move-back') return isLineNumber(value.to);
       return value.act === 'reinsert';
     case 'replace':
       return typeof value.text === 'string' && typeof value.base === 'string';
@@ -302,8 +333,14 @@ function isReplyTo(request: Request, value: unknown): boolean {
       return isValuesRefusal(value) || isStale(value);
     case 'remove':
       return value.kind === 'applied' ? isChangedLine(value) : isStale(value);
+    case 'move':
+      if (value.kind === 'applied') return isChangedLine(value) && isLineNumber(value.from);
+      if (value.kind === 'immovable') return typeof value.document === 'string';
+      return isStale(value);
     case 'undo':
-      if (value.kind === 'applied') return isChangedLine(value) && hasEndingGiven(value);
+      // Only a move back says where it found its line, and it never gives an ending.
+      if (value.kind === 'applied' && request.act === 'move-back') return isChangedLine(value) && isLineNumber(value.from) && value.endingGiven === undefined;
+      if (value.kind === 'applied') return isChangedLine(value) && hasEndingGiven(value) && value.from === undefined;
       if (value.kind === 'name-taken') return isLineNumber(value.line);
       return isStale(value);
     case 'replace':

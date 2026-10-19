@@ -7,6 +7,7 @@ import {
   type InsertRequest,
   type JumpRequest,
   type LoadExampleRequest,
+  type MoveRequest,
   type RemoveIntentRequest,
   type RemoveRequest,
   type ReplaceRequest,
@@ -24,6 +25,8 @@ const UNDO_GIVEN: UndoRequest = { ...UNDO, endingGiven: { text: 'mail  https://m
 const RESTORE: UndoRequest = { kind: 'undo', act: 'restore', line: 3, text: 'shares               https://s.example/', former: 'stocks  https://s.example/  \ its note' };
 const REWRITE: RewriteRequest = { kind: 'rewrite', line: 3, text: 'stocks  https://s.example/', name: 'shares', url: 'https://s.example/', note: '' };
 const REMOVE: RemoveRequest = { kind: 'remove', line: 3, text: 'stocks  https://s.example/' };
+const MOVE: MoveRequest = { kind: 'move', line: 3, text: 'stocks  https://s.example/', direction: 'up' };
+const MOVE_BACK: UndoRequest = { kind: 'undo', act: 'move-back', line: 2, text: 'stocks  https://s.example/', to: 3 };
 const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
 const RESET_USAGE: ResetUsageRequest = { kind: 'reset-usage' };
 const REPLACE: ReplaceRequest = { kind: 'replace', text: 'a  https://a.example/\nb  https://b.example/\n', base: 'a  https://a.example/\r\n' };
@@ -117,7 +120,7 @@ test('the worker accepts only a request declared here', () => {
 });
 
 test('the requests that write the document, each with the replies declared for it', async () => {
-  const replies: [InsertRequest | RewriteRequest | RemoveRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
+  const replies: [InsertRequest | RewriteRequest | RemoveRequest | MoveRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
     [INSERT, [
       { kind: 'applied', line: 3, text: 'stocks               https://s.example/', headingMissing: false },
       { kind: 'applied', line: 2, text: 'stocks https://s.example/', headingMissing: false, endingGiven: { text: 'a  x:1\r', ending: '\n' } },
@@ -133,6 +136,13 @@ test('the requests that write the document, each with the replies declared for i
       { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
     ]],
     [REMOVE, [{ kind: 'applied', line: 3, text: REMOVE.text }, { kind: 'stale', document: '' }, { kind: 'storage-failed', message: 'IO error' }]],
+    [MOVE, [
+      { kind: 'applied', line: 2, text: MOVE.text, from: 3 },
+      { kind: 'stale', document: 'a  x:1\n' },
+      { kind: 'immovable', document: '' },
+      { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
+    ]],
+    [MOVE_BACK, [{ kind: 'applied', line: 3, text: MOVE_BACK.text, from: 2 }, { kind: 'stale', document: '' }, { kind: 'name-taken', line: 4 }, { kind: 'storage-failed', message: 'IO error' }]],
     [UNDO, [{ kind: 'applied', line: 3, text: UNDO.text }, { kind: 'stale', document: '' }]],
     [UNDO_GIVEN, [{ kind: 'applied', line: 3, text: UNDO.text }]],
     [RESTORE, [{ kind: 'applied', line: 3, text: RESTORE.former }, { kind: 'stale', document: '' }, { kind: 'name-taken', line: 1 }]],
@@ -156,7 +166,7 @@ test('the requests that write the document, each with the replies declared for i
 
 test('a reply declared for another request, or missing a field, is no reply', async () => {
   const malformedEndings = [{ text: 'a', ending: '\r' }, { text: 'a', ending: '' }, { text: 1, ending: '\n' }, { ending: '\n' }, 'a\n', null];
-  const undeclared: [InsertRequest | RewriteRequest | RemoveRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
+  const undeclared: [InsertRequest | RewriteRequest | RemoveRequest | MoveRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
     [INSERT, [
       { kind: 'applied', line: 3, text: 'x' },
       { kind: 'name-taken' },
@@ -169,7 +179,26 @@ test('a reply declared for another request, or missing a field, is no reply', as
     [REWRITE, [{ kind: 'applied', line: 3 }, { kind: 'applied', text: 'x' }, { kind: 'stale' }, { kind: 'name-taken', line: 0 }, { kind: 'invalid', rule: 'empty' }, { kind: 'changed', document: '' }, { kind: 'done' }]],
     [REMOVE, [{ kind: 'applied', line: 0, text: 'x' }, { kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'name-taken', line: 2 }, { kind: 'invalid', field: 'name', rule: 'empty' }]],
     [RESTORE, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'name-taken' }, ...malformedEndings.map((endingGiven) => ({ kind: 'applied', line: 3, text: 'x', endingGiven }))]],
-    [UNDO, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'not-empty' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }]],
+    [UNDO, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'not-empty' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }, { kind: 'applied', line: 3, text: 'x', from: 2 }]],
+    // An applied move always says where it found its line; a refused one carries the stored text.
+    [MOVE, [
+      { kind: 'applied', line: 2, text: 'x' },
+      { kind: 'applied', line: 2, text: 'x', from: 0 },
+      { kind: 'applied', line: 2, from: 3 },
+      { kind: 'immovable' },
+      { kind: 'immovable', document: 3 },
+      { kind: 'stale' },
+      { kind: 'name-taken', line: 2 },
+      { kind: 'invalid', field: 'name', rule: 'empty' },
+      { kind: 'changed', document: '' },
+    ]],
+    [MOVE_BACK, [
+      { kind: 'applied', line: 3, text: 'x' },
+      { kind: 'applied', line: 3, text: 'x', from: '2' },
+      { kind: 'applied', line: 3, text: 'x', from: 2, endingGiven: { text: 'a', ending: '\n' } },
+      { kind: 'immovable', document: '' },
+      { kind: 'name-taken' },
+    ]],
     [REINSERT, [{ kind: 'applied', text: 'x' }, { kind: 'invalid', field: 'name', rule: 'empty' }, { kind: 'done' }]],
     [LOAD_EXAMPLE, [{ kind: 'applied', text: 'x' }, { kind: 'done' }, { kind: 'stale', document: '' }]],
   ];
@@ -195,6 +224,9 @@ test('the worker accepts the writing requests only with every field of its decla
   expect(isRequest(REWRITE)).toBe(true);
   expect(isRequest({ ...REWRITE, note: 'see docs' })).toBe(true);
   expect(isRequest(REMOVE)).toBe(true);
+  expect(isRequest(MOVE)).toBe(true);
+  expect(isRequest({ ...MOVE, direction: 'down' })).toBe(true);
+  expect(isRequest(MOVE_BACK)).toBe(true);
   expect(isRequest(LOAD_EXAMPLE)).toBe(true);
   for (const value of [
     { ...INSERT, name: undefined },
@@ -225,6 +257,17 @@ test('the worker accepts the writing requests only with every field of its decla
     { ...REMOVE, text: undefined },
     { ...REMOVE, line: 1.5 },
     { kind: 'rewrites', line: 3, text: 'x', name: 'a', url: 'u:1', note: '' },
+    { ...MOVE, direction: undefined },
+    { ...MOVE, direction: 'left' },
+    { ...MOVE, direction: 'Up' },
+    { ...MOVE, line: 0 },
+    { ...MOVE, text: undefined },
+    { ...MOVE_BACK, to: undefined },
+    { ...MOVE_BACK, to: 0 },
+    { ...MOVE_BACK, to: 2.5 },
+    { ...MOVE_BACK, to: '3' },
+    { ...MOVE_BACK, act: 'move' },
+    { ...MOVE_BACK, line: 0 },
     { ...UNDO, line: 0 },
     { ...UNDO, line: 2.5 },
     { ...UNDO, text: undefined },
