@@ -196,12 +196,6 @@
   overflow-wrap: anywhere;
 }
 
-/* What the page is called (G10), below the rows in the view; a long name wraps and the view scrolls. */
-.this-page {
-  margin: 6px 8px 2px;
-  overflow-wrap: anywhere;
-}
-
 /* The button that names the page, fixed above the footer. */
 .page-bar {
   flex: none;

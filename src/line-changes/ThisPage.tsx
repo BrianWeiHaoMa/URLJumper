@@ -2,6 +2,7 @@
 // address exactly, by name, with its pencil, which opens that line's editor; in search and in the Name form.
 import type { Mapping } from '../document/grammar';
 import { Pencil } from './Pencil';
+import './this-page.css';
 
 interface ThisPageProps {
   mapping: Mapping;

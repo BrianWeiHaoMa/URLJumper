@@ -1,0 +1,12 @@
+/* What the page is called (G10), in search below the rows and in the Name form below what it names: a long
+   name wraps, and the view scrolls; its pencil follows the name on its line. */
+.this-page {
+  margin: 6px 8px 2px;
+  overflow-wrap: anywhere;
+}
+
+.this-page .pencil {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+}

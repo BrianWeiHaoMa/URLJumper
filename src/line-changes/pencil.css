@@ -1,0 +1,24 @@
+/* The pencil (G32): a small square button with its icon centered. Every color is a token of src/theme.css. */
+.pencil {
+  /* Over search's rows a press beside a pencil reaches the row under it (src/popup/row-pencils.css); a press
+     on the pencil is its own. */
+  pointer-events: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pencil[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}

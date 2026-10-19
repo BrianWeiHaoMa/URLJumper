@@ -1,7 +1,6 @@
-/* The pencils (G7, G32): the window's pencils drawn over the ends of their rows, each beside its row's name
-   in the room the name's line leaves it, so a long name is cut before the pencil and the pencil never is; the
-   URL's line below keeps the row's whole width. And the pencil after what the page is called. Every color is
-   a token of src/theme.css. */
+/* The window's pencils (G7, G32), drawn over the ends of their rows, each beside its row's name in the room
+   the name's line leaves it, so a long name is cut before the pencil and the pencil never is; the URL's line
+   below keeps the row's whole width. The pencil itself is src/line-changes/pencil.css. */
 
 /* The list and its pencils share one cell, the pencils over the rows' ends; the cell is as wide as the view,
    whatever the rows' text would take. */
@@ -39,32 +38,4 @@
    take them for covering it. */
 .row.has-pencil > .row-line:first-child {
   padding-right: 32px;
-}
-
-.pencil {
-  pointer-events: auto;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  color: var(--text-primary);
-  background: var(--bg-control);
-  border: 1px solid var(--line-control);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.pencil[aria-disabled="true"] {
-  color: var(--text-muted);
-  cursor: default;
-}
-
-.this-page .pencil {
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: 8px;
 }

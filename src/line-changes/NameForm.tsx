@@ -6,22 +6,21 @@
 // from the worker's reply alone. A taken name is named, with the offer to edit that line instead, beside any
 // other problem (G8); that offer and *This page is*'s pencil (G10) leave the form for the editor of that line,
 // the form's values stored nowhere, and wait while Save awaits its reply, so the reply never lands on an
-// editor opened meanwhile (G21). Below the header, after an update from 1.x, the notice of what is new (G25).
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+// editor opened meanwhile (G21). It never reads storage or draws its host's frame: the host gives it the
+// document as last read and the name field's ref, where the notice of what is new leads (G25), and shows what
+// it says Enter does in its footer (L2).
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
 import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingText, namedSections, type HeadingIdentity, type Section } from '../document/sections';
 import { checkMapping } from '../document/validation';
-import { editInsteadText, fieldProblemText, takenNameText } from '../line-changes/field-problems';
-import { insertedOutcome, type Outcome } from '../line-changes/outcomes';
 import { send, type InsertReply } from '../requests';
-import { useFitToViewport } from './fit-to-viewport';
+import { editInsteadText, fieldProblemText, takenNameText } from './field-problems';
+import { insertedOutcome, type Outcome } from './outcomes';
 import { SectionChoice, type SectionOption } from './SectionChoice';
 import { ThisPage } from './ThisPage';
-import { footerWithNotice } from './upgrade-notice';
-import { UpgradeNotice, type Notice } from './UpgradeNotice';
-import '../line-changes/line-form.css';
+import './line-form.css';
 import './name-form.css';
 
 /**
@@ -33,27 +32,27 @@ export type NameSubject =
   | { kind: 'page'; url: string | undefined; title: string | undefined }
   | { kind: 'link'; url: string; pageUrl: string | undefined; pageTitle: string | undefined; tabUrl: string | undefined };
 
-interface NameFormProps {
+export interface NameFormProps {
   /** The stored document as last read. */
   document: string;
   /** The name to start with: empty, the Name row's typed text, or what was typed before a form a command or menu item asked for showed. */
   name: string;
   subject: NameSubject;
-  /** The notice of what is new, while it shows. */
-  notice: Notice;
+  /** The name field, where the form starts, which a host gives the focus as the notice of what is new does. */
+  start: RefObject<HTMLInputElement | null>;
   /** Called with the stored insert's outcome, which the host confirms. */
   onSaved(outcome: Outcome): void;
   /** Opens the editor of line N as the document the form last rendered holds it, leaving the form. */
   onEdit(line: number): void;
   onCancel(): void;
+  /** Called with what Enter does where the focus is in the form, as it appears and whenever that changes (L2). */
+  sayWhatEnterDoes(text: string): void;
 }
 
 /** The controls whose focus changes what Enter does. */
 type FormControl = 'cancel' | 'this-page' | 'edit-instead';
 
-export function NameForm({ document: stored, name: startName, subject, notice, onSaved, onEdit, onCancel }: NameFormProps) {
-  const layout = useFitToViewport();
-  const nameField = useRef<HTMLInputElement>(null);
+export function NameForm({ document: stored, name: startName, subject, start, onSaved, onEdit, onCancel, sayWhatEnterDoes }: NameFormProps) {
   const [name, setName] = useState(startName);
   const [url, setUrl] = useState(subject.url ?? '');
   // The heading as named when chosen, found again by that identity at every read, never by its position (G9).
@@ -100,7 +99,7 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
 
   // The name field has the focus when the form appears, with the caret after a prefilled name.
   useLayoutEffect(() => {
-    const field = nameField.current;
+    const field = start.current;
     field?.focus();
     field?.setSelectionRange(field.value.length, field.value.length);
   }, []);
@@ -111,7 +110,7 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
   const hasSections = sections.length > 0;
   useLayoutEffect(() => {
     if (document.activeElement !== document.body) return;
-    nameField.current?.focus();
+    start.current?.focus();
     setFocusedOn(null);
   }, [hasSections, takenBy?.line, thisPage?.key]);
 
@@ -131,9 +130,9 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
   }, []);
 
   const where = describeWhere(result, point, chosen ? label(chosen) : undefined);
-  // The footer is fixed, so it holds no typed or stored text, which can be as long as the document.
+  // The host's footer is fixed, so this holds no typed or stored text, which can be as long as the document.
   const editsInstead = focusedOn === 'this-page' ? thisPage?.line : focusedOn === 'edit-instead' ? takenBy?.line : undefined;
-  const footer =
+  const enterSays =
     focusedOn === 'cancel'
       ? 'Enter returns to search'
       : saving
@@ -143,106 +142,97 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
           : result.kind === 'applied'
             ? `Enter saves it as line ${result.line}`
             : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : fieldProblemText(result, point.after + 1, url)}`;
+  // Before the browser paints, so the host's footer never shows its own default in place of the form's.
+  useLayoutEffect(() => sayWhatEnterDoes(enterSays), [enterSays, sayWhatEnterDoes]);
 
   return (
-    <main className="popup" ref={layout.root}>
-      <header className="form-header">
-        <h1 className="form-title">{subject.kind === 'link' ? 'Name this link' : 'Name this page'}</h1>
-      </header>
-      <UpgradeNotice notice={notice} start={nameField} />
-      <div className="view" ref={layout.view} role="region" aria-label="Name form">
-        <div className="view-content" ref={layout.content}>
-          <form
-            className="name-form"
-            noValidate
-            onSubmit={(event) => {
-              event.preventDefault();
-              void save();
-            }}
-          >
-            <div className="subject">
-              {subject.kind === 'link' ? (
-                <p className="subject-page">{linkPage(subject)}</p>
-              ) : subject.url === undefined ? (
-                <p className="subject-missing">Chrome gave no address for this tab: type or paste the URL.</p>
-              ) : (
-                <>
-                  {subject.title ? <p className="subject-title">{subject.title}</p> : null}
-                  {hostOf(subject.url) ? <p className="subject-host">{hostOf(subject.url)}</p> : null}
-                </>
-              )}
-              {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} waiting={saving} onEdit={edit} onFocusChange={focusOn('this-page')} />}
-            </div>
-            <label className="field">
-              <span className="field-label">Name</span>
-              <input
-                ref={nameField}
-                className="field-input"
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                aria-invalid={result.kind === 'name-taken' || (result.kind === 'invalid' && result.field === 'name')}
-                aria-describedby="name-form-problem"
-                value={name}
-                onChange={(event) => {
-                  setRefusal(null);
-                  setName(event.target.value);
-                }}
-              />
-            </label>
-            <label className="field">
-              <span className="field-label">URL</span>
-              <input
-                className="field-input field-url"
-                type="text"
-                inputMode="url"
-                autoComplete="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                aria-invalid={result.kind === 'invalid' && result.field === 'url'}
-                aria-describedby="name-form-problem"
-                value={url}
-                onChange={(event) => {
-                  setRefusal(null);
-                  setUrl(event.target.value);
-                }}
-              />
-            </label>
-            {sections.length > 0 && (
-              <SectionChoice
-                options={options}
-                chosen={chosenIndex}
-                onChoose={(index) => {
-                  setRefusal(null);
-                  setHeading(index === 0 ? null : sections[index - 1]!.identity);
-                }}
-              />
-            )}
-            <div className="preview">
-              <p className="preview-where">{where}</p>
-              {result.kind === 'applied' && <pre className="preview-line">{result.text}</pre>}
-            </div>
-            <p id="name-form-problem" className="form-problem" aria-live="polite">
-              {refusal ?? problem ?? ''}
-            </p>
-            {takenBy !== null && (
-              <button type="button" className="form-button edit-instead" aria-disabled={saving} onClick={() => edit(takenBy.line)} onFocus={() => setFocusedOn('edit-instead')} onBlur={() => setFocusedOn(null)}>
-                {editInsteadText(takenBy)}
-              </button>
-            )}
-            <div className="form-actions">
-              <button type="submit" className="form-button save" aria-disabled={result.kind !== 'applied' || saving}>
-                Save
-              </button>
-              <button type="button" className="form-button" onClick={onCancel} onFocus={() => setFocusedOn('cancel')} onBlur={() => setFocusedOn(null)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
+    <form
+      className="name-form"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      <div className="subject">
+        {subject.kind === 'link' ? (
+          <p className="subject-page">{linkPage(subject)}</p>
+        ) : subject.url === undefined ? (
+          <p className="subject-missing">Chrome gave no address for this tab: type or paste the URL.</p>
+        ) : (
+          <>
+            {subject.title ? <p className="subject-title">{subject.title}</p> : null}
+            {hostOf(subject.url) ? <p className="subject-host">{hostOf(subject.url)}</p> : null}
+          </>
+        )}
+        {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} waiting={saving} onEdit={edit} onFocusChange={focusOn('this-page')} />}
       </div>
-      <footer className="footer">{footerWithNotice(footer, notice)}</footer>
-    </main>
+      <label className="field">
+        <span className="field-label">Name</span>
+        <input
+          ref={start}
+          className="field-input"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={result.kind === 'name-taken' || (result.kind === 'invalid' && result.field === 'name')}
+          aria-describedby="name-form-problem"
+          value={name}
+          onChange={(event) => {
+            setRefusal(null);
+            setName(event.target.value);
+          }}
+        />
+      </label>
+      <label className="field">
+        <span className="field-label">URL</span>
+        <input
+          className="field-input field-url"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          aria-invalid={result.kind === 'invalid' && result.field === 'url'}
+          aria-describedby="name-form-problem"
+          value={url}
+          onChange={(event) => {
+            setRefusal(null);
+            setUrl(event.target.value);
+          }}
+        />
+      </label>
+      {sections.length > 0 && (
+        <SectionChoice
+          options={options}
+          chosen={chosenIndex}
+          onChoose={(index) => {
+            setRefusal(null);
+            setHeading(index === 0 ? null : sections[index - 1]!.identity);
+          }}
+        />
+      )}
+      <div className="preview">
+        <p className="preview-where">{where}</p>
+        {result.kind === 'applied' && <pre className="preview-line">{result.text}</pre>}
+      </div>
+      <p id="name-form-problem" className="form-problem" aria-live="polite">
+        {refusal ?? problem ?? ''}
+      </p>
+      {takenBy !== null && (
+        <button type="button" className="form-button edit-instead" aria-disabled={saving} onClick={() => edit(takenBy.line)} onFocus={() => setFocusedOn('edit-instead')} onBlur={() => setFocusedOn(null)}>
+          {editInsteadText(takenBy)}
+        </button>
+      )}
+      <div className="form-actions">
+        <button type="submit" className="form-button save" aria-disabled={result.kind !== 'applied' || saving}>
+          Save
+        </button>
+        <button type="button" className="form-button" onClick={onCancel} onFocus={() => setFocusedOn('cancel')} onBlur={() => setFocusedOn(null)}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

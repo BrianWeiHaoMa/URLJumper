@@ -11,9 +11,9 @@ import type { Usage } from '../document/score';
 import type { OpenMode } from '../open-intent';
 import type { Theme } from '../preferences';
 import type { JumpReply, JumpRequest } from '../requests';
+import type { NameSubject } from '../line-changes/NameForm';
 import { offersUndo, undoFooter, type Confirmed, type Outcome } from '../line-changes/outcomes';
 import { move, newList, relist, sameList, scroll, type ListState } from './list-state';
-import type { NameSubject } from './NameForm';
 import type { MappingRow } from './Row';
 
 export interface Stored {

@@ -20,17 +20,18 @@ import { intentFor, startMode, type OpenIntent, type OpenMode } from '../open-in
 import { applyTheme, readSearchOrder, readTheme } from '../preferences';
 import { send } from '../requests';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
+import type { NameSubject } from '../line-changes/NameForm';
 import { offersUndo, undoFooter } from '../line-changes/outcomes';
+import { ThisPage } from '../line-changes/ThisPage';
 import { FirstRun } from './FirstRun';
 import { outsideWindow, WINDOW_ROWS } from './list-state';
-import { NameForm, type NameSubject } from './NameForm';
-import { RowPencils } from './Pencil';
 import { editControlsOf, editedLine, footer, initialState, isEditKey, jumpRequest, MODE_LABEL, notOpened, otherMode, reduce, type Opener, type Stored } from './popup-state';
+import { PopupNameForm } from './PopupNameForm';
 import { PopupRowEditor } from './PopupRowEditor';
 import { PopupSettings, SettingsGear } from './PopupSettings';
 import { Row, rowId, type MappingRow } from './Row';
+import { RowPencils } from './RowPencils';
 import { useSelectionInView } from './selection-in-view';
-import { ThisPage } from './ThisPage';
 import { useFitToViewport } from './fit-to-viewport';
 import { footerWithNotice } from './upgrade-notice';
 import { UpgradeNotice, useUpgradeNotice } from './UpgradeNotice';
@@ -191,7 +192,7 @@ export function Popup() {
 
   if (state.view.kind === 'name' && state.stored !== undefined) {
     return (
-      <NameForm
+      <PopupNameForm
         key={state.view.opened}
         document={state.stored.document}
         name={state.view.name}
