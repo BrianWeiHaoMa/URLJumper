@@ -110,7 +110,7 @@ Behavior outside these assumptions is not promised.
   ```
 
 - **F12.** A line the extension writes is the name, spaces, the URL, and, when there is a note, spaces, `\ `, and the note. The URL starts at the column (counted from 1) where the URL starts on the nearest mapping line above the insertion point, else the nearest below, else column 22; when the name is too long for that, one space separates them. A rewritten line keeps its URL's column and its note's column when the new values fit, else one space. A new line takes the document's line ending (CRLF when the document's first line break is CRLF, else LF).
-- **F13.** The popup shows seven rows at a time.
+- **F13.** The popup's search list shows seven rows at a time.
 - **F14.** A **heading** is a maximal run of consecutive lines that each hold a comment and nothing else. A **section** is a heading together with the lines after it up to the next heading or the end of the document. A **note** is the comment on a mapping line, without the backslash and surrounding whitespace.
 - **F15.** The search-order preference has two values, Document order and Smart order; the theme preference has three, System, Light, and Dark.
 
