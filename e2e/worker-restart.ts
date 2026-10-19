@@ -19,7 +19,10 @@ export async function restartWorker(context: BrowserContext, worker: Worker, wak
     const [target] = await targets();
     if (target === undefined) throw new Error('the worker has no target to close');
     await cdp.send('Target.closeTarget', { targetId: target.targetId });
-    for (const deadline = Date.now() + 10_000; (await targets()).length > 0; ) {
+    // A page's message may start the next worker before `wake` does, under the same target: stopped is no
+    // target, or one whose worker holds nothing of the old one's memory.
+    const restartedMeanwhile = () => worker.evaluate(() => !('beforeRestart' in globalThis)).catch(() => false);
+    for (const deadline = Date.now() + 10_000; (await targets()).length > 0 && !(await restartedMeanwhile()); ) {
       if (Date.now() > deadline) throw new Error('the worker did not stop');
       await new Promise((resolve) => setTimeout(resolve, 50));
     }

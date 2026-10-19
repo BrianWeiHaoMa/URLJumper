@@ -3,6 +3,7 @@
 import type { DocumentError } from './document/grammar';
 import type { HeadingIdentity } from './document/sections';
 import type { FieldProblem } from './document/validation';
+import { isDraft, isDraftName, type Draft, type DraftName } from './draft';
 
 /** Opens a mapping: the worker records the use when the document holds the mapping, then navigates (G6, G26). */
 export type JumpRequest = {
@@ -64,7 +65,30 @@ export type LoadExampleRequest = { kind: 'load-example' };
  */
 export type ResetUsageRequest = { kind: 'reset-usage' };
 
-export type Request = JumpRequest | RemoveIntentRequest | InsertRequest | UndoRequest | ReplaceRequest | LoadExampleRequest | ResetUsageRequest;
+/**
+ * Keeps a Text view's unsaved text as the draft (G19; Composition, *draft set*): stored as `draft` unless the
+ * stored draft is newer, so a late coalesced write never overtakes a newer edit from another view.
+ */
+export type DraftSetRequest = { kind: 'draft-set' } & Draft;
+
+/**
+ * Removes the draft named by its view and number, only while `draft` is still that edit, so a discard removes
+ * exactly the draft it names and never a later one (Composition, *draft discard*). `ifStored` is given when the
+ * discard rests on the stored document holding that text, as a view read it: then the draft goes only while the
+ * stored document still is that text, so a read answered late never discards an unsaved change (G19).
+ */
+export type DraftDiscardRequest = { kind: 'draft-discard'; ifStored?: string } & DraftName;
+
+export type Request =
+  | JumpRequest
+  | RemoveIntentRequest
+  | InsertRequest
+  | UndoRequest
+  | ReplaceRequest
+  | LoadExampleRequest
+  | ResetUsageRequest
+  | DraftSetRequest
+  | DraftDiscardRequest;
 
 /** Chrome refused to store; nothing of the request was stored. */
 export type StorageFailed = { kind: 'storage-failed'; message: string };
@@ -115,6 +139,16 @@ export type LoadExampleReply =
 /** `done` once no learned usage is stored, whether or not there was any. */
 export type ResetUsageReply = { kind: 'done' } | StorageFailed;
 
+/** `done` once `draft` holds the edit sent or a newer one. */
+export type DraftSetReply = { kind: 'done' } | StorageFailed;
+
+export type DraftDiscardReply =
+  /** `draft` no longer holds the edit named, whether or not it was there to remove; with `ifStored`, the stored document is that text. */
+  | { kind: 'done' }
+  /** The stored document is not `ifStored`: nothing was removed. */
+  | { kind: 'changed' }
+  | StorageFailed;
+
 export type ReplyTo<R extends Request> = R extends JumpRequest
   ? JumpReply
   : R extends RemoveIntentRequest
@@ -129,7 +163,11 @@ export type ReplyTo<R extends Request> = R extends JumpRequest
             ? LoadExampleReply
             : R extends ResetUsageRequest
               ? ResetUsageReply
-              : never;
+              : R extends DraftSetRequest
+                ? DraftSetReply
+                : R extends DraftDiscardRequest
+                  ? DraftDiscardReply
+                  : never;
 
 /** What a page shows when the worker gave no reply and Chrome no reason. */
 const NO_REPLY = "URLJumper's service worker did not reply.";
@@ -163,6 +201,10 @@ export function isRequest(value: unknown): value is Request {
     case 'load-example':
     case 'reset-usage':
       return true;
+    case 'draft-set':
+      return isDraft(value);
+    case 'draft-discard':
+      return isDraftName(value) && (value.ifStored === undefined || typeof value.ifStored === 'string');
     case 'jump':
       break;
     default:
@@ -195,7 +237,10 @@ function isReplyTo(request: Request, value: unknown): boolean {
   switch (request.kind) {
     case 'remove-intent':
     case 'reset-usage':
+    case 'draft-set':
       return value.kind === 'done';
+    case 'draft-discard':
+      return value.kind === 'done' || value.kind === 'changed';
     case 'insert':
       if (value.kind === 'applied') return isLineNumber(value.line) && typeof value.text === 'string' && typeof value.headingMissing === 'boolean';
       if (value.kind === 'invalid') return typeof value.field === 'string' && typeof value.rule === 'string';

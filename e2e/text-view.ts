@@ -1,8 +1,12 @@
 // The Text view as a check reaches it, re-exported by e2e/extension.ts: its parts found by their names, the
-// offer to bring in a change and its versions, the view opened in the popup's settings or on the options page once its text area holds the stored document,
-// typing into a line as a user does, where the caret is, the requests the worker receives, a page's reads of
-// storage answered late, and the clipboard, which *Copy tab URL* writes, read back from a web page.
+// offer to bring in a change and its versions, the offer of a kept draft, the view opened in the popup's
+// settings or on the options page once its text area holds the stored document or once it offers a kept
+// draft, typing into a line as a user does, where the caret is, the draft stored, the draft sets the worker
+// receives and stores, a file handed to Import and its read held, the requests the worker receives and a page's
+// requests sent late, a page's reads of storage made late or answered late, and the clipboard, which *Copy tab
+// URL* writes, read back from a web page.
 import { expect, type BrowserContext, type Locator, type Page, type Worker } from '@playwright/test';
+import type { Draft } from '../src/draft.ts';
 
 /** The Text view's parts in `page`, a popup or an options page that shows it. */
 export function textView(page: Page) {
@@ -18,6 +22,12 @@ export function textView(page: Page) {
     /** The offer's parts changed in both, in order, each with its two versions (`version`). */
     conflicts: page.getByRole('group', { name: /^Changed in both/ }),
     bringIn: page.getByRole('button', { name: 'Bring in the change' }),
+    /** The offer of a kept draft a Text view makes as it opens, and its two answers. */
+    keptOffer: page.getByRole('region', { name: 'Unsaved text kept' }),
+    resume: page.getByRole('button', { name: 'Resume', exact: true }),
+    discard: page.getByRole('button', { name: 'Discard', exact: true }),
+    /** What the view says when the worker did not keep its draft. */
+    notKept: page.getByRole('alert').filter({ hasText: 'not kept for later' }),
   };
 }
 
@@ -28,23 +38,75 @@ export function version(conflict: Locator, side: 'stored' | 'yours'): Locator {
 
 export type TextView = ReturnType<typeof textView>;
 
-/** Opens the popup's settings by the gear, in search or the first run, and shows the Text view once it holds the stored document. */
-export async function textViewInPopup(popup: Page): Promise<TextView> {
+/** How a Text view is expected to open: holding the stored document, editable, or offering a kept draft, its text area taking no typing. */
+export type TextViewOpening = 'editable' | 'offering';
+
+/** Opens the popup's settings by the gear, in search or the first run, and shows the Text view once it holds the stored document or offers a kept draft. */
+export async function textViewInPopup(popup: Page, opening: TextViewOpening = 'editable'): Promise<TextView> {
   await popup.getByRole('button', { name: 'Settings' }).click();
   await popup.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'Text' }).click();
   const view = textView(popup);
-  // Read-only until it holds the stored document.
-  await expect(view.area).toBeEditable();
+  await opened(view, opening);
   return view;
 }
 
-/** Opens a tab of `options.html` at `fragment`, the Text view by default, and returns it once its text area holds the stored document. */
-export async function textViewOnOptionsPage(extension: { context: BrowserContext; url(file: string): string }, fragment = '#view=text'): Promise<TextView & { page: Page }> {
+/** Opens a tab of `options.html` at `fragment`, the Text view by default, and returns it once its text area holds the stored document or it offers a kept draft. */
+export async function textViewOnOptionsPage(
+  extension: { context: BrowserContext; url(file: string): string },
+  fragment = '#view=text',
+  opening: TextViewOpening = 'editable',
+): Promise<TextView & { page: Page }> {
   const page = await extension.context.newPage();
   await page.goto(extension.url(`options.html${fragment}`));
   const view = textView(page);
-  await expect(view.area).toBeEditable();
+  await opened(view, opening);
   return { page, ...view };
+}
+
+async function opened(view: TextView, opening: TextViewOpening) {
+  if (opening === 'editable') {
+    // Read-only until it holds the stored document.
+    await expect(view.area).toBeEditable();
+    await expect(view.keptOffer).toHaveCount(0);
+  } else {
+    await expect(view.keptOffer).toBeVisible();
+    await expect(view.area).not.toBeEditable();
+  }
+}
+
+/** The draft the worker keeps, as stored under `draft`; undefined when none is. */
+export async function storedDraft(worker: Worker): Promise<Draft | undefined> {
+  return worker.evaluate(async () => (await chrome.storage.local.get('draft')).draft as Draft | undefined);
+}
+
+/**
+ * Starts recording, in the worker, when each *draft set* arrives and when each write of `draft` it makes has
+ * landed, which is just before the worker replies to it; the function returned gives both lists of times,
+ * oldest first.
+ */
+export async function watchDraftSets(worker: Worker): Promise<() => Promise<{ received: number[]; stored: number[] }>> {
+  await worker.evaluate(() => {
+    const record = { received: [] as number[], stored: [] as number[] };
+    (globalThis as Record<string, unknown>).draftSets = record;
+    chrome.runtime.onMessage.addListener((message: { kind?: unknown }) => {
+      if (message?.kind === 'draft-set') record.received.push(performance.now());
+      return false;
+    });
+    const local = chrome.storage.local;
+    const set = local.set.bind(local) as (items: Record<string, unknown>) => Promise<void>;
+    (local as unknown as { set: unknown }).set = async (items: Record<string, unknown>) => {
+      await set(items);
+      if ('draft' in items) record.stored.push(performance.now());
+    };
+  });
+  return () => worker.evaluate(() => (globalThis as Record<string, unknown>).draftSets as { received: number[]; stored: number[] });
+}
+
+/** Activates Import on the options page `page` shows and chooses a file named `name` holding `bytes`, through the file chooser it opens. */
+export async function importFile(page: Page, name: string, bytes: Buffer, activate: () => Promise<void> = () => page.getByRole('button', { name: 'Import…' }).click()) {
+  const chooser = page.waitForEvent('filechooser');
+  await activate();
+  await (await chooser).setFiles({ name, mimeType: 'text/plain', buffer: bytes });
 }
 
 /** Selects the text of `line` of the text area's text, as a user selecting the line would, and types `text` over it. */
@@ -127,6 +189,67 @@ export async function delayPageReads(page: Page, ms: number): Promise<() => Prom
     };
   }, ms);
   return () => page.evaluate(() => ((globalThis as Record<string, unknown>).delayedReads as { count: number }).count);
+}
+
+/**
+ * Holds the answer to every read of `chrome.storage.local` that `page` makes from now, each read made at once
+ * and its answer given only when released, oldest first, as a busy page may hear a read late, after a change
+ * made since. `held` gives how many answers wait; `release` gives the oldest.
+ */
+export async function holdPageReads(page: Page): Promise<{ held(): Promise<number>; release(): Promise<void> }> {
+  await page.evaluate(() => {
+    const local = chrome.storage.local;
+    const get = local.get.bind(local) as (keys?: unknown) => Promise<Record<string, unknown>>;
+    const waiting: (() => void)[] = [];
+    (globalThis as Record<string, unknown>).heldReads = waiting;
+    (local as unknown as { get: unknown }).get = async (keys?: unknown) => {
+      const items = await get(keys);
+      await new Promise<void>((release) => waiting.push(release));
+      return items;
+    };
+  });
+  return {
+    held: () => page.evaluate(() => ((globalThis as Record<string, unknown>).heldReads as unknown[]).length),
+    release: () => page.evaluate(() => ((globalThis as Record<string, unknown>).heldReads as (() => void)[]).shift()?.()),
+  };
+}
+
+/**
+ * Holds every request of `kind` that `page` sends to the worker from now, each sent only when released, oldest
+ * first, as a busy page may send it late; its reply reaches the page as Chrome gives it. `held` gives how many
+ * wait; `release` sends the oldest.
+ */
+export async function holdPageRequests(page: Page, kind: string): Promise<{ held(): Promise<number>; release(): Promise<void> }> {
+  await page.evaluate((kind) => {
+    const runtime = chrome.runtime;
+    const sendMessage = runtime.sendMessage.bind(runtime) as (message: unknown) => Promise<unknown>;
+    const waiting: (() => void)[] = [];
+    (globalThis as Record<string, unknown>).heldRequests = waiting;
+    (runtime as unknown as { sendMessage: unknown }).sendMessage = (message: { kind?: unknown }) =>
+      message?.kind === kind ? new Promise((reply, refuse) => waiting.push(() => sendMessage(message).then(reply, refuse))) : sendMessage(message);
+  }, kind);
+  return {
+    held: () => page.evaluate(() => ((globalThis as Record<string, unknown>).heldRequests as unknown[]).length),
+    release: () => page.evaluate(() => ((globalThis as Record<string, unknown>).heldRequests as (() => void)[]).shift()?.()),
+  };
+}
+
+/** Holds the end of every read of a chosen file's text in `page` (`File.text()`) until the function returned is called. */
+export async function holdFileReads(page: Page): Promise<() => Promise<void>> {
+  await page.evaluate(() => {
+    const read = File.prototype.text;
+    const waiting: (() => void)[] = [];
+    (globalThis as Record<string, unknown>).heldFileReads = waiting;
+    File.prototype.text = async function (this: File) {
+      const text = await read.call(this);
+      await new Promise<void>((release) => waiting.push(release));
+      return text;
+    };
+  });
+  return async () => {
+    await expect.poll(() => page.evaluate(() => ((globalThis as Record<string, unknown>).heldFileReads as unknown[]).length)).toBeGreaterThan(0);
+    await page.evaluate(() => ((globalThis as Record<string, unknown>).heldFileReads as (() => void)[]).shift()?.());
+  };
 }
 
 /**

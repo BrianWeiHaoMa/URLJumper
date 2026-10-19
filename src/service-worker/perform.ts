@@ -1,6 +1,7 @@
 // Every request runs on the worker's one queue, in the order it arrived, and gets exactly one reply. An
 // operation that throws, as a refused `get` or `set` does, replies `storage-failed` with Chrome's message.
 import { chromeMessage, type ReplyTo, type Request } from '../requests';
+import { discardDraft, setDraft } from './draft';
 import { insert } from './insert';
 import { jump } from './jump';
 import { loadExampleDocument } from './load-example';
@@ -32,5 +33,9 @@ function operate<R extends Request>(request: R): Promise<ReplyTo<R>> {
       return loadExampleDocument() as Promise<ReplyTo<R>>;
     case 'reset-usage':
       return resetUsage() as Promise<ReplyTo<R>>;
+    case 'draft-set':
+      return setDraft(request) as Promise<ReplyTo<R>>;
+    case 'draft-discard':
+      return discardDraft(request) as Promise<ReplyTo<R>>;
   }
 }

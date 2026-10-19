@@ -15,6 +15,7 @@ import {
   restartWorker,
   slowWorkerReads,
   stallWorkerAfterWriting,
+  storedDraft,
   test,
   textViewInPopup,
   textViewOnOptionsPage,
@@ -43,6 +44,11 @@ function heardAndRead(page: Page): Promise<void> {
 
 async function storedDocument(extension: LoadedExtension) {
   return (await extension.readStorage()).mappings;
+}
+
+/** Waits until the draft the typing keeps holds `text`, so no write of it lands while a check fills storage. */
+async function draftLanded(extension: LoadedExtension, text: string) {
+  await expect.poll(async () => (await storedDraft(extension.worker))?.text).toBe(text);
 }
 
 test('a view with nothing typed takes in another page\'s change, and a Save after typing keeps it, on an LF and on a CRLF document', async ({ extension, site }) => {
@@ -150,7 +156,10 @@ test('while a Save is under way the text area is read-only and Save sends nothin
   await expect(view.status).toHaveText('Saved', { timeout: 15_000 });
   await expect(view.area).toBeEditable();
   expect(await replaces()).toHaveLength(1);
-  expect(await changes()).toHaveLength(1);
+  // The draft's own changes aside, one change holds the document, with its usage alone.
+  const stores = (await changes()).filter((change) => 'mappings' in change || 'usage' in change);
+  expect(stores).toHaveLength(1);
+  expect(Object.keys(stores[0]!).sort()).toEqual(['mappings', 'usage']);
   expect(await storedDocument(extension)).toBe('a  https://a/\nb  https://b/\n');
   await view.area.focus();
   await expect(popup.locator('footer')).toHaveText('Enter starts a new line');
@@ -164,6 +173,7 @@ test('a store Chrome refuses says so and keeps the text and its base: once there
   const view = await textViewInPopup(popup);
   const long = `long  https://long.example/${'x'.repeat(2_000)}\n`;
   await typeAtEnd(view, long);
+  await draftLanded(extension, stored + long);
   await extension.fillStorage(100);
   await view.save.click();
   await expect(view.status).toHaveText(/^Not saved: your text is kept as you typed it\. Chrome said: .*quota/i);
@@ -179,6 +189,7 @@ test('a store Chrome refuses says so and keeps the text and its base: once there
 
   // Refused again; another page's change lands before the next Save, which must not store over it.
   await typeAtEnd(view, long.replace('long', 'longer'));
+  await draftLanded(extension, stored + long + long.replace('long', 'longer'));
   await extension.fillStorage(100);
   await view.save.click();
   await expect(view.status).toHaveText(/^Not saved: your text is kept as you typed it\. Chrome said: /);
@@ -199,6 +210,7 @@ test('after a store Chrome refuses, a change that lands before the view reads th
   const view = await textViewInPopup(popup);
   const long = `long  https://long.example/${'x'.repeat(2_000)}\n`;
   await typeAtEnd(view, long);
+  await draftLanded(extension, stored + long);
   await extension.fillStorage(100);
   // The read the view makes on the reply is made after the other page's change has landed.
   const unanswered = await delayPageReads(popup, 2_000);
@@ -227,8 +239,11 @@ test('a Save that gets no reply says so and keeps the text: stopped before its w
   await typeAtEnd(view, 'b  https://b/\n');
   const first = `${stored}b  https://b/\n`;
   await slowWorkerReads(extension.worker, 'mappings', 10_000);
+  const replaces = await watchRequests(extension.worker, 'replace');
   await view.save.click();
   await expect(view.status).toHaveText('Saving…');
+  // Stopped once the Save has reached it, after the draft it sends first.
+  await expect.poll(replaces).toHaveLength(1);
   await restartWorker(extension.context, extension.worker, wake);
   await expect(view.status).toHaveText(noReply);
   expect(await storedDocument(extension)).toBe(stored);
@@ -307,8 +322,13 @@ test("the options page's Text view, refused and failed, passes the accessibility
   await checkAccessibilityInBothSchemes(view.page);
 
   await view.page.close();
-  const fresh = await textViewOnOptionsPage(extension);
-  await typeAtEnd(fresh, `long  https://long.example/${'x'.repeat(2_000)}\n`);
+  // The refused Save left its text kept, which the next Text view offers; discarded, it shows the stored document.
+  const fresh = await textViewOnOptionsPage(extension, '#view=text', 'offering');
+  await fresh.discard.click();
+  await expect(fresh.area).toBeEditable();
+  const long = `long  https://long.example/${'x'.repeat(2_000)}\n`;
+  await typeAtEnd(fresh, long);
+  await draftLanded(extension, `a  https://a/\nother https://other.example/\n${long}`);
   await extension.fillStorage(100);
   await fresh.save.click();
   await expect(fresh.status).toHaveText(/^Not saved: your text is kept as you typed it\. Chrome said: /);

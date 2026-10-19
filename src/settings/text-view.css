@@ -128,3 +128,10 @@
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* A kept draft offered as the view opens: what it is, and Resume and Discard. */
+.draft-offer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

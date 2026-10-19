@@ -4,13 +4,29 @@
 // stays as typed; a Save over a document changed since the view loaded it stores nothing and says so; a store
 // Chrome refuses says so and keeps the text.
 import type { Page } from '@playwright/test';
-import { caret, checkAccessibilityInBothSchemes, checkFitAndAccessibility, expect, popupOnNewPage, retypeLine, test, textViewInPopup, textViewOnOptionsPage, typeAtEnd, type TextView } from './extension.ts';
+import {
+  caret,
+  checkAccessibilityInBothSchemes,
+  checkFitAndAccessibility,
+  expect,
+  holdPageReads,
+  popupOnNewPage,
+  retypeLine,
+  test,
+  textViewInPopup,
+  textViewOnOptionsPage,
+  typeAtEnd,
+  type TextView,
+} from './extension.ts';
 
 const lines = (count: number, line = (n: number) => `m${n}${' '.repeat(18 - String(n).length)}https://m${n}.example/`) =>
   Array.from({ length: count }, (_, i) => line(i + 1));
 
+/** The storage changes of `changes` that hold the document or its usage, leaving out the draft's own. */
+const documentChanges = <C extends object>(changes: C[]): C[] => changes.filter((change) => 'mappings' in change || 'usage' in change);
+
 /** In use, "The most common failure", in the host `page` shows, on a stored document of 20 mappings. */
-async function mostCommonFailure(page: Page, view: TextView, stored: string, readStorage: () => Promise<Record<string, unknown>>, watch: () => Promise<unknown[]>) {
+async function mostCommonFailure(page: Page, view: TextView, stored: string, readStorage: () => Promise<Record<string, unknown>>, watch: () => Promise<object[]>) {
   await expect(view.area).toHaveValue(stored);
   await retypeLine(view, 12, 'stocks');
   const typed = stored.replace(lines(20)[11]!, 'stocks');
@@ -37,8 +53,9 @@ async function mostCommonFailure(page: Page, view: TextView, stored: string, rea
   }
   expect((await readStorage()).mappings).toBe(stored);
   // A write the Save made would have reached every listener by now: the reads since were answered after it.
+  // The draft the typing keeps is no write of the document.
   await readStorage();
-  expect(await watch()).toEqual([]);
+  expect(documentChanges(await watch())).toEqual([]);
 }
 
 test('In use, "The most common failure", in the popup: nothing is stored, the error names line 12, activating it moves the caret there, and the draft stays as typed', async ({ extension, site }) => {
@@ -77,7 +94,8 @@ test('a valid edit is stored exactly as the text area holds it, with its usage i
   const before = Date.now();
   await view.save.click();
   await expect(view.status).toHaveText('Saved');
-  const changes = (await watch()) as Record<string, { newValue?: unknown }>[];
+  // The draft's own changes before and after it aside, one change holds the document, with its usage alone.
+  const changes = documentChanges((await watch()) as Record<string, { newValue?: unknown }>[]);
   expect(changes).toHaveLength(1);
   expect(Object.keys(changes[0]!).sort()).toEqual(['mappings', 'usage']);
   expect(changes[0]!.mappings!.newValue).toBe(typed);
@@ -166,6 +184,26 @@ test('a CRLF document is saved as the text area holds it, with LF endings, and s
   await view.save.click();
   await expect(view.status).toHaveText('Saved');
   await expect.poll(async () => (await extension.readStorage()).mappings).toBe('a  https://a/\nb  https://b/\nc  https://c/\n');
+});
+
+test('a read made before a Save and answered after it never replaces the text the Save stored', async ({ extension }) => {
+  const stored = 'a  https://a/\n';
+  await extension.seedStorage({ mappings: stored });
+  const view = await textViewOnOptionsPage(extension);
+  const reads = await holdPageReads(view.page);
+  // Saved as loaded, the view reads the document on the reply; that read's answer waits.
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  await expect.poll(reads.held).toBe(1);
+  await typeAtEnd(view, 'mine  https://mine/\n');
+  await view.save.click();
+  await expect(view.status).toHaveText('Saved');
+  const saved = `${stored}mine  https://mine/\n`;
+  expect((await extension.readStorage()).mappings).toBe(saved);
+  await expect.poll(reads.held).toBeGreaterThan(1);
+  while ((await reads.held()) > 0) await reads.release();
+  await expect(view.area).toHaveValue(saved);
+  await expect(view.status).toHaveText('Saved');
 });
 
 test('opening the Text view in either host and leaving it stores nothing', async ({ extension, site }) => {

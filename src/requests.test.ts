@@ -1,5 +1,17 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { isRequest, send, type InsertRequest, type JumpRequest, type LoadExampleRequest, type RemoveIntentRequest, type ReplaceRequest, type ResetUsageRequest, type UndoRequest } from './requests';
+import {
+  isRequest,
+  send,
+  type DraftDiscardRequest,
+  type DraftSetRequest,
+  type InsertRequest,
+  type JumpRequest,
+  type LoadExampleRequest,
+  type RemoveIntentRequest,
+  type ReplaceRequest,
+  type ResetUsageRequest,
+  type UndoRequest,
+} from './requests';
 
 const JUMP: JumpRequest = { kind: 'jump', name: 'alpha', url: 'https://a.example/', argument: null, mode: 'new-tab', active: true };
 const REMOVE_INTENT: RemoveIntentRequest = { kind: 'remove-intent', windowId: 3, time: 1_700_000_000_000 };
@@ -9,6 +21,8 @@ const REINSERT: UndoRequest = { ...UNDO, act: 'reinsert' };
 const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
 const RESET_USAGE: ResetUsageRequest = { kind: 'reset-usage' };
 const REPLACE: ReplaceRequest = { kind: 'replace', text: 'a  https://a.example/\nb  https://b.example/\n', base: 'a  https://a.example/\r\n' };
+const DRAFT_SET: DraftSetRequest = { kind: 'draft-set', text: 'a  https://a.example/\nb', base: 'a  https://a.example/\r\n', time: 1_700_000_000_500, view: '0b5c6d3e-1f2a-4b3c-8d4e-5f6a7b8c9d0e', number: 3 };
+const DRAFT_DISCARD: DraftDiscardRequest = { kind: 'draft-discard', view: DRAFT_SET.view, number: 3 };
 const NO_REPLY = { kind: 'storage-failed', message: "URLJumper's service worker did not reply." };
 
 // Chrome's transport, replaced; `send` is the product's.
@@ -233,4 +247,57 @@ test("a replace resolves to the worker's reply for it: stored, refused over a ch
   }
   chromeWhoseSendMessage(() => Promise.reject(new Error('Message length exceeded maximum allowed length.')));
   expect(await send(REPLACE)).toEqual({ kind: 'storage-failed', message: 'Message length exceeded maximum allowed length.' });
+});
+
+test('a draft set is the text, its base, the time of the edit, and the view and number that name it; a draft discard is that name, with the stored text it rests on when it rests on one', () => {
+  expect(isRequest(DRAFT_SET)).toBe(true);
+  expect(isRequest({ ...DRAFT_SET, text: '', base: '' })).toBe(true);
+  expect(isRequest(DRAFT_DISCARD)).toBe(true);
+  expect(isRequest({ ...DRAFT_DISCARD, ifStored: 'a  https://a.example/\n' })).toBe(true);
+  expect(isRequest({ ...DRAFT_DISCARD, ifStored: '' })).toBe(true);
+  for (const value of [
+    { ...DRAFT_SET, text: undefined },
+    { ...DRAFT_SET, text: ['a'] },
+    { ...DRAFT_SET, base: undefined },
+    { ...DRAFT_SET, base: null },
+    { ...DRAFT_SET, time: undefined },
+    { ...DRAFT_SET, time: '1700000000500' },
+    { ...DRAFT_SET, time: Number.POSITIVE_INFINITY },
+    { ...DRAFT_SET, view: '' },
+    { ...DRAFT_SET, view: undefined },
+    { ...DRAFT_SET, number: 0 },
+    { ...DRAFT_SET, number: 2.5 },
+    { ...DRAFT_SET, kind: 'draft' },
+    { ...DRAFT_DISCARD, view: '' },
+    { ...DRAFT_DISCARD, view: 3 },
+    { ...DRAFT_DISCARD, number: undefined },
+    { ...DRAFT_DISCARD, number: -1 },
+    { ...DRAFT_DISCARD, ifStored: null },
+    { ...DRAFT_DISCARD, ifStored: ['a'] },
+    { kind: 'draft-discard' },
+  ]) {
+    expect(isRequest(value), JSON.stringify(value)).toBe(false);
+  }
+});
+
+test("a draft set or discard resolves to the worker's reply for it, and to no other", async () => {
+  // Refused because the stored document is not the text the discard rests on.
+  const sent = chromeWhoseSendMessage(async () => ({ kind: 'changed' }));
+  expect(await send({ ...DRAFT_DISCARD, ifStored: 'a  https://a.example/\n' })).toEqual({ kind: 'changed' });
+  expect(sent).toEqual([{ ...DRAFT_DISCARD, ifStored: 'a  https://a.example/\n' }]);
+  chromeWhoseSendMessage(async () => ({ kind: 'changed' }));
+  expect(await send(DRAFT_SET)).toEqual(NO_REPLY);
+  for (const request of [DRAFT_SET, DRAFT_DISCARD]) {
+    for (const reply of [{ kind: 'done' }, { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' }]) {
+      const sent = chromeWhoseSendMessage(async () => reply);
+      expect(await send(request)).toEqual(reply);
+      expect(sent).toEqual([request]);
+    }
+    for (const reply of [undefined, { kind: 'applied' }, { kind: 'opened' }, { kind: 'stale', document: '' }, { kind: 'storage-failed' }]) {
+      chromeWhoseSendMessage(async () => reply);
+      expect(await send(request), JSON.stringify(reply)).toEqual(NO_REPLY);
+    }
+    chromeWhoseSendMessage(() => Promise.reject(new Error('Could not establish connection. Receiving end does not exist.')));
+    expect(await send(request)).toEqual({ kind: 'storage-failed', message: 'Could not establish connection. Receiving end does not exist.' });
+  }
 });

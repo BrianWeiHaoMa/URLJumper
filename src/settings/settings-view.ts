@@ -5,6 +5,16 @@
 // *Open in tab* names the view it shows.
 import type { ComponentType, ReactNode } from 'react';
 
+/** A file's text Import brings to the Text view as its draft (G20). */
+export interface ImportedText {
+  /** The file's text as `File.text()` read it (S14). */
+  text: string;
+  /** The file's name, which the Text view asks by before it replaces a kept draft with unsaved changes (G19). */
+  fileName: string;
+  /** When the user imported it, in milliseconds since the Unix epoch: the time of the edit it makes. */
+  time: number;
+}
+
 export interface SettingsViewProps {
   /** What the host puts beside the view, below its own parts: on the options page, Export beside Preferences. */
   beside?: ReactNode;
@@ -20,6 +30,12 @@ export interface SettingsViewProps {
    * Text view's *Copy tab URL* copies (G31). Absent on the options page, which has no such tab.
    */
   openerTab?: { url: string | undefined };
+  /**
+   * On the options page alone, after Import, until another view is shown: the file, whose text the Text view
+   * takes as its draft, against the base it loads, as it first shows the document, once it has asked over a kept
+   * draft with unsaved changes; nothing is stored until Save. The view is shown afresh for each Import.
+   */
+  imported?: ImportedText;
 }
 
 export interface SettingsView {
