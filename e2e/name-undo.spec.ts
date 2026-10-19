@@ -246,3 +246,32 @@ test('a long name: every outcome and refusal is shown whole beside Undo, the foo
   expect(await fits()).toEqual(whole);
   await checkFitAndAccessibility(popup);
 });
+
+test("an Undo of a save after the last line gives that line back as it was, though another window removed a CRLF first line since", async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'first first:1\r\nsecond second:1\nlast last:1' });
+  const other = await extension.openRequestPage();
+  const { popup } = await savedOnNewPage(extension, site, 'new');
+  await expect(confirmation(popup)).toHaveText('Saved "new" as line 4');
+  expect(await other.send({ kind: 'remove', line: 1, text: 'first first:1' })).toMatchObject({ kind: 'applied' });
+  await expect(popup.getByRole('option')).toHaveCount(3);
+  await undo(popup).click();
+  await expect(confirmation(popup)).toHaveText('Removed "new" from line 3');
+  expect(await storedDocument(extension)).toBe('second second:1\nlast last:1');
+  await checkFitAndAccessibility(popup);
+});
+
+test('a last line ending in a lone CR comes back from the Undo of a save after it, and from the Undo of putting that save back', async ({ extension, site }) => {
+  const doc = 'first first:1\nlast last:1\r';
+  await extension.seedStorage({ mappings: doc });
+  const { popup, saved } = await savedOnNewPage(extension, site, 'new');
+  expect(saved).toMatch(/^first first:1\nlast last:1\r\nnew +\S+$/);
+  await undo(popup).click();
+  await expect(confirmation(popup)).toHaveText('Removed "new" from line 3');
+  expect(await storedDocument(extension)).toBe(doc);
+  await undo(popup).click();
+  await expect(confirmation(popup)).toHaveText('Put "new" back as line 3');
+  expect(await storedDocument(extension)).toBe(saved);
+  await undo(popup).click();
+  await expect(confirmation(popup)).toHaveText('Removed "new" from line 3');
+  expect(await storedDocument(extension)).toBe(doc);
+});

@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { readDocument } from './grammar';
-import { documentLineEnding } from './line-edits';
+import { documentLineEnding, type EndingGiven } from './line-edits';
 import { splitLines } from './lines';
-import { insertMapping, reinsertLine, undoInsert, type InsertResult } from './insertion';
+import { insertMapping, type InsertResult } from './insertion';
+import { reinsertLine } from './put-back';
+import { removeMapping } from './removal';
 import type { HeadingIdentity } from './sections';
 
 interface Case {
@@ -15,6 +17,8 @@ interface Case {
   inserted: string;
   line: number;
   headingMissing?: boolean;
+  /** What the insert gave the last line, when the new line went after it. */
+  endingGiven?: EndingGiven;
 }
 
 const insert = (c: Pick<Case, 'document' | 'name' | 'url' | 'note' | 'heading'>): InsertResult =>
@@ -52,6 +56,7 @@ const CASES: Record<string, Case> = {
     url: 'y:2',
     inserted: 'z    q:0\r\na    x:1\r\nb    y:2',
     line: 3,
+    endingGiven: { text: 'a    x:1', ending: '\r\n' },
   },
   'after the only line, which has no break: it gains LF': {
     document: 'a    x:1',
@@ -59,6 +64,7 @@ const CASES: Record<string, Case> = {
     url: 'y:2',
     inserted: 'a    x:1\nb    y:2',
     line: 2,
+    endingGiven: { text: 'a    x:1', ending: '\n' },
   },
   'mixed endings, first break LF: the new line takes LF and the CRLF line keeps its own': {
     document: 'a    x:1\nb    y:2\r\n',
@@ -73,6 +79,7 @@ const CASES: Record<string, Case> = {
     url: 'w:4',
     inserted: 'a    x:1\r\nb    y:2\nc    z:3\r\nd    w:4',
     line: 4,
+    endingGiven: { text: 'c    z:3', ending: '\r\n' },
   },
   'into a section followed by another': {
     document: '\\ Work\nmail  m:1\n\n\\ Home\ntv    t:2\n',
@@ -259,6 +266,7 @@ const CASES: Record<string, Case> = {
     url: 'y:2',
     inserted: 'a    x:1\r\nb    y:2',
     line: 2,
+    endingGiven: { text: 'a    x:1\r', ending: '\n' },
   },
   'lone surrogates become U+FFFD in the name, the URL, and the note alike': {
     document: '',
@@ -275,7 +283,7 @@ describe('an insert writes one line by F12 where G9 places it, and leaves every 
     test(title, () => {
       const result = insert(c);
       const newLine = splitLines(c.inserted)[c.line - 1]!.text;
-      expect(result).toEqual({ kind: 'applied', document: c.inserted, line: c.line, text: newLine, headingMissing: c.headingMissing ?? false });
+      expect(result).toEqual({ kind: 'applied', document: c.inserted, line: c.line, text: newLine, headingMissing: c.headingMissing ?? false, endingGiven: c.endingGiven });
     });
   }
 });
@@ -309,42 +317,9 @@ describe("undone with its reply's line and text, every insert gives back the ori
     test(title, () => {
       const result = insert(c);
       if (result.kind !== 'applied') throw new Error(result.kind);
-      expect(undoInsert(result.document, result.line, result.text)).toEqual({ kind: 'applied', document: c.document, line: c.line, text: result.text });
+      expect(removeMapping(result.document, result, result.endingGiven)).toEqual({ kind: 'applied', document: c.document, line: c.line, text: result.text });
     });
   }
-
-  test('a lone CR the last line ended in comes back: only the LF the insert gave is taken', () => {
-    expect(undoInsert('a    x:1\r\nb    y:2', 2, 'b    y:2')).toMatchObject({ document: 'a    x:1\r' });
-    expect(undoInsert('z    q:0\na    x:1\r\nb    y:2', 3, 'b    y:2')).toMatchObject({ document: 'z    q:0\na    x:1\r' });
-    // In a CRLF document the insert gave CRLF, and that is what goes.
-    expect(undoInsert('z    q:0\r\na    x:1\r\nb    y:2', 3, 'b    y:2')).toMatchObject({ document: 'z    q:0\r\na    x:1' });
-  });
-
-  test('the line is found by its text when lines were added above it since', () => {
-    const inserted = `\\ top\n\\ Daily\nmail                 https://mail.google.com/\n${STOCKS}\n`;
-    expect(undoInsert(inserted, 3, STOCKS)).toEqual({
-      kind: 'applied',
-      document: '\\ top\n\\ Daily\nmail                 https://mail.google.com/\n',
-      line: 4,
-      text: STOCKS,
-    });
-  });
-
-  test('a line changed since is stale', () => {
-    expect(undoInsert('\\ Daily\nmail  https://mail.google.com/\nstocks               https://other.example/\n', 3, STOCKS)).toEqual({ kind: 'stale' });
-  });
-
-  test('a line now unreadable, its name repeating an earlier line, is stale', () => {
-    expect(undoInsert(`stocks  https://other/\n\\ Daily\nmail  https://mail.google.com/\n${STOCKS}\n`, 3, STOCKS)).toEqual({ kind: 'stale' });
-  });
-
-  test('an unreadable line with the text at the number is passed over for the mapping line that has it', () => {
-    expect(undoInsert('\\ x\na  x:1\n\\ y\na  x:1\n', 4, 'a  x:1')).toEqual({ kind: 'applied', document: '\\ x\n\\ y\na  x:1\n', line: 2, text: 'a  x:1' });
-  });
-
-  test('the only line, taken back, leaves the empty document', () => {
-    expect(undoInsert('a  x:1', 1, 'a  x:1')).toEqual({ kind: 'applied', document: '', line: 1, text: 'a  x:1' });
-  });
 });
 
 describe('an insert is refused, writing nothing, when the values break a rule or the name is taken', () => {
@@ -372,52 +347,12 @@ describe("an Undo's Undo puts the line back as the insert left the document, and
     test(title, () => {
       const inserted = insert(c);
       if (inserted.kind !== 'applied') throw new Error(inserted.kind);
-      const undone = undoInsert(inserted.document, inserted.line, inserted.text);
+      const undone = removeMapping(inserted.document, inserted, inserted.endingGiven);
       if (undone.kind !== 'applied') throw new Error(undone.kind);
-      expect(reinsertLine(undone.document, undone.line, undone.text)).toEqual({ kind: 'applied', document: c.inserted, line: c.line, text: inserted.text });
-      expect(undoInsert(c.inserted, c.line, inserted.text)).toMatchObject({ kind: 'applied', document: c.document });
+      const putBack = reinsertLine(undone.document, undone.line, undone.text);
+      expect(putBack).toEqual({ kind: 'applied', document: c.inserted, line: c.line, text: inserted.text, endingGiven: inserted.endingGiven });
+      if (putBack.kind !== 'applied') throw new Error(putBack.kind);
+      expect(removeMapping(c.inserted, { line: c.line, text: inserted.text }, putBack.endingGiven)).toMatchObject({ kind: 'applied', document: c.document });
     });
   }
-
-  test('the text goes back as it was, its columns and note kept, not formatted again', () => {
-    expect(reinsertLine('a  x:1\nc  z:3\n', 2, '  b\ty:2    \\  its note ')).toEqual({
-      kind: 'applied',
-      document: 'a  x:1\n  b\ty:2    \\  its note \nc  z:3\n',
-      line: 2,
-      text: '  b\ty:2    \\  its note ',
-    });
-  });
-
-  test('into a document now shorter than the line before it: after the last line, the empty one a final break leaves included', () => {
-    expect(reinsertLine('a  x:1', 5, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\nb  y:2', line: 2, text: 'b  y:2' });
-    expect(reinsertLine('a  x:1\r\nc  z:3', 9, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\r\nc  z:3\r\nb  y:2', line: 3, text: 'b  y:2' });
-    expect(reinsertLine('a  x:1\n', 9, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\n\nb  y:2', line: 3, text: 'b  y:2' });
-    expect(reinsertLine('', 3, 'b  y:2')).toEqual({ kind: 'applied', document: '\nb  y:2', line: 2, text: 'b  y:2' });
-    // With exactly line − 1 lines it is the new last line, still at its number.
-    expect(reinsertLine('a  x:1\nc  z:3', 3, 'b  y:2')).toEqual({ kind: 'applied', document: 'a  x:1\nc  z:3\nb  y:2', line: 3, text: 'b  y:2' });
-  });
-
-  test("a name another mapping line now has, in any case, is taken: that line's number, nothing written", () => {
-    expect(reinsertLine('z  q:0\nnot a mapping\nSTOCKS  https://t.example/\n', 2, STOCKS)).toEqual({ kind: 'name-taken', line: 3 });
-    // A later line with the name counts as much as an earlier one: putting the text back would make it unreadable.
-    expect(reinsertLine('z  q:0\nStocks  https://t.example/\n', 1, STOCKS)).toEqual({ kind: 'name-taken', line: 2 });
-    // A lone surrogate is checked as the U+FFFD it is stored as.
-    expect(reinsertLine('a\uFFFD  y:2\n', 2, 'a\uD800  x:1')).toEqual({ kind: 'name-taken', line: 1 });
-    expect(reinsertLine('', 1, 'a\uD800  x:1')).toEqual({ kind: 'applied', document: 'a\uFFFD  x:1\n', line: 1, text: 'a\uFFFD  x:1' });
-  });
-
-  test('a name only an unreadable line has is free, and that line stays as it was', () => {
-    expect(reinsertLine('stocks notaurl\n', 1, STOCKS)).toEqual({ kind: 'applied', document: `${STOCKS}\nstocks notaurl\n`, line: 1, text: STOCKS });
-  });
-
-  test('a text that is not one mapping line where it lands is refused: a comment, a blank, two lines, an unreadable line', () => {
-    for (const text of ['\\ Work', '', '   ', 'a  x:1\nb  y:2', 'a  x:1\r\n', 'what  is  this', 'stocks', 'b  y:2\r\nc  z:3']) {
-      expect(reinsertLine('a  x:1\nc  z:3\n', 2, text), JSON.stringify(text)).toEqual({ kind: 'unreadable' });
-    }
-  });
-
-  test('a text ending in a lone CR stands only as the last line: before another it would read with the ending as CRLF', () => {
-    expect(reinsertLine('a  x:1\nc  z:3\n', 2, 'b  y:2\r')).toEqual({ kind: 'unreadable' });
-    expect(reinsertLine('a  x:1', 2, 'b  y:2\r')).toEqual({ kind: 'applied', document: 'a  x:1\nb  y:2\r', line: 2, text: 'b  y:2\r' });
-  });
 });

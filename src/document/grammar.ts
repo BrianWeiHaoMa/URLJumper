@@ -24,8 +24,11 @@ export type ReadLine =
   | (Line & { kind: 'blank' })
   /** A line holding a comment and nothing else; runs of them are headings (see `findSections`). */
   | (Line & { kind: 'comment' })
-  /** `urlStart`: where the URL starts in the line's exact text, as an index of UTF-16 code units. */
-  | (Line & { kind: 'mapping'; mapping: Mapping; urlStart: number })
+  /**
+   * `urlStart`: where the URL starts in the line's exact text, as an index of UTF-16 code units; `noteStart`:
+   * where its note starts, the same way, or null when the line has no note or an empty one.
+   */
+  | (Line & { kind: 'mapping'; mapping: Mapping; urlStart: number; noteStart: number | null })
   | (Line & { kind: 'unreadable' } & Unreadable);
 
 /** An error of the document by F4: an unreadable line, by its number, with what makes it one. */
@@ -112,12 +115,14 @@ function readLine(line: Line, namesSeen: Map<string, number>): ReadLine {
   const heldBy = namesSeen.get(lowered);
   if (heldBy !== undefined) return { ...line, kind: 'unreadable', problem: 'repeated-name', heldBy };
   namesSeen.set(lowered, line.number);
-  const note = commentAt === -1 ? null : line.text.slice(commentAt + 1).trim();
+  const comment = commentAt === -1 ? null : line.text.slice(commentAt + 1);
+  const note = comment === null ? null : comment.trim();
   const contentStart = beforeComment.length - beforeComment.trimStart().length;
   return {
     ...line,
     kind: 'mapping',
     mapping: { line: line.number, name, url, note, key: mappingKey(name, url) },
     urlStart: contentStart + urlStart,
+    noteStart: comment === null || note === '' ? null : commentAt + 1 + comment.length - comment.trimStart().length,
   };
 }

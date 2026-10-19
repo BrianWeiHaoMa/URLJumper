@@ -7,8 +7,10 @@ import { jump } from './jump';
 import { loadExampleDocument } from './load-example';
 import { removeHonoredIntent } from './open-popup';
 import { enqueue } from './queue';
+import { remove } from './remove';
 import { replace } from './replace';
 import { resetUsage } from './reset-usage';
+import { rewrite } from './rewrite';
 import { undo } from './undo';
 
 export function perform<R extends Request>(request: R): Promise<ReplyTo<R>> {
@@ -25,6 +27,10 @@ function operate<R extends Request>(request: R): Promise<ReplyTo<R>> {
       return removeHonoredIntent(request) as Promise<ReplyTo<R>>;
     case 'insert':
       return insert(request) as Promise<ReplyTo<R>>;
+    case 'rewrite':
+      return rewrite(request) as Promise<ReplyTo<R>>;
+    case 'remove':
+      return remove(request) as Promise<ReplyTo<R>>;
     case 'undo':
       return undo(request) as Promise<ReplyTo<R>>;
     case 'replace':

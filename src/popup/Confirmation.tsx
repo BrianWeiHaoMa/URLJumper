@@ -103,8 +103,8 @@ export function useUndo(confirmed: Confirmed | null, onOutcome: (outcome: Outcom
   const undo = async () => {
     const outcome = confirmed?.outcome;
     if (outcome === undefined || outcome.kind === 'refused' || inFlight.current) return;
-    const { name, line, text } = outcome.changed;
-    const request: UndoRequest = { kind: 'undo', act: outcome.kind === 'removed' ? 'reinsert' : 'remove', line, text };
+    const { name, line, text, endingGiven } = outcome.changed;
+    const request: UndoRequest = outcome.kind === 'removed' ? { kind: 'undo', act: 'reinsert', line, text } : { kind: 'undo', act: 'remove', line, text, endingGiven };
     inFlight.current = true;
     setUndoing(true);
     const reply = await send(request);
@@ -118,7 +118,7 @@ export function useUndo(confirmed: Confirmed | null, onOutcome: (outcome: Outcom
 function outcomeAfter(name: string, request: UndoRequest, reply: UndoReply): Outcome {
   if (reply.kind !== 'applied') return { kind: 'refused', message: refusalText(name, request, reply) };
   const changed = { name, line: reply.line, text: reply.text };
-  return request.act === 'remove' ? { kind: 'removed', changed } : { kind: 'put-back', changed };
+  return request.act === 'remove' ? { kind: 'removed', changed } : { kind: 'put-back', changed: { ...changed, endingGiven: reply.endingGiven } };
 }
 
 function refusalText(name: string, request: UndoRequest, reply: Exclude<UndoReply, { kind: 'applied' }>): string {

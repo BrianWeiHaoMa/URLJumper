@@ -8,8 +8,10 @@ import {
   type JumpRequest,
   type LoadExampleRequest,
   type RemoveIntentRequest,
+  type RemoveRequest,
   type ReplaceRequest,
   type ResetUsageRequest,
+  type RewriteRequest,
   type UndoRequest,
 } from './requests';
 
@@ -18,6 +20,10 @@ const REMOVE_INTENT: RemoveIntentRequest = { kind: 'remove-intent', windowId: 3,
 const INSERT: InsertRequest = { kind: 'insert', name: 'stocks', url: 'https://s.example/', note: '', heading: null };
 const UNDO: UndoRequest = { kind: 'undo', act: 'remove', line: 3, text: 'stocks               https://s.example/' };
 const REINSERT: UndoRequest = { ...UNDO, act: 'reinsert' };
+const UNDO_GIVEN: UndoRequest = { ...UNDO, endingGiven: { text: 'mail  https://mail.google.com/', ending: '\r\n' } };
+const RESTORE: UndoRequest = { kind: 'undo', act: 'restore', line: 3, text: 'shares               https://s.example/', former: 'stocks  https://s.example/  \ its note' };
+const REWRITE: RewriteRequest = { kind: 'rewrite', line: 3, text: 'stocks  https://s.example/', name: 'shares', url: 'https://s.example/', note: '' };
+const REMOVE: RemoveRequest = { kind: 'remove', line: 3, text: 'stocks  https://s.example/' };
 const LOAD_EXAMPLE: LoadExampleRequest = { kind: 'load-example' };
 const RESET_USAGE: ResetUsageRequest = { kind: 'reset-usage' };
 const REPLACE: ReplaceRequest = { kind: 'replace', text: 'a  https://a.example/\nb  https://b.example/\n', base: 'a  https://a.example/\r\n' };
@@ -111,16 +117,28 @@ test('the worker accepts only a request declared here', () => {
 });
 
 test('the requests that write the document, each with the replies declared for it', async () => {
-  const replies: [InsertRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
+  const replies: [InsertRequest | RewriteRequest | RemoveRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
     [INSERT, [
       { kind: 'applied', line: 3, text: 'stocks               https://s.example/', headingMissing: false },
+      { kind: 'applied', line: 2, text: 'stocks https://s.example/', headingMissing: false, endingGiven: { text: 'a  x:1\r', ending: '\n' } },
       { kind: 'invalid', field: 'url', rule: 'no-scheme' },
       { kind: 'name-taken', line: 5 },
       { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
     ]],
+    [REWRITE, [
+      { kind: 'applied', line: 4, text: 'shares  https://s.example/' },
+      { kind: 'stale', document: 'a  x:1\n' },
+      { kind: 'name-taken', line: 2 },
+      { kind: 'invalid', field: 'note', rule: 'backslash' },
+      { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
+    ]],
+    [REMOVE, [{ kind: 'applied', line: 3, text: REMOVE.text }, { kind: 'stale', document: '' }, { kind: 'storage-failed', message: 'IO error' }]],
     [UNDO, [{ kind: 'applied', line: 3, text: UNDO.text }, { kind: 'stale', document: '' }]],
+    [UNDO_GIVEN, [{ kind: 'applied', line: 3, text: UNDO.text }]],
+    [RESTORE, [{ kind: 'applied', line: 3, text: RESTORE.former }, { kind: 'stale', document: '' }, { kind: 'name-taken', line: 1 }]],
     [REINSERT, [
       { kind: 'applied', line: 3, text: UNDO.text },
+      { kind: 'applied', line: 3, text: UNDO.text, endingGiven: { text: '', ending: '\n' } },
       { kind: 'stale', document: 'a  x:1\n' },
       { kind: 'name-taken', line: 2 },
       { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
@@ -137,8 +155,20 @@ test('the requests that write the document, each with the replies declared for i
 });
 
 test('a reply declared for another request, or missing a field, is no reply', async () => {
-  const undeclared: [InsertRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
-    [INSERT, [{ kind: 'applied', line: 3, text: 'x' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }, { kind: 'invalid', field: 'url' }, { kind: 'stale', document: '' }, { kind: 'opened' }]],
+  const malformedEndings = [{ text: 'a', ending: '\r' }, { text: 'a', ending: '' }, { text: 1, ending: '\n' }, { ending: '\n' }, 'a\n', null];
+  const undeclared: [InsertRequest | RewriteRequest | RemoveRequest | UndoRequest | LoadExampleRequest, unknown[]][] = [
+    [INSERT, [
+      { kind: 'applied', line: 3, text: 'x' },
+      { kind: 'name-taken' },
+      { kind: 'name-taken', line: 0 },
+      { kind: 'invalid', field: 'url' },
+      { kind: 'stale', document: '' },
+      { kind: 'opened' },
+      ...malformedEndings.map((endingGiven) => ({ kind: 'applied', line: 3, text: 'x', headingMissing: false, endingGiven })),
+    ]],
+    [REWRITE, [{ kind: 'applied', line: 3 }, { kind: 'applied', text: 'x' }, { kind: 'stale' }, { kind: 'name-taken', line: 0 }, { kind: 'invalid', rule: 'empty' }, { kind: 'changed', document: '' }, { kind: 'done' }]],
+    [REMOVE, [{ kind: 'applied', line: 0, text: 'x' }, { kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'name-taken', line: 2 }, { kind: 'invalid', field: 'name', rule: 'empty' }]],
+    [RESTORE, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'name-taken' }, ...malformedEndings.map((endingGiven) => ({ kind: 'applied', line: 3, text: 'x', endingGiven }))]],
     [UNDO, [{ kind: 'applied', line: 3 }, { kind: 'stale' }, { kind: 'not-empty' }, { kind: 'name-taken' }, { kind: 'name-taken', line: 0 }]],
     [REINSERT, [{ kind: 'applied', text: 'x' }, { kind: 'invalid', field: 'name', rule: 'empty' }, { kind: 'done' }]],
     [LOAD_EXAMPLE, [{ kind: 'applied', text: 'x' }, { kind: 'done' }, { kind: 'stale', document: '' }]],
@@ -157,7 +187,14 @@ test('the worker accepts the writing requests only with every field of its decla
   expect(isRequest(INSERT)).toBe(true);
   expect(isRequest({ ...INSERT, note: 'see docs', heading: { texts: ['\\ Work', '\\ more'], before: 2 } })).toBe(true);
   expect(isRequest(UNDO)).toBe(true);
+  expect(isRequest(UNDO_GIVEN)).toBe(true);
+  expect(isRequest({ ...UNDO, endingGiven: { text: '', ending: '\n' } })).toBe(true);
   expect(isRequest(REINSERT)).toBe(true);
+  expect(isRequest(RESTORE)).toBe(true);
+  expect(isRequest({ ...RESTORE, former: '' })).toBe(true);
+  expect(isRequest(REWRITE)).toBe(true);
+  expect(isRequest({ ...REWRITE, note: 'see docs' })).toBe(true);
+  expect(isRequest(REMOVE)).toBe(true);
   expect(isRequest(LOAD_EXAMPLE)).toBe(true);
   for (const value of [
     { ...INSERT, name: undefined },
@@ -169,6 +206,25 @@ test('the worker accepts the writing requests only with every field of its decla
     { ...INSERT, heading: { texts: ['\\ Work'], before: -1 } },
     { ...INSERT, heading: { texts: ['\\ Work'], before: 0.5 } },
     { ...UNDO, act: 'restore' },
+    { ...RESTORE, former: undefined },
+    { ...RESTORE, former: 3 },
+    { ...RESTORE, line: 0 },
+    { ...RESTORE, text: null },
+    { ...UNDO, endingGiven: { text: 'a', ending: '\r' } },
+    { ...UNDO, endingGiven: { text: 'a', ending: '' } },
+    { ...UNDO, endingGiven: { text: 1, ending: '\n' } },
+    { ...UNDO, endingGiven: { ending: '\n' } },
+    { ...UNDO, endingGiven: 'a\n' },
+    { ...UNDO, endingGiven: null },
+    { ...REWRITE, name: undefined },
+    { ...REWRITE, url: 1 },
+    { ...REWRITE, note: undefined },
+    { ...REWRITE, text: undefined },
+    { ...REWRITE, line: 0 },
+    { ...REWRITE, line: '3' },
+    { ...REMOVE, text: undefined },
+    { ...REMOVE, line: 1.5 },
+    { kind: 'rewrites', line: 3, text: 'x', name: 'a', url: 'u:1', note: '' },
     { ...UNDO, line: 0 },
     { ...UNDO, line: 2.5 },
     { ...UNDO, text: undefined },

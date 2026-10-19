@@ -46,6 +46,11 @@ export function holderOfName(mappings: readonly Mapping[], name: string): Mappin
   return mappings.find((mapping) => comparableName(mapping.name) === wanted);
 }
 
+/** `mappings` but the one on line `line`: the names a rewritten or restored line must not have, its own former name free. */
+export function mappingsBesides(mappings: readonly Mapping[], line: number): Mapping[] {
+  return mappings.filter((mapping) => mapping.line !== line);
+}
+
 function nameProblem(name: string): FieldProblem | undefined {
   if (name === '') return { field: 'name', rule: 'empty' };
   if (name.includes('\\')) return { field: 'name', rule: 'backslash' };

@@ -1,3 +1,4 @@
+import type { EndingGiven } from '../src/document/line-edits.ts';
 import type { InsertRequest, UndoRequest } from '../src/requests.ts';
 import { expect, test, type LoadedExtension } from './extension.ts';
 
@@ -8,7 +9,7 @@ const insertOf = (name: string, url: string, heading: InsertRequest['heading'] =
   note,
   heading,
 });
-const undoOf = (line: number, text: string): UndoRequest => ({ kind: 'undo', act: 'remove', line, text });
+const undoOf = (line: number, text: string, endingGiven?: EndingGiven): UndoRequest => ({ kind: 'undo', act: 'remove', line, text, endingGiven });
 const reinsertOf = (line: number, text: string): UndoRequest => ({ kind: 'undo', act: 'reinsert', line, text });
 
 const DAILY = '\\ Daily\nmail                 https://mail.google.com/\n';
@@ -112,8 +113,8 @@ test('a CRLF document without a final break, and a last line ending in a lone CR
     await extension.seedStorage({ mappings: document });
     const reply = await extension.sendRequest(insertOf('b', 'y:2'));
     expect(await storedDocument(extension)).toBe(inserted);
-    const { line, text } = reply as { line: number; text: string };
-    expect(await extension.sendRequest(undoOf(line, text))).toEqual({ kind: 'applied', line, text: 'b    y:2' });
+    const { line, text, endingGiven } = reply as { line: number; text: string; endingGiven: EndingGiven };
+    expect(await extension.sendRequest(undoOf(line, text, endingGiven))).toEqual({ kind: 'applied', line, text: 'b    y:2' });
     expect(await storedDocument(extension)).toBe(document);
   }
 });
@@ -263,11 +264,11 @@ test("through an insert, its undo, and the undo's undo, a CRLF document without 
     ['a    x:1\r', 'a    x:1\r\nb    y:2'],
   ]) {
     await extension.seedStorage({ mappings: document });
-    const { line, text } = (await extension.sendRequest(insertOf('b', 'y:2'))) as { line: number; text: string };
-    expect(await extension.sendRequest(undoOf(line, text))).toMatchObject({ kind: 'applied' });
-    expect(await extension.sendRequest(reinsertOf(line, text))).toEqual({ kind: 'applied', line, text });
+    const { line, text, endingGiven } = (await extension.sendRequest(insertOf('b', 'y:2'))) as { line: number; text: string; endingGiven: EndingGiven };
+    expect(await extension.sendRequest(undoOf(line, text, endingGiven))).toMatchObject({ kind: 'applied' });
+    expect(await extension.sendRequest(reinsertOf(line, text))).toEqual({ kind: 'applied', line, text, endingGiven });
     expect(await storedDocument(extension)).toBe(inserted);
-    expect(await extension.sendRequest(undoOf(line, text))).toMatchObject({ kind: 'applied' });
+    expect(await extension.sendRequest(undoOf(line, text, endingGiven))).toMatchObject({ kind: 'applied' });
     expect(await storedDocument(extension)).toBe(document);
   }
 });

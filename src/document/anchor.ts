@@ -4,6 +4,12 @@
 // line can be an anchor (R3): an unreadable line with the same text is never one.
 import type { ReadLine } from './grammar';
 
+/** A line as a surface loaded it, both from one read of the document: its number and its exact text. */
+export interface Anchor {
+  line: number;
+  text: string;
+}
+
 /** The number of the line a change names as `number` and `text`; undefined when no mapping line, or several, has the text. */
 export function findAnchor(lines: readonly ReadLine[], number: number, text: string): number | undefined {
   if (lines[number - 1]?.kind === 'mapping' && lines[number - 1]!.text === text) return number;

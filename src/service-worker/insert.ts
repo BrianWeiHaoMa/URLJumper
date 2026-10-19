@@ -9,5 +9,6 @@ export async function insert(request: InsertRequest): Promise<InsertReply> {
   const result = insertMapping(read.document, { name: request.name, url: request.url, note: request.note }, request.heading);
   if (result.kind !== 'applied') return result;
   await storeDocument(read, result.document);
-  return { kind: 'applied', line: result.line, text: result.text, headingMissing: result.headingMissing };
+  const { document: _, ...reply } = result;
+  return reply;
 }

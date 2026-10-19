@@ -85,6 +85,18 @@ describe('mapping lines', () => {
     expect(urlStart('😀 https://x')).toBe(3);
   });
 
+  test("a mapping line records where its note starts in the line's exact text, none without a note or with an empty one", () => {
+    const noteStart = (text: string) => {
+      const [line] = read(text);
+      return line?.kind === 'mapping' ? line.noteStart : undefined;
+    };
+    expect(noteStart('a https://x \\ note')).toBe(14);
+    expect(noteStart('a https://x\\note')).toBe(12);
+    expect(noteStart('😀 https://x  \\\t note \\ more')).toBe(17);
+    expect(noteStart('a https://x')).toBeNull();
+    expect(noteStart('a https://x   \\   ')).toBeNull();
+  });
+
   test('the scheme rule and the name comparison are the ones validation shares', () => {
     expect(hasScheme('a1+.-:x')).toBe(true);
     expect(hasScheme('\u212A:x')).toBe(false);

@@ -7,6 +7,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
+import type { EndingGiven } from '../document/line-edits';
 import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingText, namedSections, type HeadingIdentity, type Section } from '../document/sections';
 import { send, type InsertReply } from '../requests';
@@ -31,6 +32,8 @@ export interface Saved {
   line: number;
   text: string;
   headingMissing: boolean;
+  /** Present when the line went after the last line: what its Undo takes back from that line (G12). */
+  endingGiven?: EndingGiven;
 }
 
 interface NameFormProps {
@@ -77,7 +80,7 @@ export function NameForm({ document: stored, name: startName, subject, notice, o
     setRefusal(null);
     const reply = await send({ kind: 'insert', name, url, note: '', heading });
     if (reply.kind === 'applied') {
-      onSaved({ name: storedName(reply.text), line: reply.line, text: reply.text, headingMissing: reply.headingMissing });
+      onSaved({ name: storedName(reply.text), line: reply.line, text: reply.text, headingMissing: reply.headingMissing, endingGiven: reply.endingGiven });
       return;
     }
     inFlight.current = false;
