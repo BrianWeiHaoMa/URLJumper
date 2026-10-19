@@ -15,7 +15,7 @@ import { anchorAt, type Anchor } from '../document/anchor';
 import { mappingOfLine } from '../document/grammar';
 import type { MappingFields } from '../document/validation';
 import { chromeMessage, send, type InsertReply } from '../requests';
-import { editInsteadText, fieldProblemText, takenNameText } from './field-problems';
+import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
 import { insertedOutcome, removedOutcome, rewrittenOutcome, type Outcome } from './outcomes';
 import { destination, lineFields, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
 import './line-form.css';
@@ -349,9 +349,7 @@ function controlOf(target: EventTarget): Control {
 
 /** What a refusal of Save, a rewrite's or an insert's, says: the rule or the name the worker found, or Chrome's message (G21). */
 function notSaved(reply: Exclude<InsertReply, { kind: 'applied' }>, line: number, url: string): string {
-  if (reply.kind === 'storage-failed') return `Not saved: nothing was stored. Chrome said: ${reply.message}`;
-  if (reply.kind === 'name-taken') return `Not saved: line ${reply.line} already has this name.`;
-  return `Not saved: ${fieldProblemText(reply, line, url)}`;
+  return reply.kind === 'storage-failed' ? `Not saved: nothing was stored. Chrome said: ${reply.message}` : refusedValuesText(reply, line, url);
 }
 
 /** What became of the line, said where the change was refused (G13): nothing was stored. */

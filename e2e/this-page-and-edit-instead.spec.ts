@@ -7,7 +7,7 @@
 // reply would close the editor opened meanwhile; and one that goes while it has the focus gives it to a
 // control that stays. Every state fits and passes the accessibility pass (G7, G32).
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, expect, popupOnNewPage, rowEditor, slowWorkerReads, test, thisPagePencil, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, expect, popupOnNewPage, rowEditor, SELECTED_ROW, selectedRow, selectedRowName, slowWorkerReads, test, thisPagePencil, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const searchBox = (popup: Page) => popup.getByRole('combobox');
@@ -116,17 +116,17 @@ test("after Tab to a long This page is's pencil, which scrolls the view past the
   const longName = `n${'x'.repeat(2_999)}`;
   const { popup } = await popupWith(extension, site, (address) => `mail                 https://mail.example.com/\n${longName}  ${address}\n`);
   const selectedInView = () =>
-    popup.evaluate(() => {
+    popup.evaluate((selected) => {
       const view = document.querySelector('.view')!.getBoundingClientRect();
-      const row = document.querySelector('[role=option][aria-selected=true]')!.getBoundingClientRect();
+      const row = document.querySelector(selected)!.getBoundingClientRect();
       return row.top >= view.top - 0.5 && row.bottom <= view.bottom + 0.5;
-    });
+    }, SELECTED_ROW);
   await popup.keyboard.type('mail');
-  await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('mail');
+  await expect(selectedRowName(popup)).toHaveText('mail');
   for (let i = 0; i < 5; i++) await popup.keyboard.press('Tab');
   await expect(thisPagePencil(popup)).toBeFocused();
   // The row the view scrolled away from is held back: neither drawn nor named as selected (G3).
-  await expect(popup.locator('[role=option][aria-selected=true]')).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(searchBox(popup)).not.toHaveAttribute('aria-activedescendant');
   await expect(footer(popup)).toHaveText('Enter edits line 2');
   await popup.keyboard.press('Tab');

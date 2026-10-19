@@ -12,6 +12,7 @@ import {
   holdPageReads,
   popupOnNewPage,
   retypeLine,
+  selectedRowName,
   test,
   textViewInPopup,
   textViewOnOptionsPage,
@@ -274,7 +275,7 @@ test('an absent document is an empty text area: a mapping typed there is stored,
   expect((await extension.readStorage()).mappings).toBe('typed  https://typed.example/');
   await popup.getByRole('button', { name: 'Back' }).click();
   await popup.getByRole('combobox').fill('typ');
-  await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('typed');
+  await expect(selectedRowName(popup)).toHaveText('typed');
 
   const again = await textViewInPopup(popup);
   await again.area.fill(' \n\t\n');

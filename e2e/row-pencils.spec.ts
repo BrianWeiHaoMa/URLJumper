@@ -12,6 +12,8 @@ import {
   popupOnNewPage,
   rowEditor,
   rowPencils,
+  selectedRow,
+  selectedRowName,
   test,
   thisPagePencil,
   upgradeNotice,
@@ -73,7 +75,7 @@ test("each row of the seven-row window has its pencil, which follows the window;
 
   // Down past the seventh row moves the window by one, and the pencils with it.
   for (let i = 0; i < 7; i++) await popup.keyboard.press('ArrowDown');
-  await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('m08');
+  await expect(selectedRowName(popup)).toHaveText('m08');
   await expect.poll(() => pencilNames(popup)).toEqual(edits(2, 7));
   // The wheel over a pencil moves the window as over its row: three rows for 120 pixels.
   await rowPencils(popup).nth(1).hover();
@@ -98,7 +100,7 @@ test('the Name row has no pencil; address matches and the argument row each have
   // Address matches, then the Name row last: up from the first row wraps to it.
   await popup.keyboard.type('example');
   await popup.keyboard.press('ArrowUp');
-  await expect(popup.locator('[role=option][aria-selected=true]')).toHaveAccessibleName('Name "example" for this page');
+  await expect(selectedRow(popup)).toHaveAccessibleName('Name "example" for this page');
   await expect.poll(() => pencilNames(popup)).toEqual(edits(15, 6));
   expect(await pencilsOnTheirRows(popup)).toBe(true);
   await checkFitAndAccessibility(popup);
@@ -146,7 +148,7 @@ test('Tab from the search box reaches the chip, the gear, then the pencils in ro
     await expect(editor.name, key).toHaveValue('stock fund');
     await editor.cancel.click();
     await expect(searchBox(popup)).toHaveValue('stock');
-    await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('stocks');
+    await expect(selectedRowName(popup)).toHaveText('stocks');
     await popup.keyboard.press('Tab');
     await popup.keyboard.press('Tab');
     await popup.keyboard.press('Tab');

@@ -2,8 +2,8 @@
 // suggestions, and Enter opens the chosen one through the one *jump*, which records the use (G26). Both run
 // on the worker's queue, so an input's record is stored before the next input's and before the Enter that
 // follows it; Enter reads the record from storage, since the worker's memory may not have survived (S2).
-import type { Usage } from '../document/score';
 import { readSearchOrder } from '../preferences';
+import { readMappings, readUsage } from '../stored-document';
 import { addressBarList, enteredTarget, readAddressBarRecord } from './address-bar-suggestions';
 import { jump } from './jump';
 import { enqueue } from './queue';
@@ -57,8 +57,8 @@ export function openFromAddressBar(text: string, disposition: Disposition): Prom
 // As the popup reads them, so the two lists are the same (How G1, G2, G28).
 function searchInputs({ mappings, usage, searchOrder }: Record<string, unknown>) {
   return {
-    document: typeof mappings === 'string' ? mappings : '',
-    usage: typeof usage === 'object' && usage !== null ? (usage as Usage) : undefined,
+    document: readMappings(mappings),
+    usage: readUsage(usage),
     order: readSearchOrder(searchOrder),
     now: Date.now(),
   };

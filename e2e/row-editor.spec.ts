@@ -16,6 +16,8 @@ import {
   lineConfirmation,
   popupOnNewPage,
   rowEditor,
+  selectedRow,
+  selectedRowName,
   test,
   textView,
   upgradeNotice,
@@ -26,7 +28,6 @@ import {
 const footer = (popup: Page) => popup.locator('footer');
 const searchBox = (popup: Page) => popup.getByRole('combobox');
 const rowNames = (popup: Page) => popup.locator('[role=option] .row-name');
-const selectedName = (popup: Page) => popup.locator('[role=option][aria-selected=true] .row-name');
 
 const STOCKS = 'stocks               https://stocks.example.com/        \\ markets';
 const DOC = [
@@ -72,7 +73,7 @@ test('Ctrl+E on the selected row opens its editor, filled from its line, from th
 
   await rowEditor(popup).cancel.click();
   await popup.keyboard.press('ArrowUp');
-  await expect(selectedName(popup)).toHaveText('stocks');
+  await expect(selectedRowName(popup)).toHaveText('stocks');
   await editSelectedRow(popup);
   await expect(rowEditor(popup).note).toHaveValue('markets');
   expect(await jumps()).toEqual([]);
@@ -125,7 +126,7 @@ test('rename by typing and Enter: the line alone rewritten in its columns, one c
   expect(await storedDocument(extension)).toBe(renamed);
   await expect(searchBox(popup)).toHaveValue('');
   await expect(searchBox(popup)).toBeFocused();
-  await expect(popup.locator('[role=option][aria-selected=true]')).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   const stored = await changes();
   expect(stored).toHaveLength(1);
   expect(Object.keys(stored[0]!).sort()).toEqual(['mappings', 'usage']);
@@ -303,7 +304,7 @@ test("Cancel returns to search as it was left: the typed text, the window, the s
   const before = await extension.readStorage();
   await popup.keyboard.type('m');
   await popup.keyboard.press('ArrowUp');
-  await expect(selectedName(popup)).toHaveText('m12');
+  await expect(selectedRowName(popup)).toHaveText('m12');
   await expect(popup.locator('.cue')).toHaveText('5 more above');
   await popup.locator('.chip').click();
   await expect(popup.locator('.chip')).toHaveText('This tab');
@@ -315,7 +316,7 @@ test("Cancel returns to search as it was left: the typed text, the window, the s
   await popup.keyboard.press('Enter');
   await expect(searchBox(popup)).toHaveValue('m');
   await expect(searchBox(popup)).toBeFocused();
-  await expect(selectedName(popup)).toHaveText('m12');
+  await expect(selectedRowName(popup)).toHaveText('m12');
   await expect(rowNames(popup)).toHaveText(['m6', 'm7', 'm8', 'm9', 'm10', 'm11', 'm12']);
   await expect(popup.locator('.cue')).toHaveText('5 more above');
   await expect(popup.locator('.chip')).toHaveText('This tab');
@@ -403,7 +404,7 @@ test('with the notice of what is new showing and a row selected, Ctrl+E dismisse
   await extension.seedStorage({ mappings: DOC });
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('mail');
-  await expect(selectedName(popup)).toHaveText('mail');
+  await expect(selectedRowName(popup)).toHaveText('mail');
   // Chrome updates the extension from 1.x while this popup is open.
   await extension.dispatchEvent('runtime.onInstalled', { reason: 'update', previousVersion: '1.3.0' });
   await expect(upgradeNotice(popup).notice).toBeVisible();

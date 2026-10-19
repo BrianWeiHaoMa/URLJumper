@@ -10,6 +10,7 @@ import {
   caret,
   checkAccessibilityInBothSchemes,
   checkFitAndAccessibility,
+  draftLanded,
   expect,
   holdPageReads,
   holdPageRequests,
@@ -21,7 +22,6 @@ import {
   textViewOnOptionsPage,
   typeAtEnd,
   watchRequests,
-  type LoadedExtension,
 } from './extension.ts';
 
 const DOC = 'a  https://a/\nb  https://b/\n';
@@ -33,10 +33,6 @@ const footer = (popup: Page) => popup.locator('footer');
 /** A draft another Text view kept, as a check seeds it. */
 function kept(text: string, base: string, view = 'earlier-view', number = 4, time = 1_700_000_000_000): Draft {
   return { text, base, time, view, number };
-}
-
-async function draftLanded(extension: LoadedExtension, text: string) {
-  await expect.poll(async () => (await storedDraft(extension.worker))?.text).toBe(text);
 }
 
 test('a kept draft offered and discarded goes; resumed, then made the stored text again by one input, it goes; each discard names the view and number that wrote it', async ({ extension }) => {

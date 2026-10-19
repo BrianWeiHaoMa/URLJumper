@@ -13,6 +13,7 @@ import {
   expectNoNotice,
   holdPageReads,
   popupOnNewPage,
+  selectedRowName,
   shownTheme,
   test,
   upgradeNotice,
@@ -33,7 +34,6 @@ const WHATS_NEW = 'whats-new.html';
 
 const searchBox = (popup: Page) => popup.getByRole('combobox');
 const names = (popup: Page) => popup.locator('[role=option] .row-name');
-const selected = (popup: Page) => popup.locator('[role=option][aria-selected=true] .row-name');
 const footer = (popup: Page) => popup.locator('footer');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
 
@@ -70,7 +70,7 @@ test('the first popup after an update from 1.x shows the notice; a typed letter 
   await expect(notice).toHaveCount(0);
   await expect(searchBox(popup)).toHaveValue('m');
   await expect(names(popup)).toHaveText(['mailbox', 'mail', 'maps', 'cal']);
-  await expect(selected(popup)).toHaveText('mailbox');
+  await expect(selectedRowName(popup)).toHaveText('mailbox');
   await expect.poll(() => extension.readStorage()).toEqual(ONE_X);
   await popup.close();
 
@@ -80,7 +80,7 @@ test('the first popup after an update from 1.x shows the notice; a typed letter 
   await expect(footer(next)).toHaveText('Enter does nothing · Down selects a row');
   await next.keyboard.press('m');
   await expect(names(next)).toHaveText(['mailbox', 'mail', 'maps', 'cal']);
-  await expect(selected(next)).toHaveText('mailbox');
+  await expect(selectedRowName(next)).toHaveText('mailbox');
   expect(await extension.readStorage()).toEqual(ONE_X);
 });
 
@@ -90,7 +90,7 @@ test('Down as the first key dismisses the notice and selects row 1', async ({ ex
   await expect(upgradeNotice(popup).notice).toBeVisible();
   await popup.keyboard.press('ArrowDown');
   await expect(upgradeNotice(popup).notice).toHaveCount(0);
-  await expect(selected(popup)).toHaveText('mailbox');
+  await expect(selectedRowName(popup)).toHaveText('mailbox');
   await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
   await expect.poll(() => extension.readStorage()).toEqual(ONE_X);
 });
@@ -218,7 +218,7 @@ test('with a row selected and no key typed yet, Enter on the notice opens only t
   const { popup } = await popupOnNewPage(extension, site);
   // Text put in the box without a keystroke, as a paste from the context menu puts it.
   await searchBox(popup).fill('mail');
-  await expect(selected(popup)).toHaveText('mail');
+  await expect(selectedRowName(popup)).toHaveText('mail');
   await expect(upgradeNotice(popup).notice).toBeVisible();
   for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
   await expect(upgradeNotice(popup).open).toBeFocused();

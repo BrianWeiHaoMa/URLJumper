@@ -49,6 +49,13 @@ test('the use is keyed by the lowercased name and the URL, as the list keys the 
   expect(Object.keys((await extension.readStorage()).usage as object)).toEqual([`github\n${page}`]);
 });
 
+test('a stored usage that is not a record of uses counts as none: the jump opens and records its use as the only one', async ({ extension, site }) => {
+  const page = site.pageUrl('Anew');
+  await extension.seedStorage({ mappings: `anew  ${page}\n`, usage: 'not a record' });
+  expect(await extension.sendRequest(newTab('anew', page))).toEqual({ kind: 'opened' });
+  expect(Object.keys((await extension.readStorage()).usage as object)).toEqual([`anew\n${page}`]);
+});
+
 test('a mapping keeps the times of its last ten uses, newest last', async ({ extension, site }) => {
   const page = site.pageUrl('Often');
   const tab = await extension.context.newPage();

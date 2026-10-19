@@ -4,18 +4,7 @@
 // worker keeps (State; S2, S7), through the one jump, which records the use (G26), in the tab Chrome's
 // disposition asks for. Nothing typed, or nothing matching, opens nothing (N4).
 import type { Page } from '@playwright/test';
-import {
-  addressBar,
-  checkFitAndAccessibility,
-  chromeShows,
-  expect,
-  popupOnNewPage,
-  restartWorker,
-  slowWorkerReads,
-  test,
-  type LoadedExtension,
-  type LocalSite,
-} from './extension.ts';
+import { addressBar, checkFitAndAccessibility, chromeShows, expect, popupOnNewPage, restartWorker, selectedRow, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
 type Usage = Record<string, number[]>;
 type StoredRecord = { typed: string; rows: [number, string, string, string][]; argumentRow: number | null };
@@ -49,7 +38,7 @@ async function readDescriptions(extension: LoadedExtension, page: Page, descript
 /** The popup's whole list for `typed`, each row as its name and the URL it shows, walked with Down from row 1. */
 async function popupRows(popup: Page, typed: string): Promise<string[]> {
   await popup.getByRole('combobox').fill(typed);
-  const selected = popup.locator('[role=option][aria-selected=true]');
+  const selected = selectedRow(popup);
   await expect(selected).toHaveAttribute('aria-posinset', '1');
   const count = Number(await selected.getAttribute('aria-setsize'));
   const rows: string[] = [];

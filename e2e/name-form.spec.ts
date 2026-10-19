@@ -4,10 +4,9 @@
 // Save is blocked (G8, L2), and it fits the popup (G7) and passes the accessibility pass (G32), keeping a
 // visible focus when another view's write takes away the Section choice that had it.
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, test, textViewOnOptionsPage, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, selectedRow, selectedRowName, test, textViewOnOptionsPage, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
-const selected = (popup: Page) => popup.locator('[role=option][aria-selected=true]');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
 const urlField = (popup: Page) => popup.getByRole('textbox', { name: 'URL' });
 const sectionChoice = (popup: Page) => popup.getByRole('listbox', { name: 'Section' });
@@ -40,7 +39,7 @@ test('text that matches no name lists the Name row, selected; Enter opens the fo
   const { page, popup } = await popupOnNewPage(extension, site, 'The page for zz');
   await popup.keyboard.type('zz');
   await expect(popup.getByRole('option')).toHaveCount(1);
-  await expect(selected(popup)).toHaveAccessibleName('Name "zz" for this page');
+  await expect(selectedRow(popup)).toHaveAccessibleName('Name "zz" for this page');
   await expect(footer(popup)).toHaveText('Enter opens the Name form');
   await checkFitAndAccessibility(popup);
 
@@ -65,12 +64,12 @@ test('address matches come first and the Name row last, reached with Down and co
   await extension.seedStorage({ mappings: lines });
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('shared');
-  await expect(selected(popup).locator('.row-name')).toHaveText('m1');
+  await expect(selectedRowName(popup)).toHaveText('m1');
   await expect(popup.locator('.cue')).toHaveText('1 more below');
   for (let i = 0; i < 7; i++) await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup)).toHaveAccessibleName('Name "shared" for this page');
-  await expect(selected(popup)).toHaveAttribute('aria-posinset', '8');
-  await expect(selected(popup)).toBeInViewport({ ratio: 1 });
+  await expect(selectedRow(popup)).toHaveAccessibleName('Name "shared" for this page');
+  await expect(selectedRow(popup)).toHaveAttribute('aria-posinset', '8');
+  await expect(selectedRow(popup)).toBeInViewport({ ratio: 1 });
   await expect(popup.locator('.cue')).toHaveText('1 more above');
   await expect(footer(popup)).toHaveText('Enter opens the Name form');
 
@@ -81,7 +80,7 @@ test('address matches come first and the Name row last, reached with Down and co
 
 test('Shift+Enter and a click on the Name row open the form as Enter does, and open no page', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: 'a  https://a.example/\n' });
-  for (const open of [(popup: Page) => popup.keyboard.press('Shift+Enter'), (popup: Page) => selected(popup).click({ modifiers: ['Shift'] }), (popup: Page) => selected(popup).click()]) {
+  for (const open of [(popup: Page) => popup.keyboard.press('Shift+Enter'), (popup: Page) => selectedRow(popup).click({ modifiers: ['Shift'] }), (popup: Page) => selectedRow(popup).click()]) {
     const { popup } = await popupOnNewPage(extension, site);
     await popup.keyboard.type('new name');
     const tabs = await pageTabs(extension);
@@ -112,7 +111,7 @@ test('the Name this page button opens the form with an empty, focused name field
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('combobox')).toBeFocused();
   await expect(popup.getByRole('combobox')).toHaveValue('typed in search');
-  await expect(selected(popup)).toHaveAccessibleName('Name "typed in search" for this page');
+  await expect(selectedRow(popup)).toHaveAccessibleName('Name "typed in search" for this page');
 });
 
 test('a name another line holds, in any case, is refused with that line, and Save stores nothing by Enter or click', async ({ extension, site }) => {
@@ -215,7 +214,7 @@ test('a long typed name is cut in the Name row with the words around it whole; a
   const { popup } = await popupOn(extension, address);
   const typed = 'q'.repeat(300);
   await popup.getByRole('combobox').fill(typed);
-  await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
+  await expect(selectedRow(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
   const shown = () =>
     popup.evaluate(() => {
       const whole = (element: HTMLElement) => element.scrollWidth <= element.clientWidth && element.getBoundingClientRect().width > 0;

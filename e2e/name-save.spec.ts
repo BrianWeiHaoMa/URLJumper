@@ -4,7 +4,7 @@
 // reply, until the user's next action or ten seconds.
 import type { Page } from '@playwright/test';
 import type { InsertRequest } from '../src/requests.ts';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, selectedRow, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
@@ -49,7 +49,7 @@ test('typed zz, Enter on the Name row, Enter again: one line after the last, per
   // Back in search with a blank box, where nothing is selected.
   await expect(popup.getByRole('combobox')).toBeFocused();
   await expect(popup.getByRole('combobox')).toHaveValue('');
-  await expect(popup.locator('[role=option][aria-selected=true]')).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
   expect(await pageTabs(extension)).toEqual(tabs);
   expect(page.url()).toBe(address);

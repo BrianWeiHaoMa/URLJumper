@@ -3,7 +3,7 @@
 // page; the footer says what Enter does wherever the focus is (L2), Enter on a choice does nothing, Escape
 // closes the popup, and every state fits (G7) and passes the accessibility pass (G32).
 import type { Page } from '@playwright/test';
-import { checkFit, checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, test } from './extension.ts';
+import { checkFit, checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, selectedRowName, test } from './extension.ts';
 
 const DOC = 'mail  https://mail.example.com/\ncal  https://cal.example.com/\n';
 
@@ -38,7 +38,7 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   await expect(searchBox(popup)).toBeFocused();
   // A row is selected, and Enter on the gear opens settings, never the row.
   await popup.keyboard.type('ma');
-  await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('mail');
+  await expect(selectedRowName(popup)).toHaveText('mail');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await expect(gear(popup)).toBeFocused();
@@ -96,7 +96,7 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   await popup.keyboard.press('Enter');
   await expect(searchBox(popup)).toBeFocused();
   await expect(searchBox(popup)).toHaveValue('ma');
-  await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('mail');
+  await expect(selectedRowName(popup)).toHaveText('mail');
   await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
   expect(await extension.tabUrls()).toEqual(tabs);
   expect('usage' in (await extension.readStorage())).toBe(false);

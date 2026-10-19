@@ -1,14 +1,13 @@
 // What the popup lists, as the user types and as storage changes: groups and order (G1, G2), selection and
 // the seven-row window (G3, F13), the cue and footer (L2), the theme (F3, F15), and the fit (G7).
 import type { Locator, Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, editSelectedRow, expect, popupOnNewPage, shownTheme, test, upgradeNotice, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, editSelectedRow, expect, popupOnNewPage, SELECTED_ROW, selectedRow, selectedRowName, shownTheme, test, upgradeNotice, type LoadedExtension } from './extension.ts';
 
 // Mappings named m1 … m<count>, one per line, each at the address `url` gives it.
 const mappings = (count: number, url = (i: number) => `https://m${i}.example/`) =>
   Array.from({ length: count }, (_, i) => `m${i + 1}                   ${url(i + 1)}\n`).join('');
 
 const names = (popup: Page) => popup.locator('[role=option] .row-name').allTextContents();
-const selected = (popup: Page) => popup.locator('[role=option][aria-selected=true]');
 const footer = (popup: Page) => popup.locator('footer');
 const cue = (popup: Page) => popup.locator('.cue');
 
@@ -22,7 +21,7 @@ test('a blank box lists the first seven mappings in line order with nothing sele
   const { popup } = await popupOnNewPage(extension, site);
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
   expect(await names(popup)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7']);
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(cue(popup)).toHaveText('13 more below');
   await checkFitAndAccessibility(popup);
 
@@ -34,20 +33,20 @@ test('a blank box lists the first seven mappings in line order with nothing sele
   expect(await extension.openPopups()).toBe(1);
   // Up selects nothing: only Down does.
   await popup.keyboard.press('ArrowUp');
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
 
   await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup).locator('.row-name')).toHaveText('m1');
+  await expect(selectedRowName(popup)).toHaveText('m1');
   await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
   await checkFitAndAccessibility(popup);
 
   // The blank list holds every mapping, in line order: Down walks all twenty, then wraps to the first.
-  const walked = [await selected(popup).locator('.row-name').textContent()];
+  const walked = [await selectedRowName(popup).textContent()];
   for (let i = 2; i <= 21; i++) {
     await popup.keyboard.press('ArrowDown');
-    await expect(selected(popup)).toHaveAttribute('aria-posinset', String(i > 20 ? 1 : i));
-    walked.push(await selected(popup).locator('.row-name').textContent());
+    await expect(selectedRow(popup)).toHaveAttribute('aria-posinset', String(i > 20 ? 1 : i));
+    walked.push(await selectedRowName(popup).textContent());
     if (i === 10) {
       // The window off both ends of the list.
       await expect(cue(popup)).toHaveText('3 more above · 10 more below');
@@ -61,19 +60,19 @@ test('each new list selects its first row: typed s, Down twice, then t', async (
   await extension.seedStorage({ mappings: 'sa  https://sa.example/\nsb  https://sb.example/\nst  https://st.example/\nstocks  https://stocks.example/\n' });
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('s');
-  await expect(selected(popup).locator('.row-name')).toHaveText('sa');
+  await expect(selectedRowName(popup)).toHaveText('sa');
   await popup.keyboard.press('ArrowDown');
   await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup).locator('.row-name')).toHaveText('st');
+  await expect(selectedRowName(popup)).toHaveText('st');
   await popup.keyboard.type('t');
   await expect.poll(() => names(popup)).toEqual(['st', 'stocks']);
-  await expect(selected(popup).locator('.row-name')).toHaveText('st');
-  await expect(selected(popup)).toHaveAttribute('aria-posinset', '1');
+  await expect(selectedRowName(popup)).toHaveText('st');
+  await expect(selectedRow(popup)).toHaveAttribute('aria-posinset', '1');
   // A keystroke that leaves the same rows is a new list too.
   await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup).locator('.row-name')).toHaveText('stocks');
+  await expect(selectedRowName(popup)).toHaveText('stocks');
   await popup.keyboard.type(' ');
-  await expect(selected(popup).locator('.row-name')).toHaveText('st');
+  await expect(selectedRowName(popup)).toHaveText('st');
 });
 
 test('Up and Down wrap through every match and the window follows; the wheel moves the window and a click opens a row', async ({ extension, site }) => {
@@ -81,17 +80,17 @@ test('Up and Down wrap through every match and the window follows; the wheel mov
   await extension.seedStorage({ mappings: mappings(20, (i) => urls[i - 1]!) });
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('m');
-  await expect(selected(popup).locator('.row-name')).toHaveText('m1');
+  await expect(selectedRowName(popup)).toHaveText('m1');
 
   await popup.keyboard.press('ArrowUp');
-  await expect(selected(popup).locator('.row-name')).toHaveText('m20');
-  await expect(selected(popup)).toBeInViewport({ ratio: 1 });
+  await expect(selectedRowName(popup)).toHaveText('m20');
+  await expect(selectedRow(popup)).toBeInViewport({ ratio: 1 });
   expect(await names(popup)).toEqual(['m14', 'm15', 'm16', 'm17', 'm18', 'm19', 'm20']);
   await expect(cue(popup)).toHaveText('13 more above');
   await expect(popup.getByRole('combobox')).toHaveAttribute('aria-activedescendant', 'row-19');
 
   await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup).locator('.row-name')).toHaveText('m1');
+  await expect(selectedRowName(popup)).toHaveText('m1');
   expect(await names(popup)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7']);
   await expect(cue(popup)).toHaveText('13 more below');
 
@@ -100,7 +99,7 @@ test('Up and Down wrap through every match and the window follows; the wheel mov
   for (let i = 0; i < 20 && !(await names(popup)).includes('m20'); i++) await popup.mouse.wheel(0, 100);
   expect(await names(popup)).toEqual(['m14', 'm15', 'm16', 'm17', 'm18', 'm19', 'm20']);
   await expect(cue(popup)).toHaveText('13 more above');
-  await expect(selected(popup)).toBeInViewport({ ratio: 1 });
+  await expect(selectedRow(popup)).toBeInViewport({ ratio: 1 });
   const before = new Set(extension.context.pages());
   await closingPopup(popup, () => popup.getByRole('option', { name: /^m20 / }).click());
   await expect.poll(() => extension.context.pages().filter((page) => !before.has(page)).map((page) => page.url())).toEqual([urls[19]]);
@@ -115,7 +114,7 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
   await expect(cue(popup)).toHaveText('13 more below');
 
   const shown = () =>
-    popup.evaluate(() => {
+    popup.evaluate((selected) => {
       const box = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
       const view = box('.view');
       return {
@@ -125,7 +124,7 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
         viewFits: document.querySelector('.view')!.scrollHeight <= document.querySelector('.view')!.clientHeight,
         // Within half a pixel: layout rounds.
         selectedInView: (() => {
-          const row = document.querySelector('[role=option][aria-selected=true]')!.getBoundingClientRect();
+          const row = document.querySelector(selected)!.getBoundingClientRect();
           return row.top >= view.top - 0.5 && row.bottom <= view.bottom + 0.5;
         })(),
         cueInView: box('.cue').bottom <= view.bottom && box('.cue').top >= view.top,
@@ -137,14 +136,14 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
         // Everything else of the popup's own is whole.
         uncut: [...document.querySelectorAll<HTMLElement>('.chip, .cue, footer, .row-tag, .message')].every((element) => element.scrollWidth <= element.clientWidth),
       };
-    });
+    }, SELECTED_ROW);
   const whole = { footerInView: true, noPageOverflow: true, viewScrolls: true, viewFits: true, selectedInView: true, cueInView: true, uncut: true };
   const eachText = { oneLine: true, cutWithEllipsis: true, fromStart: true };
   let state = await shown();
   expect(state).toMatchObject(whole);
   expect(state.texts).toEqual(Array(14).fill(eachText));
   for (let i = 0; i < 6; i++) await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup).locator('.row-name')).toHaveText(/^n7w/);
+  await expect(selectedRowName(popup)).toHaveText(/^n7w/);
   expect(await shown()).toMatchObject(whole);
   await checkFitAndAccessibility(popup);
 
@@ -157,7 +156,7 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
   });
   await expect.poll(() => popup.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true);
   for (let i = 0; i < 6; i++) await popup.keyboard.press('ArrowDown');
-  await expect(selected(popup).locator('.row-name')).toHaveText(/^n13w/);
+  await expect(selectedRowName(popup)).toHaveText(/^n13w/);
   state = await shown();
   // The cue scrolled out with the rest of the view is not cut off: the view scrolls to it.
   expect(state).toMatchObject({ ...whole, viewFits: false, cueInView: false });
@@ -193,7 +192,7 @@ test('text in a right-to-left script that names no mapping is shown in the Name 
   const { popup } = await popupOnNewPage(extension, site);
   for (const typed of ['مرحبا', `يس${'س'.repeat(300)}`]) {
     await popup.getByRole('combobox').fill(typed);
-    await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
+    await expect(selectedRow(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
     await checkFitAndAccessibility(popup);
   }
 });
@@ -265,7 +264,7 @@ test('a mapping found only by its address is listed as an address match, visibly
   await expect(popup.getByRole('option').last()).toHaveAccessibleName('Name "localhost" for this page');
   await expect(popup.getByRole('option').locator('.row-tag')).toHaveText('address match');
   await expect(popup.getByRole('option', { name: 'dev address match http://localhost:5173/', exact: true })).toBeVisible();
-  await expect(selected(popup).locator('.row-name')).toHaveText('dev');
+  await expect(selectedRowName(popup)).toHaveText('dev');
   await checkFitAndAccessibility(popup);
 });
 
@@ -336,7 +335,7 @@ test('text that matches no mapping lists only the Name row, selected: no cue, an
     await popup.keyboard.type(typed);
     await expect(footer(popup)).toHaveText('Enter opens the Name form');
     await expect(popup.getByRole('option')).toHaveCount(1);
-    await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
+    await expect(selectedRow(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
     await expect(cue(popup)).toHaveCount(0);
     await checkFitAndAccessibility(popup);
     const tabs = await pageTabs(extension);
@@ -358,21 +357,21 @@ test('the list redraws when the document, the usage, or the order changes while 
   await expect.poll(() => names(popup)).toEqual(['avocado', 'apple', 'banana']);
   await extension.seedStorage({ mappings: `${doc}apricot  https://apricot.example/\n` });
   await expect.poll(() => names(popup)).toEqual(['avocado', 'apple', 'apricot', 'banana']);
-  await expect(selected(popup).locator('.row-name')).toHaveText('avocado');
+  await expect(selectedRowName(popup)).toHaveText('avocado');
 
   // Under Smart order with a blank box, a use stored for banana lists it first, and selects nothing.
   await popup.keyboard.press('Control+a');
   await popup.keyboard.press('Backspace');
   await extension.seedStorage({ mappings: doc, searchOrder: 'smart' });
   await expect.poll(() => names(popup)).toEqual(['avocado', 'banana', 'apple']);
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await extension.seedStorage({ mappings: doc, searchOrder: 'smart', usage: { 'banana\nhttps://banana.example/': [Date.now()] } });
   await expect.poll(() => names(popup)).toEqual(['banana', 'avocado', 'apple']);
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   // The order preference removed: Document order, line order.
   await extension.seedStorage({ mappings: doc, usage: { 'banana\nhttps://banana.example/': [Date.now()] } });
   await expect.poll(() => names(popup)).toEqual(['avocado', 'banana', 'apple']);
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
 });
 
@@ -430,7 +429,7 @@ test("after an update from 1.x the popup is dark and in Document order, and list
   for (const typed of ['not', 'other']) {
     await popup.getByRole('combobox').fill(typed);
     await expect(popup.getByRole('option')).toHaveCount(1);
-    await expect(selected(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
+    await expect(selectedRow(popup)).toHaveAccessibleName(`Name "${typed}" for this page`);
   }
   // Everything 1.x stored is as it was; the first key typed dismissed the notice of what is new (G25).
   await expect.poll(() => extension.readStorage()).toEqual(oneX);

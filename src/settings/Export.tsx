@@ -4,6 +4,7 @@
 // with no byte-order mark added. An absent document exports as an empty file.
 import { useRef, useState } from 'react';
 import { chromeMessage } from '../requests';
+import { readMappings } from '../stored-document';
 import './settings.css';
 
 const FILE_NAME = 'URLJumperMappings.txt';
@@ -18,7 +19,7 @@ export function Export() {
     let text: string;
     try {
       const { mappings } = await chrome.storage.local.get('mappings');
-      text = typeof mappings === 'string' ? mappings : '';
+      text = readMappings(mappings);
     } catch (error) {
       setMessage(`Not exported. Chrome said: ${chromeMessage(error)}`);
       return;

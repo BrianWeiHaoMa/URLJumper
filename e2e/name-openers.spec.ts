@@ -12,6 +12,7 @@ import {
   menuItemExists,
   recordWorkerCalls,
   removeMenuItems,
+  selectedRowName,
   slowWorkerReads,
   test,
   type LoadedExtension,
@@ -75,7 +76,7 @@ test('name-this-page on a granted page opens the form for it with the keys typed
   const before = await tabsAt(extension, page.url());
   const next = await extension.clickToolbarButton(page);
   await next.keyboard.type('stocks');
-  await expect(next.locator('[role=option][aria-selected=true] .row-name')).toHaveText('stocks');
+  await expect(selectedRowName(next)).toHaveText('stocks');
   await expect(footer(next)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
   await closingPopup(next, () => next.keyboard.press('Enter'));
   await expect.poll(() => tabsAt(extension, page.url())).toBe(before + 1);

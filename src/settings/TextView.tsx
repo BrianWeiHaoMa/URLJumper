@@ -20,6 +20,7 @@ import { textAreaLineStart } from '../document/lines';
 import { mergeTexts, type MergePart } from '../document/merge';
 import { documentHolds, isDraft, isNamed, nameOf, type Draft } from '../draft';
 import { chromeMessage, send } from '../requests';
+import { readMappings } from '../stored-document';
 import { CopyTabUrl } from './CopyTabUrl';
 import { discardDraft, draftRequestsAnswered, keepDraft, type DraftKeeping } from './draft-keeping';
 import { DraftOffer } from './DraftOffer';
@@ -125,7 +126,7 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
         if (open && !everLoaded.current) setOutcome({ kind: 'unread', message: chromeMessage(error) });
         return;
       }
-      const storedText = typeof items.mappings === 'string' ? items.mappings : '';
+      const storedText = readMappings(items.mappings);
       // Every answer tells the keeper whether the stored document held the text after it was made (G19), even
       // after the view has closed, except during a Save, whose reply is followed by a read. One answered after a
       // later read was made shows an older state than the later one, which lands instead.

@@ -6,6 +6,7 @@
 // The offer itself, its answers, and the merge it can lead to are in e2e/text-view-draft-offer.spec.ts.
 import type { Draft } from '../src/draft.ts';
 import {
+  draftLanded,
   expect,
   holdPageReads,
   holdPageRequests,
@@ -31,11 +32,6 @@ const CHANGED = 'Not saved: the stored document changed after this text was load
 /** A draft another Text view kept, as a check seeds it. */
 function kept(text: string, base: string, view = 'earlier-view', number = 4, time = 1_700_000_000_000): Draft {
   return { text, base, time, view, number };
-}
-
-/** Waits until the draft stored holds `text`. */
-async function draftLanded(extension: LoadedExtension, text: string) {
-  await expect.poll(async () => (await storedDraft(extension.worker))?.text).toBe(text);
 }
 
 async function noDraft(extension: LoadedExtension) {

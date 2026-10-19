@@ -6,7 +6,7 @@
 // does nothing (L2), until the row is whole in view again, or Up, Down, a new list, or the search box's focus
 // brings it there. Every state fits and passes the accessibility pass.
 import type { Locator, Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, rowEditor, test, thisPagePencil, watchRequests, type LoadedExtension, type LocalSite, type RequestPage } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, rowEditor, selectedRow, selectedRowName, test, thisPagePencil, watchRequests, type LoadedExtension, type LocalSite, type RequestPage } from './extension.ts';
 
 const HELD_BACK = 'Enter does nothing · Up or Down selects a row';
 const OPENS = 'Enter opens it in a new tab · Shift+Enter in this tab';
@@ -14,7 +14,6 @@ const OPENS = 'Enter opens it in a new tab · Shift+Enter in this tab';
 const view = (popup: Page) => popup.locator('.view');
 const searchBox = (popup: Page) => popup.getByRole('combobox');
 const footer = (popup: Page) => popup.locator('footer');
-const selected = (popup: Page) => popup.locator('[role=option][aria-selected=true]');
 const scrollTop = (popup: Page) => view(popup).evaluate((element) => element.scrollTop);
 const urlOf = (name: string) => `https://${name}.example.com/`;
 
@@ -29,14 +28,14 @@ function inView(target: Locator): Promise<boolean> {
 
 /** Fails unless the selected row is `name` and whole in view, and the search box names it as its active row. */
 async function expectSelected(popup: Page, name: string) {
-  await expect(selected(popup).locator('.row-name')).toHaveText(name);
-  expect(await inView(selected(popup))).toBe(true);
-  await expect(searchBox(popup)).toHaveAttribute('aria-activedescendant', (await selected(popup).getAttribute('id'))!);
+  await expect(selectedRowName(popup)).toHaveText(name);
+  expect(await inView(selectedRow(popup))).toBe(true);
+  await expect(searchBox(popup)).toHaveAttribute('aria-activedescendant', (await selectedRow(popup).getAttribute('id'))!);
 }
 
 /** Fails unless no row is selected, drawn or named, and the footer says Enter does nothing. */
 async function expectHeldBack(popup: Page) {
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(searchBox(popup)).not.toHaveAttribute('aria-activedescendant');
   await expect(footer(popup)).toHaveText(HELD_BACK);
 }
@@ -154,7 +153,7 @@ test("PageDown on the view's own Tab stop holds the selection back: Enter, Shift
   await expectHeldBack(popup);
 
   await popup.keyboard.press('PageUp');
-  await expect(selected(popup)).toHaveCount(1);
+  await expect(selectedRow(popup)).toHaveCount(1);
   await settled(popup);
   await expectSelected(popup, 'm1');
   await expect(footer(popup)).toHaveText(OPENS);
@@ -176,7 +175,7 @@ test("Space and End on the view's own Tab stop hold the selection back as PageDo
     await expectHeldBack(popup);
     if (key === 'End') expect(await inView(popup.locator('.this-page'))).toBe(true);
     await popup.keyboard.press('Home');
-    await expect(selected(popup)).toHaveCount(1);
+    await expect(selectedRow(popup)).toHaveCount(1);
     await settled(popup);
     await expectSelected(popup, 'm1');
   }
@@ -197,7 +196,7 @@ test('the wheel over This page is holds the selection back with the focus in the
   await expectHeldBack(popup);
 
   await popup.mouse.wheel(0, -600);
-  await expect(selected(popup)).toHaveCount(1);
+  await expect(selectedRow(popup)).toHaveCount(1);
   await settled(popup);
   await expectSelected(popup, 'm1');
   await expect(searchBox(popup)).toBeFocused();
@@ -211,13 +210,13 @@ test("Tab to This page is's pencil scrolls the view to the pencil and holds the 
   await expect(thisPagePencil(popup)).toBeInViewport({ ratio: 1 });
   expect(await inView(thisPagePencil(popup))).toBe(true);
   await expect(footer(popup)).toHaveText('Enter edits line 9');
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await expect(searchBox(popup)).not.toHaveAttribute('aria-activedescendant');
   expect(await focusDrawn(popup)).toBe(true);
   await thisPagePencil(popup).focus();
   await checkFitAndAccessibility(popup);
   await expect(thisPagePencil(popup)).toBeFocused();
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
 
   await popup.keyboard.press('Tab');
   await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
@@ -245,7 +244,7 @@ test('a row cut at the edge of the view is not selected, nor is the next row in 
   await expectHeldBack(popup);
 
   await view(popup).evaluate((element) => (element.scrollTop = 0));
-  await expect(selected(popup)).toHaveCount(1);
+  await expect(selectedRow(popup)).toHaveCount(1);
   await expectSelected(popup, 'm1');
 
   await view(popup).evaluate((element, cut) => (element.scrollTop = cut), cut);
@@ -303,7 +302,7 @@ test('Down and Up move the selection with the focus on any button of search, whi
   // On This page is's pencil, which the view scrolled to past the rows, the selection held back moves to the
   // next row and comes into view; the focus, whose pencil that scrolls out, goes to the search box (G32).
   await tabTo(popup, thisPagePencil(popup));
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await popup.keyboard.press('ArrowDown');
   await expectSelected(popup, 'm3');
   await expect(searchBox(popup)).toBeFocused();
@@ -368,7 +367,7 @@ test("with the focus on This page is's pencil, another page's change leaves the 
   expect(await scrollTop(popup)).toBe(top);
   await expect(thisPagePencil(popup)).toBeFocused();
   expect(await inView(thisPagePencil(popup))).toBe(true);
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await checkFitAndAccessibility(popup);
 
   expect(await other.send({ kind: 'insert', name: 'm', url: 'https://m.test/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
@@ -414,7 +413,7 @@ test('in a view shorter than the seven rows, Tab to the last pencil and back kee
   await tabTo(popup, lastPencil);
   await expect(lastPencil).toBeInViewport({ ratio: 1 });
   expect(await inView(lastPencil)).toBe(true);
-  if ((await selected(popup).count()) > 0) expect(await inView(selected(popup))).toBe(true);
+  if ((await selectedRow(popup).count()) > 0) expect(await inView(selectedRow(popup))).toBe(true);
   await checkFitAndAccessibility(popup);
   await popup.keyboard.press('Tab');
   await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
@@ -425,7 +424,7 @@ test('in a view shorter than the seven rows, Tab to the last pencil and back kee
   await shorten(30);
   await expect.poll(() => view(popup).evaluate((element) => element.clientHeight)).toBeLessThan(46);
   await searchBox(popup).fill('');
-  await expect(selected(popup)).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
   await popup.keyboard.type('m');
   await expectSelected(popup, 'm1');
   await checkFitAndAccessibility(popup);

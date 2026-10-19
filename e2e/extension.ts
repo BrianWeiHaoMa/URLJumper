@@ -1,7 +1,7 @@
 // The one harness every end-to-end check uses: the built extension loaded from dist/ into a fresh headless
 // profile, or 1.3.0 loaded there and updated to it, reached only through Chrome's events and APIs, its pages,
 // and storage.
-import { test as base, type Page, type Worker } from '@playwright/test';
+import { test as base, type Locator, type Page, type Worker } from '@playwright/test';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
@@ -16,7 +16,7 @@ export { checkAccessibility, checkAccessibilityInBothSchemes, focusDrawn } from 
 export { distDir, type LoadedExtension, type RequestPage } from './extension-launch.ts';
 export { checkFit } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, followTabFocus, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
-export { caret, clipboardText, delayPageReads, holdFileReads, holdPageReads, holdPageRequests, importFile, retypeLine, storedDraft, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, version, watchDraftSets, watchRequests, type TextView } from './text-view.ts';
+export { caret, clipboardText, delayPageReads, draftLanded, holdFileReads, holdPageReads, holdPageRequests, importFile, retypeLine, storedDraft, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, version, watchDraftSets, watchRequests, type TextView } from './text-view.ts';
 export { type Release1x } from './upgrade-from-1x.ts';
 export { expectNoNotice, upgradeNotice } from './upgrade-notice.ts';
 export { editSelectedRow, lineConfirmation, rowEditor, rowPencils, thisPagePencil, type RowEditor } from './row-editor.ts';
@@ -150,6 +150,19 @@ export async function popupOnNewPage(extension: LoadedExtension, site: LocalSite
   const page = await extension.context.newPage();
   await page.goto(site.pageUrl(title));
   return { page, popup: await extension.clickToolbarButton(page) };
+}
+
+/** Search's selected row, as a check inside the page finds it: the option named as selected, none while none is (G3). */
+export const SELECTED_ROW = '[role=option][aria-selected=true]';
+
+/** Search's selected row in `popup`. */
+export function selectedRow(popup: Page): Locator {
+  return popup.locator(SELECTED_ROW);
+}
+
+/** The name search's selected row in `popup` shows. */
+export function selectedRowName(popup: Page): Locator {
+  return popup.locator(`${SELECTED_ROW} .row-name`);
 }
 
 /**

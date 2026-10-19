@@ -3,8 +3,9 @@
 // recorded first, so every navigation of a held mapping counts.
 import { fillArgument } from '../document/argument';
 import { mappingKey, readDocument } from '../document/grammar';
-import { recordUse, type Usage } from '../document/score';
+import { recordUse } from '../document/score';
 import { chromeMessage, type JumpReply, type JumpRequest } from '../requests';
+import { readMappings, readUsage } from '../stored-document';
 
 export async function jump(request: JumpRequest): Promise<JumpReply> {
   const url = fillArgument(request.url, request.argument ?? '');
@@ -13,8 +14,8 @@ export async function jump(request: JumpRequest): Promise<JumpReply> {
   try {
     const { mappings, usage } = await chrome.storage.local.get(['mappings', 'usage']);
     const key = mappingKey(request.name, request.url);
-    const held = readDocument(typeof mappings === 'string' ? mappings : '').mappings.some((mapping) => mapping.key === key);
-    if (held) await chrome.storage.local.set({ usage: recordUse(usage as Usage | undefined, key, Date.now()) });
+    const held = readDocument(readMappings(mappings)).mappings.some((mapping) => mapping.key === key);
+    if (held) await chrome.storage.local.set({ usage: recordUse(readUsage(usage), key, Date.now()) });
   } catch (error) {
     return { kind: 'storage-failed', message: chromeMessage(error) };
   }

@@ -16,7 +16,7 @@ import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingText, namedSections, type HeadingIdentity, type Section } from '../document/sections';
 import { checkMapping } from '../document/validation';
 import { send, type InsertReply } from '../requests';
-import { editInsteadText, fieldProblemText, takenNameText } from './field-problems';
+import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
 import { insertedOutcome, type Outcome } from './outcomes';
 import { SectionChoice, type SectionOption } from './SectionChoice';
 import { ThisPage } from './ThisPage';
@@ -273,7 +273,5 @@ function problemText(problem: Refused, line: number, url: string, takenBy: Mappi
 }
 
 function refusalText(reply: Exclude<InsertReply, { kind: 'applied' }>, line: number, url: string): string {
-  if (reply.kind === 'storage-failed') return `Not saved. Chrome said: ${reply.message}`;
-  if (reply.kind === 'name-taken') return `Not saved: line ${reply.line} already has this name.`;
-  return `Not saved: ${fieldProblemText(reply, line, url)}`;
+  return reply.kind === 'storage-failed' ? `Not saved. Chrome said: ${reply.message}` : refusedValuesText(reply, line, url);
 }

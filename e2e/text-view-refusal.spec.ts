@@ -10,12 +10,12 @@ import {
   checkAccessibilityInBothSchemes,
   checkFitAndAccessibility,
   delayPageReads,
+  draftLanded,
   expect,
   popupOnNewPage,
   restartWorker,
   slowWorkerReads,
   stallWorkerAfterWriting,
-  storedDraft,
   test,
   textViewInPopup,
   textViewOnOptionsPage,
@@ -44,11 +44,6 @@ function heardAndRead(page: Page): Promise<void> {
 
 async function storedDocument(extension: LoadedExtension) {
   return (await extension.readStorage()).mappings;
-}
-
-/** Waits until the draft the typing keeps holds `text`, so no write of it lands while a check fills storage. */
-async function draftLanded(extension: LoadedExtension, text: string) {
-  await expect.poll(async () => (await storedDraft(extension.worker))?.text).toBe(text);
 }
 
 test('a view with nothing typed takes in another page\'s change, and a Save after typing keeps it, on an LF and on a CRLF document', async ({ extension, site }) => {

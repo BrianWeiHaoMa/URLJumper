@@ -2,7 +2,7 @@
 // Shift in the other, the chip starts as the popup's opening asked, and when nothing opens the popup stays
 // and says why.
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, shownTheme, slowWorkerReads, test, type LoadedExtension } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, SELECTED_ROW, selectedRow, selectedRowName, shownTheme, slowWorkerReads, test, type LoadedExtension } from './extension.ts';
 
 const chip = (popup: Page) => popup.locator('.chip');
 const footer = (popup: Page) => popup.locator('footer');
@@ -230,15 +230,15 @@ test('a long refusal never hides the selected row, and Enter opens the selected 
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('m');
   for (let i = 0; i < 6; i++) await popup.keyboard.press('ArrowDown');
-  await expect(popup.locator('[role=option][aria-selected=true] .row-name')).toHaveText('m7');
+  await expect(selectedRowName(popup)).toHaveText('m7');
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('alert')).toContainText('Not opened. Chrome said: ');
   const selectedInView = () =>
-    popup.evaluate(() => {
+    popup.evaluate((selected) => {
       const view = document.querySelector('.view')!.getBoundingClientRect();
-      const row = document.querySelector('[role=option][aria-selected=true]')!.getBoundingClientRect();
+      const row = document.querySelector(selected)!.getBoundingClientRect();
       return row.top >= view.top - 0.5 && row.bottom <= view.bottom + 0.5;
-    });
+    }, SELECTED_ROW);
   expect(await selectedInView()).toBe(true);
   await checkFitAndAccessibility(popup);
 
@@ -317,7 +317,7 @@ test('after a new install the popup is in Smart order: a mapping just jumped to 
 
   popup = await extension.clickToolbarButton(page);
   await expect.poll(() => names(popup)).toEqual(['m18', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
-  await expect(popup.locator('[role=option][aria-selected=true]')).toHaveCount(0);
+  await expect(selectedRow(popup)).toHaveCount(0);
 });
 
 test("a New tab jump opens in the popup's window, though another window takes the focus while the worker is busy", async ({ extension, site }) => {

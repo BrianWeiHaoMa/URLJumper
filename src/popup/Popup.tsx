@@ -15,10 +15,10 @@ import { isEmptyDocument } from '../document/example';
 import { readDocument } from '../document/grammar';
 import { mappingOfPage } from '../document/page-mapping';
 import type { SearchRow } from '../document/search';
-import type { Usage } from '../document/score';
 import { intentFor, startMode, type OpenIntent, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme } from '../preferences';
 import { send } from '../requests';
+import { readMappings, readUsage } from '../stored-document';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
 import type { NameSubject } from '../line-changes/NameForm';
 import { offersUndo, undoFooter } from '../line-changes/outcomes';
@@ -345,9 +345,9 @@ export function Popup() {
 function readStored(items: Record<string, unknown>): Stored {
   const { mappings, usage, searchOrder, themePref, upgradeNotice } = items;
   return {
-    document: typeof mappings === 'string' ? mappings : '',
+    document: readMappings(mappings),
     order: readSearchOrder(searchOrder),
-    usage: typeof usage === 'object' && usage !== null ? (usage as Usage) : undefined,
+    usage: readUsage(usage),
     theme: readTheme(themePref),
     upgradeNotice: upgradeNotice === 'pending',
   };
