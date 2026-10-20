@@ -36,11 +36,11 @@ describe('a mapping line moved up or down (G12)', () => {
 
   test('the first mapping cannot move up nor the last down, a heading before it or a final line break after it notwithstanding', () => {
     const original = '\\ top\nA u:1\nB u:2\n';
-    expect(moveMapping(original, { line: 2, text: 'A u:1' }, 'up')).toEqual({ kind: 'immovable' });
-    expect(moveMapping(original, { line: 3, text: 'B u:2' }, 'down')).toEqual({ kind: 'immovable' });
+    expect(moveMapping(original, { line: 2, text: 'A u:1' }, 'up')).toEqual({ kind: 'immovable', passing: null });
+    expect(moveMapping(original, { line: 3, text: 'B u:2' }, 'down')).toEqual({ kind: 'immovable', passing: null });
     expect(moveMapping(original, { line: 2, text: 'A u:1' }, 'down')).toEqual({ kind: 'applied', document: '\\ top\nB u:2\nA u:1\n', from: 2, line: 3, text: 'A u:1' });
-    expect(moveMapping('only u:1', { line: 1, text: 'only u:1' }, 'up')).toEqual({ kind: 'immovable' });
-    expect(moveMapping('only u:1', { line: 1, text: 'only u:1' }, 'down')).toEqual({ kind: 'immovable' });
+    expect(moveMapping('only u:1', { line: 1, text: 'only u:1' }, 'up')).toEqual({ kind: 'immovable', passing: null });
+    expect(moveMapping('only u:1', { line: 1, text: 'only u:1' }, 'down')).toEqual({ kind: 'immovable', passing: null });
   });
 
   test("a line that stops being last gains the document's ending, never the moved line's; a line that becomes last loses its own", () => {
@@ -50,8 +50,8 @@ describe('a mapping line moved up or down (G12)', () => {
 
   test('no mapping moves past a line with its name, an unreadable line repeating it: nothing would change a byte, yet that line would become the mapping', () => {
     const original = 'a u:1\na v:2\nb u:3';
-    expect(moveMapping(original, { line: 1, text: 'a u:1' }, 'down')).toEqual({ kind: 'immovable' });
-    expect(moveMapping('a u:1\nb u:2\nb v:3\nc u:4', { line: 2, text: 'b u:2' }, 'down')).toEqual({ kind: 'immovable' });
+    expect(moveMapping(original, { line: 1, text: 'a u:1' }, 'down')).toEqual({ kind: 'immovable', passing: 2 });
+    expect(moveMapping('a u:1\nb u:2\nb v:3\nc u:4', { line: 2, text: 'b u:2' }, 'down')).toEqual({ kind: 'immovable', passing: 3 });
     // Passing the mapping line that holds the name leaves the repeat behind it, still unreadable.
     expect(moveMapping(original, { line: 3, text: 'b u:3' }, 'up')).toEqual({ kind: 'applied', document: 'b u:3\na u:1\na v:2', from: 3, line: 1, text: 'b u:3' });
   });
@@ -62,7 +62,7 @@ describe('a mapping line moved up or down (G12)', () => {
     expect(moveMapping(original, { line: 2, text: 'a v:2' }, 'down')).toEqual({ kind: 'stale' });
     expect(moveMapping(original, { line: 9, text: 'b u:3' }, 'up')).toEqual({ kind: 'applied', document: 'b u:3\na u:1\na v:2', from: 3, line: 1, text: 'b u:3' });
     // Found by its text, then refused for where it would go, not for being lost.
-    expect(moveMapping(original, { line: 9, text: 'a u:1' }, 'down')).toEqual({ kind: 'immovable' });
+    expect(moveMapping(original, { line: 9, text: 'a u:1' }, 'down')).toEqual({ kind: 'immovable', passing: 2 });
     expect(moveMapping(original, { line: 1, text: 'a u:9' }, 'down')).toEqual({ kind: 'stale' });
   });
 
@@ -76,12 +76,15 @@ describe('a mapping line moved up or down (G12)', () => {
 });
 
 describe('the moves a row editor offers, which the worker would apply', () => {
-  test('up and down each as moveMapping answers them on the document as last read', () => {
-    expect(movesAdmitted('\\ top\nA u:1\nB u:2\n', { line: 2, text: 'A u:1' })).toEqual({ up: false, down: true });
-    expect(movesAdmitted('\\ top\nA u:1\nB u:2\n', { line: 3, text: 'B u:2' })).toEqual({ up: true, down: false });
-    expect(movesAdmitted('a u:1\na v:2\nb u:3\nc u:4', { line: 1, text: 'a u:1' })).toEqual({ up: false, down: false });
-    expect(movesAdmitted('a u:1\nb u:2\nc u:3', { line: 2, text: 'b u:2' })).toEqual({ up: true, down: true });
-    expect(movesAdmitted('a u:1\nb u:2', { line: 2, text: 'gone u:9' })).toEqual({ up: false, down: false });
+  test('up and down each as moveMapping answers them on the document as last read: where the line would go, or why it would not', () => {
+    const edge = { kind: 'immovable', passing: null };
+    expect(movesAdmitted('\\ top\nA u:1\nB u:2\n', { line: 2, text: 'A u:1' })).toEqual({ up: edge, down: { kind: 'applied', from: 2, line: 3 } });
+    expect(movesAdmitted('\\ top\nA u:1\nB u:2\n', { line: 3, text: 'B u:2' })).toEqual({ up: { kind: 'applied', from: 3, line: 2 }, down: edge });
+    expect(movesAdmitted('a u:1\na v:2\nb u:3\nc u:4', { line: 1, text: 'a u:1' })).toEqual({ up: edge, down: { kind: 'immovable', passing: 2 } });
+    // Found by its text where it now stands.
+    expect(movesAdmitted('a u:1\nb u:2\nc u:3', { line: 9, text: 'b u:2' })).toEqual({ up: { kind: 'applied', from: 2, line: 1 }, down: { kind: 'applied', from: 2, line: 3 } });
+    // A line changed or gone is offered as the worker would answer it: stale, which a row editor's Save and Delete meet too.
+    expect(movesAdmitted('a u:1\nb u:2', { line: 2, text: 'gone u:9' })).toEqual({ up: { kind: 'stale' }, down: { kind: 'stale' } });
   });
 });
 

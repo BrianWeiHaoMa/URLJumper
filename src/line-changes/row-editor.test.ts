@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import type { MappingFields } from '../document/validation';
-import { destination, lineFields, saveCheck, textViewLine, whatBecameOf } from './row-editor';
+import { movesAdmitted } from '../document/moving';
+import { destination, lineFields, moveFooter, notMovedText, saveCheck, textViewLine, whatBecameOf } from './row-editor';
 
 const fields = (name: string, url: string, note = ''): MappingFields => ({ name, url, note });
 const DOC = '\\ Work\nmail   https://m.example/   \\ inbox\nyt     https://y.example/?q=%s\nStocks https://s.example/\n';
@@ -61,5 +62,32 @@ describe("Copy link's destination is where opening the row goes, from the line a
 
   test('none when longer than Chrome opens', () => {
     expect(destination('yt  https://y.example/?q=%s', 'x'.repeat(2_097_152))).toBeUndefined();
+  });
+});
+
+describe('what Enter does on a move, and what a refused one says (G12, G13, L2)', () => {
+  const doc = '\\ top\nA u:1\n\\ later\nB u:2\nC u:3\n';
+  const B = { line: 4, text: 'B u:2' };
+
+  test('where an admitted move takes the line, by the document as last read', () => {
+    const { up, down } = movesAdmitted(doc, B);
+    expect(moveFooter('up', up, 4)).toBe('Enter moves line 4 up to line 2');
+    expect(moveFooter('down', down, 4)).toBe('Enter moves line 4 down to line 5');
+  });
+
+  test('nothing at the first or last mapping, or with a line with its name in the way, saying why', () => {
+    expect(moveFooter('up', movesAdmitted(doc, { line: 2, text: 'A u:1' }).up, 2)).toBe('Enter does nothing · line 2 is the first mapping');
+    expect(moveFooter('down', movesAdmitted(doc, { line: 5, text: 'C u:3' }).down, 5)).toBe('Enter does nothing · line 5 is the last mapping');
+    expect(moveFooter('down', movesAdmitted('a u:1\na v:2\nb u:3', { line: 1, text: 'a u:1' }).down, 1)).toBe('Enter does nothing · line 2, which has this name, is in the way');
+  });
+
+  test('a line changed or gone since is offered as an attempt, the worker saying what became of it', () => {
+    expect(moveFooter('up', movesAdmitted(doc, { line: 4, text: 'B u:9' }).up, 4)).toBe('Enter tries to move line 4 up · the line has changed');
+  });
+
+  test('a move refused as immovable says why, by the document it was refused on, where the line now stands', () => {
+    // Another page moved B to the top since.
+    expect(notMovedText('B u:2\n\\ top\nA u:1\n\\ later\nC u:3\n', B, 'up')).toBe('Not moved: line 1 is the first mapping now, and nothing was stored.');
+    expect(notMovedText('a u:1\na v:2\nb u:3', { line: 1, text: 'a u:1' }, 'down')).toBe('Not moved: line 2, which has this name, is in the way now, and nothing was stored.');
   });
 });

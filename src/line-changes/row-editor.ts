@@ -1,11 +1,12 @@
-// The row editor's rules (G13, G14, G31, L2), pure, for `RowEditor.tsx`: the fields a line fills, what Save
-// would write and what stops it, what became of a line a change found stale, the line *Open in text* names,
-// and the destination *Copy link* copies. Every rule about the document's text they rest on is the document
-// module's (R2).
+// The row editor's rules (G12, G13, G14, G31, L2), pure, for `RowEditor.tsx`: the fields a line fills, what
+// Save would write and what stops it, what became of a line a change found stale, the line *Open in text*
+// names, the destination *Copy link* copies, and what Enter does on a move and what a refused one says. Every
+// rule about the document's text they rest on is the document module's (R2).
 import { anchorAt, findAnchor, type Anchor } from '../document/anchor';
 import { fillArgument } from '../document/argument';
 import { mappingOfLine, readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint } from '../document/insertion';
+import { moveMapping, type Immovable, type MoveDirection, type MoveOffer } from '../document/moving';
 import { rewriteChecks } from '../document/rewriting';
 import { checkMapping, holderOfName, type FieldProblem, type MappingFields } from '../document/validation';
 
@@ -65,4 +66,29 @@ export function textViewLine(document: string, anchor: Anchor): number {
 export function destination(text: string, argument: string | null): string | undefined {
   const url = mappingOfLine(text)?.url;
   return url === undefined ? undefined : fillArgument(url, argument ?? '');
+}
+
+/**
+ * What Enter does on *Move up* or *Move down* (L2), by what the move would come to on the document as last
+ * read (`offer`), the line standing as line `line`: where it would go; for a line changed or gone since, the
+ * attempt, which the worker refuses unless the line stands again as loaded; or nothing, and why. Like every
+ * footer it holds no name.
+ */
+export function moveFooter(direction: MoveDirection, offer: MoveOffer, line: number): string {
+  if (offer.kind === 'applied') return `Enter moves line ${offer.from} ${direction} to line ${offer.line}`;
+  if (offer.kind === 'stale') return `Enter tries to move line ${line} ${direction} · the line has changed`;
+  return `Enter does nothing · ${whyImmovable(direction, offer, line)}`;
+}
+
+/** What a move the worker refused as immovable says (G13, G21), by `document`, the stored document it refused on: nothing was stored, and why. */
+export function notMovedText(document: string, anchor: Anchor, direction: MoveDirection): string {
+  const refused = moveMapping(document, anchor, direction);
+  const line = textViewLine(document, anchor);
+  return refused.kind === 'immovable' ? `Not moved: ${whyImmovable(direction, refused, line)} now, and nothing was stored.` : 'Not moved: nothing was stored.';
+}
+
+/** Why the line, standing as line `line`, cannot move that way (G12): no mapping lies beyond it, or a line with its name is in the way. */
+function whyImmovable(direction: MoveDirection, { passing }: Immovable, line: number): string {
+  if (passing === null) return `line ${line} is the ${direction === 'up' ? 'first' : 'last'} mapping`;
+  return `line ${passing}, which has this name, is in the way`;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import type { UndoReply, UndoRequest } from '../requests';
-import { confirmationText, insertedOutcome, offersUndo, outcomeOfUndo, removedOutcome, rewrittenOutcome, undoFooter, undoLabel, type Outcome } from './outcomes';
+import { confirmationText, insertedOutcome, lineMoved, movedOutcome, offersUndo, outcomeOfUndo, removedOutcome, rewrittenOutcome, undoFooter, undoLabel, type Outcome } from './outcomes';
 
 const LINE = 'stocks               https://s.example/   \\ daily';
 const FORMER = 'stock  https://s.example/';
@@ -31,6 +31,14 @@ describe('each stored change offers the inverse request as its Undo, built from 
   test("a Delete's Undo puts the line back as the line number it had", () => {
     expect(removedOutcome({ kind: 'applied', line: 3, text: LINE })).toEqual({ kind: 'removed', name: 'stocks', line: 3, undo: { kind: 'undo', act: 'reinsert', line: 3, text: LINE } });
   });
+
+  test("a move's Undo moves the line, as the move left it, back to the number it had where the move found it, not by the opposite move", () => {
+    const moved = movedOutcome({ kind: 'applied', line: 2, text: LINE, from: 5 });
+    expect(moved).toEqual({ kind: 'moved', name: 'stocks', line: 2, undo: { kind: 'undo', act: 'move-back', line: 2, text: LINE, to: 5 } });
+    if (moved.kind === 'moved') expect(lineMoved(moved)).toEqual({ line: 2, text: LINE });
+    // The text as it now reads, which a lone CR joined to an ending it gained leaves one CR shorter, is what the Undo names.
+    expect(undoOf(movedOutcome({ kind: 'applied', line: 1, text: 'b u:2', from: 2 }))).toEqual({ kind: 'undo', act: 'move-back', line: 1, text: 'b u:2', to: 2 });
+  });
 });
 
 describe("each Undo is a change of its own, whose outcome offers that change's inverse (G12, G15)", () => {
@@ -41,6 +49,16 @@ describe("each Undo is a change of its own, whose outcome offers that change's i
     const putBack = outcomeOfUndo(undoOf(removed), { kind: 'applied', line: 4, text: LINE, endingGiven });
     expect(putBack).toEqual({ kind: 'put-back', name: 'stocks', line: 4, undo: { kind: 'undo', act: 'remove', line: 4, text: LINE, endingGiven } });
     expect(undoOf(outcomeOfUndo({ kind: 'undo', act: 'reinsert', line: 4, text: LINE }, { kind: 'applied', line: 2, text: LINE }))).toEqual({ kind: 'undo', act: 'remove', line: 2, text: LINE });
+  });
+
+  test("moving a moved line back: its Undo moves it back again, to the number the Undo found it at", () => {
+    const moved = movedOutcome({ kind: 'applied', line: 2, text: LINE, from: 5 });
+    const back = outcomeOfUndo(undoOf(moved), { kind: 'applied', line: 5, text: LINE, from: 2 });
+    expect(back).toEqual({ kind: 'moved-back', name: 'stocks', line: 5, undo: { kind: 'undo', act: 'move-back', line: 5, text: LINE, to: 2 } });
+    if (back.kind === 'moved-back') expect(lineMoved(back)).toEqual({ line: 5, text: LINE });
+    // Found elsewhere than it was sent for, it goes back to where it was found, and its text is the reply's.
+    const again = outcomeOfUndo(undoOf(back), { kind: 'applied', line: 3, text: 'stocks u:1', from: 6 });
+    expect(again).toEqual({ kind: 'moved-back', name: 'stocks', line: 3, undo: { kind: 'undo', act: 'move-back', line: 3, text: 'stocks u:1', to: 6 } });
   });
 
   test("restoring a rewritten line: its Undo restores the rewritten text, and that one's the former again", () => {
@@ -66,11 +84,14 @@ describe('an Undo that stored nothing says why and offers nothing (G15, G21)', (
     expect(refused({ kind: 'undo', act: 'remove', line: 4, text: LINE }, stale)).toBe('Not undone: line 4, "stocks", was changed or removed since. Nothing was stored.');
     expect(refused({ kind: 'undo', act: 'restore', line: 7, text: LINE, former: FORMER }, stale)).toBe('Not undone: line 7, "stocks", was changed or removed since. Nothing was stored.');
     expect(refused({ kind: 'undo', act: 'reinsert', line: 3, text: LINE }, stale)).toBe('Not undone: "stocks" can no longer go back as line 3. Nothing was stored.');
+    expect(refused({ kind: 'undo', act: 'move-back', line: 2, text: LINE, to: 5 }, stale)).toBe('Not undone: line 2, "stocks", was changed or removed since. Nothing was stored.');
   });
 
   test('another line has the name the Undo would write, the name named as it would be written', () => {
     expect(refused({ kind: 'undo', act: 'reinsert', line: 3, text: LINE }, { kind: 'name-taken', line: 9 })).toBe('Not undone: line 9 already has the name "stocks". Nothing was stored.');
     expect(refused({ kind: 'undo', act: 'restore', line: 7, text: LINE, former: FORMER }, { kind: 'name-taken', line: 2 })).toBe('Not undone: line 2 already has the name "stock". Nothing was stored.');
+    // Going back would pass a line with its name.
+    expect(refused({ kind: 'undo', act: 'move-back', line: 1, text: LINE, to: 3 }, { kind: 'name-taken', line: 2 })).toBe('Not undone: line 2 already has the name "stocks". Nothing was stored.');
   });
 });
 
@@ -82,6 +103,8 @@ describe('the confirmation names the name and the line (L2), and its Undo says w
     [{ kind: 'restored', name: 'a b', line: 3, undo }, 'Changed "a b" back on line 3', 'Undo changing back "a b"', 'Enter undoes changing the line back, changing it again'],
     [{ kind: 'removed', name: 'a b', line: 3, undo }, 'Removed "a b" from line 3', 'Undo removing "a b"', 'Enter undoes the removal, putting the line back'],
     [{ kind: 'put-back', name: 'a b', line: 3, undo }, 'Put "a b" back as line 3', 'Undo putting back "a b"', 'Enter undoes putting the line back, removing it again'],
+    [{ kind: 'moved', name: 'a b', line: 3, undo }, 'Moved "a b" to line 3', 'Undo moving "a b"', 'Enter undoes the move, moving the line back'],
+    [{ kind: 'moved-back', name: 'a b', line: 3, undo }, 'Moved "a b" back to line 3', 'Undo moving back "a b"', 'Enter undoes moving the line back, moving it again'],
   ];
   for (const [outcome, text, label, footer] of cases) {
     test(outcome.kind, () => {

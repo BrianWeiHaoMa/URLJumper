@@ -3,15 +3,16 @@
 // its name, URL, and note, each heading (F14) as one section heading, and each line the extension cannot read
 // as an unreadable row with its raw text, why, and *Fix in text*, which shows the host's Text view on that line
 // (G16); blank lines are not listed. A mapping row's pencil opens the row editor in the row's place, one at a
-// time, with the line as this view's read holds it; no storage change moves or closes an open editor. A change
-// it stores is confirmed in the list beside its line, with Undo, itself undoable (G15). The document is read
+// time, with the line as this view's read holds it, offering *Move up* and *Move down*; no storage change moves
+// or closes an open editor. A change it stores is confirmed in the list beside its line, with Undo, itself
+// undoable (G15); after a move, and its Undo, the editor stays open on the moved line. The document is read
 // as the view opens and after every change to it (State), and every line is rendered (T1). The view writes
 // only through the editor's and Undo's requests (R1), and nothing in it opens a URL (G4, R4). What differs by
 // host, how the Text view is shown, comes in as `showTextView`.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import type { Anchor } from '../document/anchor';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
-import { offersUndo, type Confirmed, type Outcome } from '../line-changes/outcomes';
+import { lineMoved, offersUndo, type Confirmed, type Outcome } from '../line-changes/outcomes';
 import { Pencil } from '../line-changes/Pencil';
 import { RowEditor } from '../line-changes/RowEditor';
 import { chromeMessage } from '../requests';
@@ -64,16 +65,21 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
     [items, editor, place, confirmed === null, confirmedAt],
   );
   const focus = useFocusKeeping(root, own, entries, confirmed, () => setFocused(null));
+  const revealMove = useMoveRevealing(own, place);
 
   const endConfirmation = useCallback((id: number) => setConfirmed((shown) => (shown?.id === id ? null : shown)), []);
   useConfirmationLifetime(confirmed, endConfirmation, own);
-  const confirm = (outcome: Outcome) => {
+  // `sentFrom`: the opening of the editor open as the change was sent. A move, or its Undo, keeps that editor
+  // open on the line it left, and never moves an editor opened since onto that line (G13).
+  const confirm = (outcome: Outcome, sentFrom: number | undefined) => {
     count.current += 1;
     setConfirmed({ id: count.current, outcome });
     setConfirmedAt((shown) => confirmationPlace(outcome, shown));
     if (outcome.kind !== 'refused') focus.line.current = outcome.line;
+    if (outcome.kind === 'moved' || outcome.kind === 'moved-back') setEditor((open) => (open !== null && open.opened === sentFrom ? { ...open, anchor: lineMoved(outcome) } : open));
   };
-  const { undo, undoing } = useUndo(confirmed, confirm);
+  // Undo's outcome lands after its request, through the callback of the render whose Undo sent it: `editor` is the one open then.
+  const { undo, undoing } = useUndo(confirmed, (outcome) => confirm(outcome, editor?.opened));
 
   // Opening an editor is the user's next action: the confirmation and its Undo end (G15). Its line is the row's,
   // number and exact text, from the read this view rendered, which no later read moves (G13).
@@ -96,11 +102,14 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
       if (control !== null) focus.line.current = control.line;
       setFocused(control);
     },
-    // A change the editor stored closes it, and its confirmation shows; the focus goes to the changed row's
-    // pencil, or, for a removed line, to Undo, never to nothing (G32).
+    // A change the editor stored shows its confirmation and closes the editor; the focus goes to the changed
+    // row's pencil, or, for a removed line, to Undo, never to nothing (G32). A move keeps the editor open on its
+    // line, the focus on the control that moved it, so the next move needs no reopening.
     stored: (outcome) => {
+      // Every other edit waits while the editor's change awaits its reply: the editor open now sent it.
+      confirm(outcome, editor?.opened);
+      if (outcome.kind === 'moved') return revealMove(outcome.line);
       setEditor(null);
-      confirm(outcome);
       focus.ask(outcome.kind === 'removed' ? 'undo' : { line: focus.line.current });
     },
     editInstead: openEditor,
@@ -229,6 +238,23 @@ function useFocusKeeping(root: RefObject<HTMLElement | null>, own: RefObject<HTM
   };
 }
 
+/**
+ * Brings a move's confirmation into view below the editor once the read lists the moved line where the move
+ * put it (`place`, the editor's), the focus staying, in view, on the control that moved it (G15, G32).
+ */
+function useMoveRevealing(own: RefObject<HTMLElement | null>, place: Place | null) {
+  const due = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (due.current === null || place?.line !== due.current) return;
+    due.current = null;
+    own.current?.scrollIntoView({ block: 'nearest' });
+    if (document.activeElement instanceof HTMLElement) document.activeElement.scrollIntoView({ block: 'nearest' });
+  }, [own, place]);
+  return (line: number) => {
+    due.current = line;
+  };
+}
+
 /** What the list's rows, editor, and confirmation call. */
 interface ListActions {
   edit(item: MappingItem): void;
@@ -295,6 +321,7 @@ const ListLines = memo(function ListLines({ entries, stored, editor, confirmed, 
                   anchor={editor!.anchor}
                   argument={null}
                   start={nameField}
+                  offersMoves
                   onStored={actions.stored}
                   onEditInstead={actions.editInstead}
                   onBack={actions.closeEditor}

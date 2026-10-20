@@ -16,8 +16,10 @@ export type MoveResult =
   | { kind: 'applied'; document: string; from: number; line: number; text: string }
   /** No mapping line, or several, stands as `anchor` names it: the line changed or went since it was loaded. */
   | { kind: 'stale' }
-  /** No mapping line before it (up) or after it (down), or a line with its name in the way. */
-  | { kind: 'immovable' };
+  | Immovable;
+
+/** The document admits no such move: no mapping line before the line (up) or after it (down), `passing` null; or a line with its name in the way, `passing` its number. */
+export type Immovable = { kind: 'immovable'; passing: number | null };
 
 /** `document` with the mapping line `anchor` names moved one mapping line up or down (G12). */
 export function moveMapping(document: string, anchor: Anchor, direction: MoveDirection): MoveResult {
@@ -25,16 +27,24 @@ export function moveMapping(document: string, anchor: Anchor, direction: MoveDir
   const from = findAnchor(lines, anchor.line, anchor.text);
   if (from === undefined) return { kind: 'stale' };
   const to = neighbouringMapping(lines, from, direction);
-  if (to === undefined) return { kind: 'immovable' };
+  if (to === undefined) return { kind: 'immovable', passing: null };
   const after = moveLine(lines, from, to);
   const moved = readDocument(after).lines;
-  if (lineWithItsNamePassed(lines, moved, from, to) !== undefined) return { kind: 'immovable' };
+  const passing = lineWithItsNamePassed(lines, moved, from, to);
+  if (passing !== undefined) return { kind: 'immovable', passing };
   return { kind: 'applied', document: after, from, line: to, text: moved[to - 1]!.text };
 }
 
-/** Which moves `moveMapping` would apply to the mapping line `anchor` names, on `document` as last read: the moves a row editor offers. */
-export function movesAdmitted(document: string, anchor: Anchor): { up: boolean; down: boolean } {
-  return { up: moveMapping(document, anchor, 'up').kind === 'applied', down: moveMapping(document, anchor, 'down').kind === 'applied' };
+/** What `moveMapping` would do with the mapping line `anchor` names: applied from line `from` to line `line`, stale, or refused and why. */
+export type MoveOffer = { kind: 'applied'; from: number; line: number } | { kind: 'stale' } | Immovable;
+
+/** What each move of the mapping line `anchor` names would come to on `document` as last read: the moves a row editor offers, and why one is not. */
+export function movesAdmitted(document: string, anchor: Anchor): Record<MoveDirection, MoveOffer> {
+  const offer = (direction: MoveDirection): MoveOffer => {
+    const result = moveMapping(document, anchor, direction);
+    return result.kind === 'applied' ? { kind: 'applied', from: result.from, line: result.line } : result;
+  };
+  return { up: offer('up'), down: offer('down') };
 }
 
 export type MoveBackResult =

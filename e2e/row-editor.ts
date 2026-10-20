@@ -13,6 +13,9 @@ export function rowEditor(page: Page) {
     save: page.getByRole('button', { name: 'Save', exact: true }),
     delete: page.getByRole('button', { name: 'Delete', exact: true }),
     copyLink: page.getByRole('button', { name: 'Copy link', exact: true }),
+    /** *Move up* and *Move down*, offered where the host offers moves: the List view. */
+    moveUp: page.getByRole('button', { name: 'Move up', exact: true }),
+    moveDown: page.getByRole('button', { name: 'Move down', exact: true }),
     openInText: page.getByRole('button', { name: 'Open in text', exact: true }),
     cancel: page.getByRole('button', { name: 'Cancel', exact: true }),
     editAgain: page.getByRole('button', { name: 'Edit again', exact: true }),

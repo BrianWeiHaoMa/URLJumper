@@ -3,10 +3,12 @@
 // it offers, which is the inverse request, kept in memory alone (State). An Undo is a change of its own, so
 // its outcome offers Undo in turn: an insert's Undo removes the line and that removal's Undo puts it back; a
 // Delete's Undo puts the line back and that Undo's removes it again; a rewrite's Undo restores the former
-// text and that restore's Undo the text it replaced. A refused Undo stores nothing and offers nothing.
+// text and that restore's Undo the text it replaced; a move's Undo moves the line back to the number it had and
+// that Undo's moves it back again. A refused Undo stores nothing and offers nothing.
+import type { Anchor } from '../document/anchor';
 import { mappingOfLine } from '../document/grammar';
 import type { EndingGiven } from '../document/line-edits';
-import type { InsertReply, RemoveReply, RewriteReply, UndoReply, UndoRequest } from '../requests';
+import type { InsertReply, MoveReply, RemoveReply, RewriteReply, UndoReply, UndoRequest } from '../requests';
 
 export type Outcome =
   /** An insert: the Name form's, or a row editor's of a line gone since it loaded; `headingMissing` says it went to the end (G9). */
@@ -16,6 +18,8 @@ export type Outcome =
    * Delete, or an Undo took an inserted line away; `put-back`: an Undo put a removed line back.
    */
   | { kind: 'rewritten' | 'restored' | 'removed' | 'put-back'; name: string; line: number; undo: UndoRequest }
+  /** `moved`: a move; `moved-back`: an Undo moved a moved line back. Its Undo names the line as it was left. */
+  | { kind: 'moved' | 'moved-back'; name: string; line: number; undo: UndoRequest }
   /** An Undo stored nothing, for this reason; nothing is offered. */
   | { kind: 'refused'; message: string };
 
@@ -42,6 +46,17 @@ export function removedOutcome(reply: Applied<RemoveReply>): Outcome {
   return { kind: 'removed', name: nameOf(reply.text), line: reply.line, undo: { kind: 'undo', act: 'reinsert', line: reply.line, text: reply.text } };
 }
 
+/** A move stored: Undo moves the line, as the move left it, back to the number it had where the move found it (G15). */
+export function movedOutcome(reply: Applied<MoveReply>): Outcome {
+  const { line, text, from } = reply;
+  return { kind: 'moved', name: nameOf(text), line, undo: { kind: 'undo', act: 'move-back', line, text, to: from } };
+}
+
+/** The line a move or its Undo left, as its own Undo names it: where an editor kept open on it now stands. */
+export function lineMoved(outcome: Extract<Outcome, { kind: 'moved' | 'moved-back' }>): Anchor {
+  return { line: outcome.undo.line, text: outcome.undo.text };
+}
+
 /** What the Undo `request` came to, by the worker's `reply`: a change of its own with its own Undo, or a refusal. */
 export function outcomeOfUndo(request: UndoRequest, reply: UndoReply): Outcome {
   if (reply.kind !== 'applied') return { kind: 'refused', message: refusalText(request, reply) };
@@ -49,6 +64,8 @@ export function outcomeOfUndo(request: UndoRequest, reply: UndoReply): Outcome {
   const name = nameOf(text);
   if (request.act === 'remove') return { kind: 'removed', name, line, undo: { kind: 'undo', act: 'reinsert', line, text } };
   if (request.act === 'reinsert') return { kind: 'put-back', name, line, undo: removal(reply) };
+  // `send` accepts a move back's applied reply only with the number it found the line at, which its Undo goes back to.
+  if (request.act === 'move-back') return { kind: 'moved-back', name, line, undo: { kind: 'undo', act: 'move-back', line, text, to: reply.from! } };
   return { kind: 'restored', name, line, undo: { kind: 'undo', act: 'restore', line, text, former: request.text } };
 }
 
@@ -67,10 +84,14 @@ export function confirmationText(outcome: Outcome): string {
       return `Removed "${outcome.name}" from line ${outcome.line}`;
     case 'put-back':
       return `Put "${outcome.name}" back as line ${outcome.line}`;
+    case 'moved':
+      return `Moved "${outcome.name}" to line ${outcome.line}`;
+    case 'moved-back':
+      return `Moved "${outcome.name}" back to line ${outcome.line}`;
   }
 }
 
-const UNDOES = { saved: 'saving', rewritten: 'changing', restored: 'changing back', removed: 'removing', 'put-back': 'putting back' } as const;
+const UNDOES = { saved: 'saving', rewritten: 'changing', restored: 'changing back', removed: 'removing', 'put-back': 'putting back', moved: 'moving', 'moved-back': 'moving back' } as const;
 
 /** The name a screen reader speaks for Undo (G32). */
 export function undoLabel(outcome: Exclude<Outcome, { kind: 'refused' }>): string {
@@ -89,6 +110,8 @@ export function undoFooter(outcome: Outcome, undoing: boolean): string {
   if (outcome.kind === 'put-back') return 'Enter undoes putting the line back, removing it again';
   if (outcome.kind === 'rewritten') return 'Enter undoes the change, restoring the line as it was';
   if (outcome.kind === 'restored') return 'Enter undoes changing the line back, changing it again';
+  if (outcome.kind === 'moved') return 'Enter undoes the move, moving the line back';
+  if (outcome.kind === 'moved-back') return 'Enter undoes moving the line back, moving it again';
   return 'Enter undoes the save, removing its line';
 }
 

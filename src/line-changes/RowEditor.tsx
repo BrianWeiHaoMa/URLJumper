@@ -1,30 +1,33 @@
-// The row editor (In use, "Edit from a suggestion"; G12, G13, G14, G21, G31, L2): name, URL, and note fields
-// filled from one mapping line as loaded, with *Save*, which rewrites that line alone, *Delete*, which removes
-// it at once and asks nothing, *Copy link*, *Open in text* where the host offers it, and *Cancel*, which stores
-// nothing. The line is the anchor from the read the editor was opened on, which no later read moves: a Save or
-// Delete the worker finds stale stores nothing, and the editor says what became of the line and offers *Edit
-// again*, which anchors on the line as it now stands, keeping the typed values, or, the line gone, saves them as
-// a new line at the end (G9). Its checks come from the document module against the document as last read, so
-// a Save that keeps its name is never blocked as taken, and a taken name is named, with the offer to edit that
-// line instead, beside any other problem (G8). While a Save or Delete awaits its reply the fields take no
-// typing and every action waits, so the reply lands on the editor that sent it (G21). It never reads storage,
-// closes its host, or shows a confirmation: a stored change's outcome goes to the host. It writes only
-// through the worker's requests (R1); no key deletes a line (P1).
+// The row editor (In use, "Edit from a suggestion" and "Edit the list"; G12, G13, G14, G21, G31, L2): name,
+// URL, and note fields filled from one mapping line as loaded, with *Save*, which rewrites that line alone,
+// *Delete*, which removes it at once and asks nothing, *Copy link*, *Move up* and *Move down* where the host
+// offers them, each moving the line at once, *Open in text* where the host offers it, and *Cancel*, which stores
+// nothing. The line is the anchor from the read the editor was opened on, which no later read moves: a change
+// the worker finds stale stores nothing, and the editor says what became of the line and offers *Edit again*,
+// which anchors on the line as it now stands, keeping the typed values, or, the line gone, saves them as a new
+// line at the end (G9). Only the host moves it otherwise, keeping the editor open on the line a move left. Its
+// checks come from the document module against the document as last read, so a Save that keeps its name is
+// never blocked as taken, a taken name is named, with the offer to edit that line instead, beside any other
+// problem (G8), and a move the document does not admit is offered disabled, saying why (G12). While a change
+// awaits its reply the fields take no typing and every action waits, so the reply lands on the editor that
+// sent it (G21). It never reads storage, closes its host, or shows a confirmation: a stored change's outcome
+// goes to the host. It writes only through the worker's requests (R1); no key deletes or moves a line (P1).
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { anchorAt, type Anchor } from '../document/anchor';
 import { mappingOfLine } from '../document/grammar';
+import { movesAdmitted, type MoveDirection, type MoveOffer } from '../document/moving';
 import type { MappingFields } from '../document/validation';
 import { chromeMessage, send, type InsertReply } from '../requests';
 import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
-import { insertedOutcome, removedOutcome, rewrittenOutcome, type Outcome } from './outcomes';
-import { destination, lineFields, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
+import { insertedOutcome, movedOutcome, removedOutcome, rewrittenOutcome, type Outcome } from './outcomes';
+import { destination, lineFields, moveFooter, notMovedText, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
 import './line-form.css';
 import './row-editor.css';
 
 export interface RowEditorProps {
   /** The stored document as last read, given again after every read. */
   document: string;
-  /** The line as loaded: its number and exact text from the read the editor was opened on. */
+  /** The line as loaded: its number and exact text from the read the editor was opened on; given anew by a host that keeps the editor open on the line a move left, which the editor then edits. */
   anchor: Anchor;
   /** The argument of the row it was opened from: the argument row's, else null; *Copy link* fills the URL with it. */
   argument: string | null;
@@ -32,7 +35,9 @@ export interface RowEditorProps {
   start: RefObject<HTMLInputElement | null>;
   /** Opens the Text view on line N, the host's way; *Open in text* is offered only when it is given. A rejection is said in the editor. */
   openInText?(line: number): Promise<void>;
-  /** A change stored: the host closes the editor and confirms the outcome. */
+  /** Whether *Move up* and *Move down* are offered. */
+  offersMoves?: boolean;
+  /** A change stored: the host confirms the outcome and closes the editor, or, after a move, keeps it open on the line, which the editor is then ready to change again. */
   onStored(outcome: Outcome): void;
   /** *Edit "‹name›" instead*: the host opens the editor on that line, its anchor from the document the editor last rendered. */
   onEditInstead(anchor: Anchor): void;
@@ -40,16 +45,19 @@ export interface RowEditorProps {
   onBack(): void;
   /** Called with what Enter does where the focus is in the editor, whenever that changes (L2). */
   sayWhatEnterDoes(text: string): void;
-  /** Called with true as a Save or Delete is sent and with false as its reply lands, so a host can hold its other edits meanwhile (G21). */
+  /** Called with true as a change is sent and with false as its reply lands, so a host can hold its other edits meanwhile (G21). */
   onBusy?(busy: boolean): void;
 }
 
 /** The editor's controls, by which the footer says what Enter does. */
-type Control = 'field' | 'save' | 'delete' | 'copy' | 'open' | 'cancel' | 'edit-again' | 'edit-instead';
+type Control = 'field' | 'save' | 'delete' | 'copy' | 'move-up' | 'move-down' | 'open' | 'cancel' | 'edit-again' | 'edit-instead';
 
-/** What a Save or Delete the worker found stale met: what became of the line, by the reply's stored document. */
+/** The changes the editor sends. */
+type Change = 'save' | 'delete' | 'move';
+
+/** What a change the worker found stale met: what became of the line, by the reply's stored document. */
 interface Stale {
-  by: 'save' | 'delete';
+  by: Change;
   became: Became;
 }
 
@@ -59,14 +67,15 @@ interface Said {
   alert: boolean;
 }
 
-export function RowEditor({ document: stored, anchor: loaded, argument, start, openInText, onStored, onEditInstead, onBack, sayWhatEnterDoes, onBusy }: RowEditorProps) {
+export function RowEditor({ document: stored, anchor: loaded, argument, start, openInText, offersMoves, onStored, onEditInstead, onBack, sayWhatEnterDoes, onBusy }: RowEditorProps) {
   const problemId = `${useId()}-problem`;
-  // Only *Edit again* moves it: to the line as it now stands, or to none, a new line at the end.
-  const [anchor, setAnchor] = useState<Anchor | null>(loaded);
+  const [anchor, setAnchor] = useAnchor(loaded);
   const [fields, setFields] = useState<MappingFields>(() => lineFields(loaded.text));
   const [focused, setFocused] = useState<Control | null>(null);
   const check = useMemo(() => saveCheck(stored, anchor, fields), [stored, anchor, fields]);
   const textLine = useMemo(() => (anchor === null ? undefined : textViewLine(stored, anchor)), [stored, anchor]);
+  // Once per read of the document, which can be ten thousand lines.
+  const moves = useMemo(() => (offersMoves && anchor !== null ? movesAdmitted(stored, anchor) : null), [offersMoves, stored, anchor]);
   const writes = useWrites(onStored, onBusy);
   const { busy, stale, said, setSaid } = writes;
 
@@ -76,6 +85,9 @@ export function RowEditor({ document: stored, anchor: loaded, argument, start, o
     },
     delete: () => {
       if (anchor !== null) void writes.write('delete', () => deleteLine(anchor));
+    },
+    move: (direction) => {
+      if (anchor !== null && moves !== null && moves[direction].kind !== 'immovable') void writes.write('move', () => moveLine(anchor, direction));
     },
     // Inside the click or key handler, which the clipboard needs (S14); it opens nothing and records no use.
     copyLink: () => {
@@ -107,7 +119,7 @@ export function RowEditor({ document: stored, anchor: loaded, argument, start, o
   };
 
   useStartFocus(start, check.takenBy?.line, stale);
-  const enterSays = whatEnterDoes(focused, { busy, stale, anchor, check, textLine, fields });
+  const enterSays = whatEnterDoes(focused, { busy, stale, anchor, check, textLine, fields, moves });
   useEffect(() => sayWhatEnterDoes(enterSays), [enterSays, sayWhatEnterDoes]);
 
   return (
@@ -134,15 +146,16 @@ export function RowEditor({ document: stored, anchor: loaded, argument, start, o
         {check.problem === null ? '' : fieldProblemText(check.problem, check.line, fields.url)}
       </p>
       <EditorMessages check={check} stale={stale} said={said} loaded={loaded} busy={busy !== null} actions={actions} />
-      <EditorButtons anchor={anchor} offersOpen={openInText !== undefined} saveOff={busy !== null || stale !== null || check.problem !== null || check.takenBy !== null} busy={busy !== null} stale={stale !== null} actions={actions} />
+      <EditorButtons anchor={anchor} offersOpen={openInText !== undefined} moves={moves} saveOff={busy !== null || stale !== null || check.problem !== null || check.takenBy !== null} busy={busy !== null} stale={stale !== null} actions={actions} />
     </form>
   );
 }
 
-/** What the editor's controls do, each waiting while a Save or Delete awaits its reply. */
+/** What the editor's controls do, each waiting while a change awaits its reply. */
 interface EditorActions {
   save(): void;
   delete(): void;
+  move(direction: MoveDirection): void;
   copyLink(): void;
   openText(): void;
   cancel(): void;
@@ -151,15 +164,29 @@ interface EditorActions {
 }
 
 /**
- * The editor's writes (G13, G21): one Save or Delete at a time, its outcome handed to the host; a stale reply
- * kept as what became of the line until *Edit again*; and what the last action came to when it stored nothing.
+ * The line the editor changes: the one it was opened on, until *Edit again* moves it to the line as it now
+ * stands, or to none, a new line at the end; or until the host gives it anew, the line where a move left it.
+ */
+function useAnchor(loaded: Anchor) {
+  const [anchor, setAnchor] = useState<Anchor | null>(loaded);
+  const [given, setGiven] = useState(loaded);
+  if (given.line !== loaded.line || given.text !== loaded.text) {
+    setGiven(loaded);
+    setAnchor(loaded);
+  }
+  return [anchor, setAnchor] as const;
+}
+
+/**
+ * The editor's writes (G13, G21): one change at a time, its outcome handed to the host; a stale reply kept as
+ * what became of the line until *Edit again*; and what the last action came to when it stored nothing.
  */
 function useWrites(onStored: (outcome: Outcome) => void, onBusy: ((busy: boolean) => void) | undefined) {
-  const [busy, setBusy] = useState<'save' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<Change | null>(null);
   const inFlight = useRef(false);
   const [stale, setStale] = useState<Stale | null>(null);
   const [said, setSaid] = useState<Said | null>(null);
-  const write = async (by: 'save' | 'delete', request: () => Promise<Written>) => {
+  const write = async (by: Change, request: () => Promise<Written>) => {
     if (inFlight.current || stale !== null) return;
     inFlight.current = true;
     setBusy(by);
@@ -167,11 +194,13 @@ function useWrites(onStored: (outcome: Outcome) => void, onBusy: ((busy: boolean
     onBusy?.(true);
     const written = await request();
     onBusy?.(false);
-    if ('outcome' in written) return onStored(written.outcome);
+    if ('outcome' in written) onStored(written.outcome);
+    // Every stored change but a move closes the editor; after a move the host keeps it open, and it is ready again.
+    if ('outcome' in written && written.outcome.kind !== 'moved') return;
     inFlight.current = false;
     setBusy(null);
     if ('became' in written) setStale({ by, became: written.became });
-    else setSaid({ text: written.refusal, alert: true });
+    else if ('refusal' in written) setSaid({ text: written.refusal, alert: true });
   };
   const clearStale = () => {
     setStale(null);
@@ -200,6 +229,14 @@ async function deleteLine(anchor: Anchor): Promise<Written> {
   const reply = await send({ kind: 'remove', line: anchor.line, text: anchor.text });
   if (reply.kind === 'applied') return { outcome: removedOutcome(reply) };
   return reply.kind === 'stale' ? { became: whatBecameOf(reply.document, anchor) } : { refusal: `Not deleted: nothing was stored. Chrome said: ${reply.message}` };
+}
+
+/** A move of the line `anchor` names one mapping line up or down, at once (G12). */
+async function moveLine(anchor: Anchor, direction: MoveDirection): Promise<Written> {
+  const reply = await send({ kind: 'move', line: anchor.line, text: anchor.text, direction });
+  if (reply.kind === 'applied') return { outcome: movedOutcome(reply) };
+  if (reply.kind === 'stale') return { became: whatBecameOf(reply.document, anchor) };
+  return { refusal: reply.kind === 'immovable' ? notMovedText(reply.document, anchor, direction) : `Not moved: nothing was stored. Chrome said: ${reply.message}` };
 }
 
 /** Puts the destination of the line `anchor` names on the clipboard (G31), saying what came of it. */
@@ -275,17 +312,19 @@ function EditorMessages({ check, stale, said, loaded, busy, actions }: EditorMes
 }
 
 interface EditorButtonsProps {
-  /** None for a line gone, saved as a new line, which offers nothing to delete, copy, or open. */
+  /** None for a line gone, saved as a new line, which offers nothing to delete, copy, move, or open. */
   anchor: Anchor | null;
   offersOpen: boolean;
+  /** What each move would come to, where the host offers moves; null where it does not. */
+  moves: Record<MoveDirection, MoveOffer> | null;
   saveOff: boolean;
   busy: boolean;
   stale: boolean;
   actions: EditorActions;
 }
 
-/** *Save*, *Delete*, *Copy link*, *Open in text*, and *Cancel*; none of them a key (P1). */
-function EditorButtons({ anchor, offersOpen, saveOff, busy, stale, actions }: EditorButtonsProps) {
+/** *Save*, *Delete*, *Copy link*, *Move up* and *Move down*, *Open in text*, and *Cancel*; none of them a key (P1). */
+function EditorButtons({ anchor, offersOpen, moves, saveOff, busy, stale, actions }: EditorButtonsProps) {
   return (
     <div className="form-actions">
       <button type="submit" className="form-button save" data-control="save" aria-disabled={saveOff}>
@@ -299,6 +338,20 @@ function EditorButtons({ anchor, offersOpen, saveOff, busy, stale, actions }: Ed
           <button type="button" className="form-button" data-control="copy" aria-disabled={busy} onClick={actions.copyLink}>
             Copy link
           </button>
+          {moves !== null &&
+            (['up', 'down'] as const).map((direction) => (
+              // Still reached by Tab where the document does not admit it, its footer saying why (G32, L2).
+              <button
+                key={direction}
+                type="button"
+                className="form-button"
+                data-control={`move-${direction}`}
+                aria-disabled={busy || stale || moves[direction].kind === 'immovable'}
+                onClick={() => actions.move(direction)}
+              >
+                {direction === 'up' ? 'Move up' : 'Move down'}
+              </button>
+            ))}
           {offersOpen && (
             <button type="button" className="form-button" data-control="open" aria-disabled={busy} onClick={actions.openText}>
               Open in text
@@ -356,28 +409,32 @@ function notSaved(reply: Exclude<InsertReply, { kind: 'applied' }>, line: number
   return reply.kind === 'storage-failed' ? `Not saved: nothing was stored. Chrome said: ${reply.message}` : refusedValuesText(reply, line, url);
 }
 
+const NOT_DONE = { save: 'Not saved', delete: 'Not deleted', move: 'Not moved' } as const;
+
 /** What became of the line, said where the change was refused (G13): nothing was stored. */
 function staleText({ by, became }: Stale, loaded: Anchor): string {
-  const refused = by === 'save' ? 'Not saved' : 'Not deleted';
+  const refused = NOT_DONE[by];
   const name = mappingOfLine(loaded.text)?.name ?? '';
   if (became.kind === 'changed') return `${refused}: line ${loaded.line}, "${name}", was changed since this editor opened, and nothing was stored. It is now line ${became.now.line}:`;
   return `${refused}: line ${loaded.line}, "${name}", has gone from the document since this editor opened, and nothing was stored.`;
 }
 
 interface EditorState {
-  busy: 'save' | 'delete' | null;
+  busy: Change | null;
   stale: Stale | null;
   anchor: Anchor | null;
   check: SaveCheck;
   /** The line *Open in text* names; undefined with no anchor, where it is not offered. */
   textLine: number | undefined;
   fields: MappingFields;
+  moves: Record<MoveDirection, MoveOffer> | null;
 }
 
 /** What Enter does with the focus on `focused` (L2); like every footer it holds no name or URL, which can be as long as the document. */
-function whatEnterDoes(focused: Control | null, { busy, stale, anchor, check, textLine, fields }: EditorState): string {
+function whatEnterDoes(focused: Control | null, { busy, stale, anchor, check, textLine, fields, moves }: EditorState): string {
   if (busy === 'save') return 'Saving · Enter does nothing until it is stored';
   if (busy === 'delete') return 'Deleting · Enter does nothing until it is stored';
+  if (busy === 'move') return 'Moving · Enter does nothing until it is stored';
   switch (focused) {
     case null:
       return 'Enter does nothing';
@@ -393,6 +450,11 @@ function whatEnterDoes(focused: Control | null, { busy, stale, anchor, check, te
       return stale?.became.kind === 'changed' ? `Enter edits line ${stale.became.now.line} as it is now, keeping your values` : 'Enter edits again, to save your values as a new line';
     case 'delete':
       return stale !== null ? 'Enter does nothing · Edit again first' : `Enter deletes line ${check.line}`;
+    case 'move-up':
+    case 'move-down': {
+      const direction = focused === 'move-up' ? 'up' : 'down';
+      return stale !== null || moves === null ? 'Enter does nothing · Edit again first' : moveFooter(direction, moves[direction], check.line);
+    }
   }
   if (stale !== null) return 'Enter does nothing · Edit again first';
   if (check.takenBy !== null) return `Enter does nothing · Line ${check.takenBy.line} already has this name.`;
