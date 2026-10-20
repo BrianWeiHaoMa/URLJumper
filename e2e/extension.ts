@@ -9,6 +9,7 @@ import { checkAccessibilityInBothSchemes } from './accessibility.ts';
 import { distDir, launchChrome, waitForStoredKey, type LoadedExtension } from './extension-launch.ts';
 import { listViewInPopup, listViewOnOptionsPage } from './list-view.ts';
 import { checkFit } from './popup-fit.ts';
+import { textViewInPopup, textViewOnOptionsPage } from './text-view.ts';
 import { keptRelease1xBuild, withRelease1x, type Release1x } from './upgrade-from-1x.ts';
 
 export { expect } from '@playwright/test';
@@ -170,6 +171,21 @@ export async function listViewIn(host: SettingsHost, extension: LoadedExtension,
     return { page: popup, view: await listViewInPopup(popup), check: () => checkFitAndAccessibility(popup) };
   }
   const { page, ...view } = await listViewOnOptionsPage(extension);
+  return { page, view, check: () => checkAccessibilityInBothSchemes(page) };
+}
+
+/**
+ * Stores `stored` and shows the Text view in `host`, once its text area holds the stored document: in the popup
+ * opened on a new page of `site`, or on the options page; returns the page that shows it, the view, and the
+ * check every state there is held to.
+ */
+export async function textViewIn(host: SettingsHost, extension: LoadedExtension, site: LocalSite, stored: Record<string, unknown>) {
+  await extension.seedStorage(stored);
+  if (host === 'popup') {
+    const { popup } = await popupOnNewPage(extension, site);
+    return { page: popup, view: await textViewInPopup(popup), check: () => checkFitAndAccessibility(popup) };
+  }
+  const { page, ...view } = await textViewOnOptionsPage(extension);
   return { page, view, check: () => checkAccessibilityInBothSchemes(page) };
 }
 

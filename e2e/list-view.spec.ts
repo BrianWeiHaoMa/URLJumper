@@ -296,12 +296,13 @@ test('in the popup, twenty mappings are all listed, the view scrolling between t
   await expect(nav(options, 'List')).toHaveAttribute('aria-current', 'page');
 });
 
-test('in the popup, unsaved text in the Text view is offered back after a switch to the List view and back', async ({ extension, site }) => {
+test('in the popup, unsaved text in the Text view, kept by Keep the draft and switch, is offered back after the switch to the List view and back', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: DOC });
   const { popup } = await popupOnNewPage(extension, site);
   const text = await textViewInPopup(popup);
   await typeAtEnd(text, 'x');
   await nav(popup, 'List').click();
+  await text.keepAndSwitch.click();
   await expect(listView(popup).list).toBeVisible();
   await nav(popup, 'Text').click();
   await expect(text.keptOffer).toBeVisible();

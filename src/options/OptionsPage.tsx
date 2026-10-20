@@ -2,13 +2,13 @@
 // views"): the same settings views as the popup's, listed from the one list, opened on the view its fragment
 // names (read once, as the page opens) with the Text view's caret on the line it names, and with Import and
 // Export beside Preferences, which the popup's settings do not offer; Import's file it shows in the Text view,
-// and the Text view on a line when the List view asks.
+// and the Text view on a line when the List view asks; the view shown may ask before another is shown in its place.
 // It shows the stored theme live, as the popup does. It holds none of the views' logic.
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { followStoredTheme } from '../preferences';
 import { Export } from '../settings/Export';
 import { Import } from '../settings/Import';
-import { lineInFragment, viewInFragment, type ImportedText, type SettingsView } from '../settings/settings-view';
+import { lineInFragment, viewInFragment, type ImportedText, type SettingsView, type SwitchGuard } from '../settings/settings-view';
 import { SettingsNav } from '../settings/SettingsNav';
 import { SETTINGS_VIEWS, TEXT_VIEW } from '../settings/views';
 
@@ -20,13 +20,30 @@ export function OptionsPage() {
   const [imported, setImported] = useState<ImportedText>();
   // Each Import shows the Text view afresh, even one already shown, so a file read late still arrives.
   const [imports, setImports] = useState(0);
+  // What the view shown asks before another is shown in its place, as it registered it (G19).
+  const switchGuard = useRef<SwitchGuard | null>(null);
+  const guardSwitch = useCallback((guard: SwitchGuard | null) => {
+    switchGuard.current = guard;
+  }, []);
+  // A switch the view asked about goes as the user answers, and the answer's control goes with the view: the
+  // focus, left on nothing, goes to the shown view's button in the list (G32).
+  const switched = useRef(false);
+  useLayoutEffect(() => {
+    if (!switched.current) return;
+    switched.current = false;
+    if (document.activeElement === document.body) document.querySelector<HTMLElement>('.settings-nav [aria-current="page"]')?.focus();
+  }, [shown]);
   useEffect(followStoredTheme, []);
   const show = (view: SettingsView) => {
-    if (view !== shown) {
+    if (view === shown) return;
+    const proceed = () => {
+      switched.current = true;
       setCaretLine(undefined);
       setImported(undefined);
-    }
-    setShown(view);
+      setShown(view);
+    };
+    if (switchGuard.current === null) proceed();
+    else switchGuard.current.switching(view, proceed);
   };
   const showTextView = (line: number) => {
     setCaretLine(line);
@@ -57,7 +74,7 @@ export function OptionsPage() {
         <SettingsNav views={SETTINGS_VIEWS} shown={shown} onShow={show} />
       </header>
       <section className="options-view" aria-label={shown.title}>
-        <View key={`${shown.id} ${imports}`} beside={beside[shown.id]} caretLine={caretLine} showTextView={showTextView} imported={imported} />
+        <View key={`${shown.id} ${imports}`} beside={beside[shown.id]} caretLine={caretLine} showTextView={showTextView} imported={imported} guardSwitch={guardSwitch} />
       </section>
     </main>
   );

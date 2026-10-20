@@ -3,7 +3,8 @@
 // differs by host is passed in, never worked out by the view. The options page opens on the view its
 // fragment names (`#view=<id>`), with the Text view's caret on the line it names (`&line=N`); the popup's
 // *Open in tab* names the view it shows, and its row editor's *Open in text* the Text view and the line. Both
-// hosts show their own Text view on a line when the List view asks (`showTextView`).
+// hosts show their own Text view on a line when the List view asks (`showTextView`), and let the view shown
+// ask before another is shown in its place (`guardSwitch`).
 import type { ComponentType, ReactNode } from 'react';
 
 /** A file's text Import brings to the Text view as its draft (G20). */
@@ -40,6 +41,26 @@ export interface SettingsViewProps {
    * draft with unsaved changes; nothing is stored until Save. The view is shown afresh for each Import.
    */
   imported?: ImportedText;
+  /**
+   * Given by both hosts: the view registers what it asks before the host shows another view in its place, as
+   * it is shown, and withdraws it (null) as it goes; the host consults it on every switch away from the view.
+   * The Text view's asks before a switch to the List view over unsaved changes (G19).
+   */
+  guardSwitch?(guard: SwitchGuard | null): void;
+}
+
+/** What a view asks before its host shows another view in its place (G19). */
+export interface SwitchGuard {
+  /**
+   * Whether a switch to `to` asks the user first when there is something to ask, which the popup's footer says
+   * on `to`'s button (L2): whether it asks now can change while the button has the focus, as a read lands.
+   */
+  mayAsk(to: SettingsView): boolean;
+  /**
+   * The user chose to show `to`: the view calls `proceed`, which shows it, at once when it has nothing to ask,
+   * once the user answers to switch, or never, when they stay.
+   */
+  switching(to: SettingsView, proceed: () => void): void;
 }
 
 export interface SettingsView {

@@ -1,10 +1,11 @@
 // The Text view as a check reaches it, re-exported by e2e/extension.ts: its parts found by their names, the
-// offer to bring in a change and its versions, the offer of a kept draft, the view opened in the popup's
-// settings or on the options page once its text area holds the stored document or once it offers a kept
-// draft, typing into a line as a user does, where the caret is, the draft stored and the wait until it holds a
-// text, the draft sets the worker receives and stores, a file handed to Import and its read held, the requests
-// the worker receives and a page's requests sent late, a page's reads of storage made late or answered late,
-// and the clipboard, which *Copy tab URL* writes, read back from a web page.
+// offer to bring in a change and its versions, the offer of a kept draft, the question a switch to the List view
+// asks over unsaved text, the view opened in the popup's settings or on the options page once its text area
+// holds the stored document or once it offers a kept draft, typing into a line as a user does, where the caret
+// is, the draft stored and the wait until it holds a text, the draft sets the worker receives and stores, a file
+// handed to Import and its read held, the requests the worker receives and a page's requests sent late, a page's
+// reads of storage made late or answered late, and the clipboard, which *Copy tab URL* writes, read back from a
+// web page.
 import { expect, type BrowserContext, type Locator, type Page, type Worker } from '@playwright/test';
 import type { Draft } from '../src/draft.ts';
 import type { LoadedExtension } from './extension-launch.ts';
@@ -29,6 +30,11 @@ export function textView(page: Page) {
     discard: page.getByRole('button', { name: 'Discard', exact: true }),
     /** What the view says when the worker did not keep its draft. */
     notKept: page.getByRole('alert').filter({ hasText: 'not kept for later' }),
+    /** The question a switch to the List view asks over unsaved text, and its three answers. */
+    switchQuestion: page.getByRole('region', { name: 'Switch to List with unsaved text?' }),
+    saveAndSwitch: page.getByRole('button', { name: 'Save and switch', exact: true }),
+    keepAndSwitch: page.getByRole('button', { name: 'Keep the draft and switch', exact: true }),
+    stay: page.getByRole('button', { name: 'Stay', exact: true }),
   };
 }
 

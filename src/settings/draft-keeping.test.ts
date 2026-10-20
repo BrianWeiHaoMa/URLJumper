@@ -320,3 +320,27 @@ test("each view opened has an identifier of its own, and the page sends its view
   // The user's own discard rests on no text.
   expect(discard).toEqual({ kind: 'draft-discard', view: 'other', number: 2 });
 });
+
+test('the view holds an unsaved change while a text it kept, or is about to keep, is one the stored document as last read does not hold', async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  const crlf = 'a  https://a/\r\n';
+  // Loaded and untouched, a CRLF document too, though the text area shows it with LF endings: none.
+  expect(keeper.unsaved(crlf)).toBe(false);
+  // Typed back to that document's text, which the text area holds with LF endings: one, about to be kept.
+  keeper.edited('a  https://a/\n', crlf, crlf);
+  expect(keeper.unsaved(crlf)).toBe(true);
+  expect(keeper.unsaved('a  https://a/\n')).toBe(false);
+  // Stored as the draft, it stays one until the document holds it.
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(keeper.unsaved(crlf)).toBe(true);
+  // Settled, as after the view's Save stored the text: none.
+  keeper.settled();
+  expect(keeper.unsaved(crlf)).toBe(false);
+  // A draft the view took over, resumed, is one.
+  keeper.holds({ text: 'b  https://b/\n', base: crlf, time: 1_700_000_000_000, view: 'another-view', number: 2 });
+  expect(keeper.unsaved(crlf)).toBe(true);
+});

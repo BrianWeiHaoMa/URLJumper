@@ -2,12 +2,12 @@
 // popup, reached by the gear in search and in the first-run state. Its header holds the way back, the list of
 // views, and *Open in tab*, which opens the options page on the view shown; between header and footer the
 // view scrolls (G7), and the footer says what Enter does wherever the focus is (L2). It gives the views the
-// tab the popup was opened on, whose address the Text view's *Copy tab URL* copies, and shows its Text view on
-// a line when the List view asks. It holds none of the views' logic and offers no Import or Export, which are
-// the full page's.
-import { useLayoutEffect, useState } from 'react';
+// tab the popup was opened on, whose address the Text view's *Copy tab URL* copies, shows its Text view on
+// a line when the List view asks, and lets the view shown ask before another is shown in its place. It holds
+// none of the views' logic and offers no Import or Export, which are the full page's.
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { chromeMessage } from '../requests';
-import { settingsFragment, type SettingsView } from '../settings/settings-view';
+import { settingsFragment, type SettingsView, type SwitchGuard } from '../settings/settings-view';
 import { enterOnView, SettingsNav } from '../settings/SettingsNav';
 import { SETTINGS_VIEWS, TEXT_VIEW } from '../settings/views';
 import { useFitToViewport } from './fit-to-viewport';
@@ -29,16 +29,30 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
   const [viewSays, setViewSays] = useState('Enter does nothing');
   const [focused, setFocused] = useState<'back' | 'open-in-tab' | SettingsView | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // What the view shown asks before another is shown in its place, as it registered it (G19).
+  const switchGuard = useRef<SwitchGuard | null>(null);
+  const guardSwitch = useCallback((guard: SwitchGuard | null) => {
+    switchGuard.current = guard;
+  }, []);
 
-  // The focus goes to the view's first control as it is shown, never to nothing (G32).
+  // The focus goes to the view's first control as it is shown, never to nothing (G32): while the view has none
+  // yet, as the List view before its first read, and the control that had it went with the view left, as the
+  // answer to its question does, to the shown view's button.
   useLayoutEffect(() => {
     const controls = layout.view.current?.querySelectorAll<HTMLElement>('.view-content *') ?? [];
-    [...controls].find((control) => control.tabIndex >= 0 && !control.matches(':disabled'))?.focus();
+    const first = [...controls].find((control) => control.tabIndex >= 0 && !control.matches(':disabled'));
+    if (first !== undefined) first.focus();
+    else if (document.activeElement === document.body) layout.root.current?.querySelector<HTMLElement>('.settings-nav [aria-current="page"]')?.focus();
   }, [shown]);
 
   const show = (view: SettingsView) => {
-    if (view !== shown) setCaretLine(undefined);
-    setShown(view);
+    if (view === shown) return;
+    const proceed = () => {
+      setCaretLine(undefined);
+      setShown(view);
+    };
+    if (switchGuard.current === null) proceed();
+    else switchGuard.current.switching(view, proceed);
   };
   const showTextView = (line: number) => {
     setCaretLine(line);
@@ -60,7 +74,7 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
       : focused === 'open-in-tab'
         ? 'Enter opens settings in a tab'
         : focused !== null
-          ? enterOnView(focused, shown)
+          ? enterOnView(focused, shown, switchGuard.current?.mayAsk(focused) ?? false)
           : viewSays;
   const { View } = shown;
 
@@ -82,7 +96,7 @@ export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
               {message}
             </p>
           )}
-          <View sayWhatEnterDoes={setViewSays} openerTab={{ url: tabUrl }} caretLine={caretLine} showTextView={showTextView} />
+          <View sayWhatEnterDoes={setViewSays} openerTab={{ url: tabUrl }} caretLine={caretLine} showTextView={showTextView} guardSwitch={guardSwitch} />
         </div>
       </div>
       <footer className="footer">{footer}</footer>

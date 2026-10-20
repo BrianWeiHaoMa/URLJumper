@@ -54,6 +54,13 @@ export interface DraftKeeping {
   /** The view took over `draft`, resumed or replaced by Import, and has sent none of its own since: the draft a discard names. */
   holds(draft: Draft): void;
   /**
+   * Whether the view holds an unsaved change (G19): a text it kept, or is about to keep, as the draft, its own
+   * edit or a draft it took over, that the stored document as last read, `stored`, does not hold. A text the
+   * view loaded, CRLF document and all, is none until it is edited, and one typed back to a CRLF document's
+   * text is one, since the text area holds it with LF endings (S14).
+   */
+  unsaved(stored: string): boolean;
+  /**
    * The text area holds the stored document, which the view's Save just stored or a read just loaded over a text
    * with no change since the last load: nothing is unsaved, and each draft the view holds goes.
    */
@@ -113,6 +120,9 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
     });
   };
 
+  // The text of the view's last edit, or of the draft it took over, while it is kept or about to be.
+  const kept = () => (unsent === null && held.length === 0 ? undefined : current);
+
   const keep = (edit: Edit) => {
     unsent = edit;
     if (timer === undefined && !waiting) timer = setTimeout(sendUnsent, COALESCE_MS);
@@ -142,7 +152,8 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
     reading: () => edits,
     storedRead(stored, read, latest) {
       // Nothing kept: the text was let go, or none was typed.
-      if ((unsent === null && held.length === 0) || current === undefined || !documentHolds(stored, current)) return;
+      const text = kept();
+      if (text === undefined || !documentHolds(stored, text)) return;
       if (read === edits) letGo();
       else if (latest) readAgain();
     },
@@ -150,6 +161,10 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
       held = [{ view: draft.view, number: draft.number }];
       current = draft.text;
       edits++;
+    },
+    unsaved(stored) {
+      const text = kept();
+      return text !== undefined && !documentHolds(stored, text);
     },
     settled() {
       letGo();

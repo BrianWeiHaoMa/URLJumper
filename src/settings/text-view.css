@@ -1,5 +1,6 @@
 /* The Text view, as both hosts show it: the grammar hint, the text area, Save and what it came to, the list
-   of errors, the offer to bring in a change made since the text was loaded, and in the popup *Copy tab URL*. The text area has a fixed whole-pixel height and scrolls inside
+   of errors, the offer to bring in a change made since the text was loaded, the question before a switch to
+   the List view, and in the popup *Copy tab URL*. The text area has a fixed whole-pixel height and scrolls inside
    itself, so the popup's view scrolls only for a long list of errors (G7); its lines do not wrap, so each
    line of the document is one row. Every color is a token of src/theme.css, and every line height a whole
    number of pixels. */
@@ -132,8 +133,10 @@
   font-style: italic;
 }
 
-/* A kept draft offered as the view opens: what it is, and Resume and Discard. */
-.draft-offer {
+/* A kept draft offered as the view opens: what it is, and Resume and Discard; and the question a switch to the
+   List view asks over unsaved changes, with its three answers. */
+.draft-offer,
+.switch-question {
   display: flex;
   flex-direction: column;
   gap: 6px;

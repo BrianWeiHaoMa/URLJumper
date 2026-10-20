@@ -31,7 +31,8 @@ export function SettingsNav({ views, shown, onShow, onFocusView }: SettingsNavPr
   );
 }
 
-/** What Enter does on `view`'s button in the list (L2). */
-export function enterOnView(view: SettingsView, shown: SettingsView): string {
-  return view === shown ? `Enter does nothing · ${view.title} is shown` : `Enter shows ${view.title}`;
+/** What Enter does on `view`'s button in the list (L2), given whether the view shown may ask first (`SwitchGuard`). */
+export function enterOnView(view: SettingsView, shown: SettingsView, mayAsk: boolean): string {
+  if (view === shown) return `Enter does nothing · ${view.title} is shown`;
+  return mayAsk ? `Enter shows ${view.title}, first asking about any unsaved text` : `Enter shows ${view.title}`;
 }

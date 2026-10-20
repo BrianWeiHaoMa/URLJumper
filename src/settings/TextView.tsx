@@ -13,7 +13,8 @@
 // goes once the stored document holds its text. As the view opens it offers a draft another view kept, to
 // resume, text and base restored, or to discard (`DraftOffer`); one the stored document holds is dropped
 // without asking. On the options page, Import's text arrives as the draft against the base the view loads,
-// after asking whether to replace a kept draft with unsaved changes (G19, G20).
+// after asking whether to replace a kept draft with unsaved changes (G19, G20). A switch to the List view over
+// unsaved changes asks first: save and switch, keep the draft and switch, or stay (`SwitchQuestion`; G19).
 import { useEffect, useRef, useState } from 'react';
 import { documentErrors, type DocumentError } from '../document/grammar';
 import { textAreaLineStart } from '../document/lines';
@@ -25,7 +26,8 @@ import { CopyTabUrl } from './CopyTabUrl';
 import { discardDraft, draftRequestsAnswered, keepDraft, type DraftKeeping } from './draft-keeping';
 import { DraftOffer } from './DraftOffer';
 import { MergeOffer } from './MergeOffer';
-import type { SettingsViewProps } from './settings-view';
+import type { SettingsView, SettingsViewProps } from './settings-view';
+import { SwitchQuestion } from './SwitchQuestion';
 import { TextErrors } from './TextErrors';
 import './settings.css';
 import './text-view.css';
@@ -42,9 +44,10 @@ type Outcome =
 /** Where the focus is among the view's controls, which says what Enter does: an error by its line. */
 type Focused = 'text' | 'save' | 'copy' | { line: number } | null;
 
-export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: SettingsViewProps) {
+export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, guardSwitch }: SettingsViewProps) {
   const root = useRef<HTMLDivElement>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
+  const saveButton = useRef<HTMLButtonElement>(null);
   // The stored document as the view last loaded it or saved it.
   const base = useRef('');
   // What the text area held after the last load or applied Save: while it still holds that, nothing is typed.
@@ -79,6 +82,11 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
   const keeping = useRef<DraftKeeping | null>(null);
   const firstCaretLine = useRef(caretLine);
   const readStored = useRef(() => {});
+  // While a switch to the List view is asked about: the host's way to show it, once the user answers to switch.
+  const switching = useRef<(() => void) | null>(null);
+  const [asking, setAsking] = useState(false);
+  // What Enter does on the question's control that has the focus.
+  const [questionSays, setQuestionSays] = useState<string | null>(null);
 
   // The document is read as the view opens and again after every change to it (State). A read that lands
   // while nothing is typed loads the stored document as both texts; one that lands over typing changes
@@ -111,6 +119,8 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
         setOutcome(null);
         keeper.settled();
       }
+      // After any load above, which leaves nothing unsaved.
+      switchUnasked();
     };
     let reads = 0;
     const read = async () => {
@@ -152,6 +162,22 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
       void keeper.flush();
     };
   }, []);
+
+  // A switch to the List view (by its id in `views.ts`, which lists this view) over unsaved changes, as the
+  // keeper of the draft tells them, waits on the user's answer (G19); any other switch, and one with nothing
+  // unsaved, goes at once, and the view's leaving keeps the draft, as a return to search does.
+  useEffect(() => {
+    const mayAsk = (to: SettingsView) => to.id === 'list';
+    guardSwitch?.({
+      mayAsk,
+      switching: (to, proceed) => {
+        if (!mayAsk(to) || keeping.current?.unsaved(stored.current) !== true) return proceed();
+        switching.current = proceed;
+        setAsking(true);
+      },
+    });
+    return () => guardSwitch?.(null);
+  }, [guardSwitch]);
 
   // The first read: the stored document as both texts, and a kept draft offered, or asked about when Import's
   // file waits; with no kept draft, Import's file is the draft against the stored document as its base (G20). A
@@ -271,15 +297,16 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
     if (area !== null) keeping.current?.edited(area.value, base.current, stored.current);
   };
 
-  const save = async () => {
+  // Whether the Save stored the text.
+  const save = async (): Promise<boolean> => {
     const area = textArea.current;
-    if (area === null || !everLoaded.current || inFlight.current || offer !== null || keptNow.current !== null || importing.current !== null) return;
+    if (area === null || !everLoaded.current || inFlight.current || offer !== null || keptNow.current !== null || importing.current !== null || switching.current !== null) return false;
     const text = area.value;
     const errors = documentErrors(text);
     if (errors.length > 0) {
       loadedText.current = null;
       setOutcome({ kind: 'errors', errors });
-      return;
+      return false;
     }
     inFlight.current = true;
     setSaving(true);
@@ -294,6 +321,7 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
       base.current = text;
       keeping.current?.settled();
       setOutcome({ kind: 'saved' });
+      switchUnasked();
     } else if (reply.kind === 'invalid') setOutcome({ kind: 'errors', errors: documentErrors(text) });
     else if (reply.kind === 'changed') {
       setOutcome({ kind: 'changed' });
@@ -303,6 +331,34 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
     // were, so the next Save applies if nothing landed and is refused if it did, never overwriting it (G21).
     else setOutcome({ kind: 'failed', message: reply.message });
     readStored.current();
+    return reply.kind === 'applied';
+  };
+
+  // The question's answers. *Save and switch* is the view's own Save, and the switch follows only once it stored
+  // the text; else the view stays as a plain Save leaves it, the focus on Save (G17, G18, G21). *Stay* gives the
+  // focus back to the text area, the caret where it was.
+  const saveAndSwitch = async () => {
+    const proceed = switching.current;
+    if (proceed === null || saveWaits) return;
+    switching.current = null;
+    setAsking(false);
+    saveButton.current?.focus();
+    if ((await save()) && mounted.current) proceed();
+  };
+  const keepAndSwitch = () => switching.current?.();
+  const stay = () => {
+    switching.current = null;
+    setAsking(false);
+    textArea.current?.focus();
+  };
+  // A question whose text the stored document comes to hold, as a Save in flight as it was asked stores it, has
+  // nothing left to ask: it goes, and the switch goes ahead, as one with nothing unsaved does (G19).
+  const switchUnasked = () => {
+    const proceed = switching.current;
+    if (proceed === null || keeping.current?.unsaved(stored.current) === true) return;
+    switching.current = null;
+    setAsking(false);
+    proceed();
   };
 
   // The merge, with the versions chosen, becomes the draft and the stored text it merged the base, so the next
@@ -327,11 +383,21 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
   };
 
   const waiting = kept === null ? (importingName === null ? null : 'import') : importingName === null ? 'offer' : 'question';
-  const enter = offerSays ?? whatEnterDoes(focused, { loaded, saving, offered: offer !== null, waiting });
+  const saveWaits = !loaded || saving || offer !== null || waiting !== null;
+  const enter = questionSays ?? offerSays ?? whatEnterDoes(focused, { loaded, saving, offered: offer !== null, waiting, asking });
   useEffect(() => sayWhatEnterDoes?.(enter), [enter, sayWhatEnterDoes]);
 
   return (
     <div className="text-view" ref={root}>
+      {asking && (
+        <SwitchQuestion
+          saveWaits={saveWaits ? whatEnterDoes('save', { loaded, saving, offered: offer !== null, waiting, asking: false }) : null}
+          onSave={() => void saveAndSwitch()}
+          onKeep={keepAndSwitch}
+          onStay={stay}
+          onSayEnter={setQuestionSays}
+        />
+      )}
       <p className="settings-text" id="text-view-hint">
         One mapping per line: a name, spaces, and a URL that starts with a scheme, as https: does. A backslash (\) starts a comment, and a line
         of only a comment is a section heading. %s in a URL takes the text typed after the name.
@@ -361,8 +427,9 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
         autoComplete="off"
         autoCapitalize="off"
         // Read-only until it holds the stored document, from Save until the worker's reply, while a change is
-        // offered, whose merge is of the text submitted, while a kept draft is offered, and until Import's file is in.
-        readOnly={!loaded || saving || offer !== null || waiting !== null}
+        // offered, whose merge is of the text submitted, while a kept draft is offered, until Import's file is in,
+        // and while a switch to the List view is asked about.
+        readOnly={saveWaits || asking}
         onInput={() => {
           keepText();
           setOutcome((shown) => (shown?.kind === 'saved' ? null : shown));
@@ -372,9 +439,10 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
       />
       <div className="settings-action">
         <button
+          ref={saveButton}
           type="button"
           className="settings-button"
-          aria-disabled={!loaded || saving || offer !== null || waiting !== null}
+          aria-disabled={saveWaits || asking}
           onClick={() => void save()}
           onFocus={() => setFocused('save')}
           onBlur={() => setFocused(null)}
@@ -399,11 +467,12 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported }: S
 
 /**
  * What Enter does where the focus is (L2), given whether the document is read, a Save is under way, a change is
- * offered, and what the view waits for: a kept draft offered, asked about for Import, or Import's file going in.
+ * offered, what the view waits for: a kept draft offered, asked about for Import, or Import's file going in, and
+ * whether a switch to the List view is asked about.
  */
 function whatEnterDoes(
   focused: Focused,
-  { loaded, saving, offered, waiting }: { loaded: boolean; saving: boolean; offered: boolean; waiting: 'offer' | 'question' | 'import' | null },
+  { loaded, saving, offered, waiting, asking }: { loaded: boolean; saving: boolean; offered: boolean; waiting: 'offer' | 'question' | 'import' | null; asking: boolean },
 ): string {
   if (focused === null) return 'Enter does nothing';
   if (focused === 'copy') return "Enter copies the tab's address";
@@ -414,6 +483,7 @@ function whatEnterDoes(
   if (waiting === 'offer') return 'Enter does nothing until the unsaved text is resumed or discarded';
   if (waiting === 'question') return 'Enter does nothing until the unsaved text is kept or replaced';
   if (waiting === 'import') return 'Enter does nothing until the file is in';
+  if (asking) return 'Enter does nothing until the switch to List is answered';
   return focused === 'text' ? 'Enter starts a new line' : 'Enter saves the text';
 }
 
