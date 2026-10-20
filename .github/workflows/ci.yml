@@ -1,0 +1,35 @@
+# Every push: the unit checks, then the package and the end-to-end checks against it, with the package kept
+# as an artifact. The upgrade check builds 1.3.0 from commit b0a1994, so the checkout takes the full history.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: URLJumper.zip
+          path: release/URLJumper.zip
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+          if-no-files-found: ignore
