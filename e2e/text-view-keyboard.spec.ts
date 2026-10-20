@@ -23,8 +23,11 @@ test('in the popup, the keyboard alone reaches the Text view and each of its con
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('listbox', { name: 'Search order' })).toBeFocused();
   // Back past *Open in tab* to the view's button, one stop each. Preferences is whole once its shortcuts are
-  // shown, and its view then takes a stop of its own, before its first control, exactly when it scrolls.
+  // shown, and its view then takes a stop of its own, before its first control, exactly when it scrolls. Shortcuts
+  // drawn in a render of their own are fit into the popup only at the next frame, and until then the view neither
+  // scrolls nor has its stop, so the stop is decided once the popup fits.
   await expect(popup.locator('.shortcut')).toHaveCount(3);
+  await checkFit(popup);
   if (await popup.locator('.view').evaluate((view) => view.scrollHeight > view.clientHeight)) {
     await popup.keyboard.press('Shift+Tab');
     await expect(popup.locator('.view')).toBeFocused();

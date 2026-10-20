@@ -167,7 +167,7 @@ for (const host of SETTINGS_HOSTS) {
   test(`in the ${host}, the Section choice follows the view's read: a heading another page adds is offered, and one it removes after being chosen sends the line to the end, as the confirmation says`, async ({ extension, site }) => {
     const search = lineOf('g', 'https://www.google.com/search?q=%s');
     const doc = ['\\ Daily', lineOf('mail', 'https://mail.example/'), '', '\\ Search', search, ''].join('\n');
-    const { page, view } = await listViewIn(host, extension, site, { mappings: doc });
+    const { page, view, check } = await listViewIn(host, extension, site, { mappings: doc });
     await view.addMapping.click();
     const form = nameForm(page);
     await expect(form.sections.getByRole('option')).toHaveText(['End of document', 'Daily', 'Search']);
@@ -180,8 +180,10 @@ for (const host of SETTINGS_HOSTS) {
     const withoutDaily = `${doc.replace('\\ Daily\n', '')}\\ Later\n`;
     await extension.seedStorage({ mappings: withoutDaily });
     await expect(form.where).toHaveText('Line 6, at the end of the document: the heading you chose is no longer there');
+    await check();
     await form.save.click();
     await expect(lineConfirmation(page).text).toHaveText('Saved "news" as line 6, at the end of the document: the heading you chose was not found');
+    await check();
     expect(await storedDocument(extension)).toBe(`${withoutDaily}${lineOf('news', 'https://news.example/')}\n`);
   });
 
@@ -269,7 +271,7 @@ for (const host of SETTINGS_HOSTS) {
   });
 
   test(`in the ${host}, an Undo's confirmation that lands after the form opened ends as the user types in the form`, async ({ extension, site }) => {
-    const { page, view } = await listViewIn(host, extension, site, { mappings: DOC });
+    const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
     await view.pencil('cal').click();
     await rowEditor(page).delete.click();
     const confirmation = lineConfirmation(page);
@@ -281,6 +283,9 @@ for (const host of SETTINGS_HOSTS) {
     await held.release();
     await expect(confirmation.text).toHaveText('Put "cal" back as line 3');
     expect(await storedDocument(extension)).toBe(DOC);
+    await check();
+    // Still shown after the check, so the typing below is what ends it (G15).
+    await expect(confirmation.text).toHaveText('Put "cal" back as line 3');
     await nameForm(page).name.pressSequentially('t');
     await expect(confirmation.text).toHaveCount(0);
     await expect(nameForm(page).name).toHaveValue('t');
