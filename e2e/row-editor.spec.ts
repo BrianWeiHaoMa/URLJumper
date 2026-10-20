@@ -452,6 +452,9 @@ test("a rewrite's Undo stores nothing and says so when another window changed th
 
   await extension.seedStorage({ mappings: DOC });
   await popup.keyboard.type('stocks');
+  // The reseed reaches the open popup through a storage change, late on a busy machine: Ctrl+E before it
+  // finds no row selected and opens nothing.
+  await expect(selectedRowName(popup)).toHaveText('stocks');
   await editSelectedRow(popup);
   await rowEditor(popup).name.fill('shares');
   await popup.keyboard.press('Enter');
