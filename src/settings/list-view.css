@@ -1,8 +1,9 @@
 /* The List view, as both hosts show it (G7, G32): one list of the document's lines, each mapping row with
    its line number, name, URL, and note beside its pencil; a heading's text; an unreadable row's raw text,
-   wrapped and never cut, with why and *Fix in text*; the open editor and the confirmation in their places. A
-   name, URL, or note longer than the row is shown from its start and cut with an ellipsis; nothing else is
-   cut. Every color is a token of src/theme.css, and every line height a whole number of pixels. */
+   wrapped and never cut, with why and *Fix in text*; the open editor and the confirmation in their places;
+   after the list, *Add mapping* or the Name form it opens. A name, URL, or note longer than the row is shown
+   from its start and cut with an ellipsis; nothing else is cut. Every color is a token of src/theme.css, and
+   every line height a whole number of pixels. */
 .list-view {
   display: flex;
   flex-direction: column;
@@ -101,7 +102,17 @@
   overflow-wrap: anywhere;
 }
 
-.list-editor {
+.list-editor,
+.list-name-form {
   border: 1px solid var(--line-separator);
   border-radius: 6px;
+}
+
+/* *Add mapping*, after the last line at its own width, and the Name form it opens in its place. */
+.list-add {
+  align-self: flex-start;
+}
+
+.list-name-form-heading {
+  padding: 6px 6px 0;
 }

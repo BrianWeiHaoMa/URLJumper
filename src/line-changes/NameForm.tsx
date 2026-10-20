@@ -1,14 +1,15 @@
-// The Name form (In use, "Name this page", "Name a link"; G8, G9, G10, G11, N6, E5): what the page is, or
-// for a link the page it is on, the URL prefilled and editable, the name, the Section choice when the
-// document has headings, and a preview of the exact line and where it goes. Every check and the preview
-// come from the document module against the document as last read, so they follow every storage change and
-// agree with what the worker writes. Save sends one insert; its outcome, which the confirmation shows, is built
-// from the worker's reply alone. A taken name is named, with the offer to edit that line instead, beside any
-// other problem (G8); that offer and *This page is*'s pencil (G10) leave the form for the editor of that line,
-// the form's values stored nowhere, and wait while Save awaits its reply, so the reply never lands on an
-// editor opened meanwhile (G21). It never reads storage or draws its host's frame: the host gives it the
-// document as last read and the name field's ref, where the notice of what is new leads (G25), and shows what
-// it says Enter does in its footer (L2).
+// The Name form (In use, "Name this page", "Name a link", "Edit the list"; G8, G9, G10, G11, N6, E5): what the
+// page is, or for a link the page it is on, the URL prefilled and editable, or, opened by *Add mapping*, no page
+// and an empty URL field; the name, the Section choice when the document has headings, and a preview of the
+// exact line and where it goes. Every check and the preview come from the document module against the document
+// as last read, so they follow every storage change and agree with what the worker writes. Save sends one
+// insert; its outcome, which the confirmation shows, is built from the worker's reply alone. A taken name is
+// named, with the offer to edit that line instead, beside any other problem (G8); that offer and *This page
+// is*'s pencil (G10) leave the form for the editor of that line, the form's values stored nowhere. They and
+// Cancel wait while Save awaits its reply, so the reply never lands on an editor opened meanwhile or on a form
+// gone, where a failure could not be said (G21). It never reads storage or draws its host's frame: the host
+// gives it the document as last read and the name field's ref, where the notice of what is new leads (G25), is
+// told while Save awaits its reply, and shows what it says Enter does in its footer (L2).
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
@@ -27,11 +28,13 @@ import './name-form.css';
 /**
  * What the form names: the page the popup was opened on, with its address and title when Chrome granted them
  * (E5); or a link, with the address and title of the page it is on as Chrome gave them, and the address of
- * the tab the popup was opened on, which *This page is* follows (G10).
+ * the tab the popup was opened on, which *This page is* follows (G10); or nothing: the form *Add mapping*
+ * opens has no page, so no address to start the URL with and no *This page is* (G11).
  */
 export type NameSubject =
   | { kind: 'page'; url: string | undefined; title: string | undefined }
-  | { kind: 'link'; url: string; pageUrl: string | undefined; pageTitle: string | undefined; tabUrl: string | undefined };
+  | { kind: 'link'; url: string; pageUrl: string | undefined; pageTitle: string | undefined; tabUrl: string | undefined }
+  | { kind: 'none' };
 
 export interface NameFormProps {
   /** The stored document as last read. */
@@ -45,7 +48,12 @@ export interface NameFormProps {
   onSaved(outcome: Outcome): void;
   /** Opens the editor of line N as the document the form last rendered holds it, leaving the form. */
   onEdit(line: number): void;
+  /** Leaves the form, storing nothing; never while Save awaits its reply. */
   onCancel(): void;
+  /** What Enter does on Cancel, which leaves for the host's view: `Enter returns to search` in the popup (L2). */
+  cancelSays: string;
+  /** Called with true as Save is sent and with false as its reply lands, whatever it is, before `onSaved`. */
+  onBusy?(busy: boolean): void;
   /** Called with what Enter does where the focus is in the form, as it appears and whenever that changes (L2). */
   sayWhatEnterDoes(text: string): void;
 }
@@ -53,9 +61,9 @@ export interface NameFormProps {
 /** The controls whose focus changes what Enter does. */
 type FormControl = 'cancel' | 'this-page' | 'edit-instead';
 
-export function NameForm({ document: stored, name: startName, subject, start, onSaved, onEdit, onCancel, sayWhatEnterDoes }: NameFormProps) {
+export function NameForm({ document: stored, name: startName, subject, start, onSaved, onEdit, onCancel, cancelSays, onBusy, sayWhatEnterDoes }: NameFormProps) {
   const [name, setName] = useState(startName);
-  const [url, setUrl] = useState(subject.url ?? '');
+  const [url, setUrl] = useState(subject.kind === 'none' ? '' : (subject.url ?? ''));
   // The heading as named when chosen, found again by that identity at every read, never by its position (G9).
   const [heading, setHeading] = useState<HeadingIdentity | null>(null);
   // Why the last save stored nothing, until a value changes.
@@ -74,7 +82,7 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   // The line that has the name, whatever else the values break (G8); `insertMapping` names only the first problem.
   const takenBy = useMemo(() => checkMapping({ name, url, note: '' }, read.mappings).takenBy, [name, url, read]);
   const point = insertionPoint(read.lines, heading);
-  const tabUrl = subject.kind === 'link' ? subject.tabUrl : subject.url;
+  const tabUrl = subject.kind === 'link' ? subject.tabUrl : subject.kind === 'page' ? subject.url : undefined;
   const thisPage = tabUrl === undefined ? undefined : mappingOfPage(read.mappings, tabUrl);
   const label = (section: Section) => headingName(read.lines, section.heading);
   const chosen = heading === null ? undefined : findSection(read.lines, heading);
@@ -86,8 +94,10 @@ export function NameForm({ document: stored, name: startName, subject, start, on
     if (inFlight.current || result.kind !== 'applied') return;
     inFlight.current = true;
     setSaving(true);
+    onBusy?.(true);
     setRefusal(null);
     const reply = await send({ kind: 'insert', name, url, note: '', heading });
+    onBusy?.(false);
     if (reply.kind === 'applied') {
       onSaved(insertedOutcome(reply));
       return;
@@ -96,9 +106,13 @@ export function NameForm({ document: stored, name: startName, subject, start, on
     setSaving(false);
     setRefusal(refusalText(reply, point.after + 1, url));
   };
-  // Leaving for the editor waits for Save's reply, which would otherwise close the editor opened meanwhile.
+  // Leaving for the editor waits for Save's reply, which would otherwise close the editor opened meanwhile;
+  // leaving the form waits for it too, so a refusal is said where the values still are (G21).
   const edit = (line: number) => {
     if (!inFlight.current) onEdit(line);
+  };
+  const cancel = () => {
+    if (!inFlight.current) onCancel();
   };
 
   // The name field has the focus when the form appears, with the caret after a prefilled name.
@@ -136,16 +150,15 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   const where = describeWhere(result, point, chosen ? label(chosen) : undefined);
   // The host's footer is fixed, so this holds no typed or stored text, which can be as long as the document.
   const editsInstead = focusedOn === 'this-page' ? thisPage?.line : focusedOn === 'edit-instead' ? takenBy?.line : undefined;
-  const enterSays =
-    focusedOn === 'cancel'
-      ? 'Enter returns to search'
-      : saving
-        ? 'Saving · Enter does nothing until it is stored'
-        : editsInstead !== undefined
-          ? `Enter edits line ${editsInstead} instead`
-          : result.kind === 'applied'
-            ? `Enter saves it as line ${result.line}`
-            : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : fieldProblemText(result, point.after + 1, url)}`;
+  const enterSays = saving
+    ? 'Saving · Enter does nothing until it is stored'
+    : focusedOn === 'cancel'
+      ? cancelSays
+      : editsInstead !== undefined
+        ? `Enter edits line ${editsInstead} instead`
+        : result.kind === 'applied'
+          ? `Enter saves it as line ${result.line}`
+          : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : fieldProblemText(result, point.after + 1, url)}`;
   // Before the browser paints, so the host's footer never shows its own default in place of the form's.
   useLayoutEffect(() => sayWhatEnterDoes(enterSays), [enterSays, sayWhatEnterDoes]);
 
@@ -158,19 +171,21 @@ export function NameForm({ document: stored, name: startName, subject, start, on
         void save();
       }}
     >
-      <div className="subject">
-        {subject.kind === 'link' ? (
-          <p className="subject-page">{linkPage(subject)}</p>
-        ) : subject.url === undefined ? (
-          <p className="subject-missing">Chrome gave no address for this tab: type or paste the URL.</p>
-        ) : (
-          <>
-            {subject.title ? <p className="subject-title">{subject.title}</p> : null}
-            {hostOf(subject.url) ? <p className="subject-host">{hostOf(subject.url)}</p> : null}
-          </>
-        )}
-        {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} waiting={saving} onEdit={edit} onFocusChange={focusOn('this-page')} />}
-      </div>
+      {subject.kind !== 'none' && (
+        <div className="subject">
+          {subject.kind === 'link' ? (
+            <p className="subject-page">{linkPage(subject)}</p>
+          ) : subject.url === undefined ? (
+            <p className="subject-missing">Chrome gave no address for this tab: type or paste the URL.</p>
+          ) : (
+            <>
+              {subject.title ? <p className="subject-title">{subject.title}</p> : null}
+              {hostOf(subject.url) ? <p className="subject-host">{hostOf(subject.url)}</p> : null}
+            </>
+          )}
+          {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} waiting={saving} onEdit={edit} onFocusChange={focusOn('this-page')} />}
+        </div>
+      )}
       <label className="field">
         <span className="field-label">Name</span>
         <input
@@ -233,7 +248,7 @@ export function NameForm({ document: stored, name: startName, subject, start, on
         <button type="submit" className="form-button save" aria-disabled={result.kind !== 'applied' || saving}>
           Save
         </button>
-        <button type="button" className="form-button" onClick={onCancel} onFocus={() => setFocusedOn('cancel')} onBlur={() => setFocusedOn(null)}>
+        <button type="button" className="form-button" aria-disabled={saving} onClick={cancel} onFocus={() => setFocusedOn('cancel')} onBlur={() => setFocusedOn(null)}>
           Cancel
         </button>
       </div>

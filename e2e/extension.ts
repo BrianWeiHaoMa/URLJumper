@@ -22,6 +22,7 @@ export { type Release1x } from './upgrade-from-1x.ts';
 export { expectNoNotice, upgradeNotice } from './upgrade-notice.ts';
 export { editSelectedRow, lineConfirmation, rowEditor, rowPencils, thisPagePencil, type RowEditor } from './row-editor.ts';
 export { listView, listViewInPopup, listViewOnOptionsPage, type ListView } from './list-view.ts';
+export { nameForm, type NameForm } from './name-form.ts';
 export { restartWorker, stallWorkerAfterWriting } from './worker-restart.ts';
 
 export interface LocalSite {

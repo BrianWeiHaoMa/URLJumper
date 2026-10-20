@@ -5,10 +5,12 @@
 // (G16); blank lines are not listed. A mapping row's pencil opens the row editor in the row's place, one at a
 // time, with the line as this view's read holds it, offering *Move up* and *Move down*; no storage change moves
 // or closes an open editor. A change it stores is confirmed in the list beside its line, with Undo, itself
-// undoable (G15); after a move, and its Undo, the editor stays open on the moved line. The document is read
-// as the view opens and after every change to it (State), and every line is rendered (T1). The view writes
-// only through the editor's and Undo's requests (R1), and nothing in it opens a URL (G4, R4). What differs by
-// host, how the Text view is shown, comes in as `showTextView`.
+// undoable (G15); after a move, and its Undo, the editor stays open on the moved line. *Add mapping* after the
+// last line opens the Name form with no page in its place (G11), one form or editor open at a time, its insert
+// confirmed as an edit is. The document is read as the view opens and after every change to it (State), and
+// every line is rendered (T1). The view writes only through the editor's, the form's, and Undo's requests (R1),
+// and nothing in it opens a URL (G4, R4). What differs by host, how the Text view is shown, comes in as
+// `showTextView`.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import type { Anchor } from '../document/anchor';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
@@ -17,6 +19,7 @@ import { Pencil } from '../line-changes/Pencil';
 import { RowEditor } from '../line-changes/RowEditor';
 import { chromeMessage } from '../requests';
 import { readMappings } from '../stored-document';
+import { AddMapping } from './AddMapping';
 import { confirmationPlace, editorPlace, listEntries, listItems, whatEnterDoes, type ListEntry, type ListItem, type MappingItem, type Place, type RowControl } from './list-view';
 import type { SettingsViewProps } from './settings-view';
 import { errorText } from './TextErrors';
@@ -49,10 +52,12 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
   const root = useRef<HTMLDivElement>(null);
   const { stored, unread } = useStoredDocument();
   const [editor, setEditor] = useState<OpenEditor | null>(null);
-  // While the editor's change awaits its reply, every other edit waits, so the reply lands on that editor (G21).
+  // Whether *Add mapping*'s Name form is open; an editor and the form are never open together.
+  const [adding, setAdding] = useState(false);
+  // While the editor's or the form's change awaits its reply, every other edit waits, so the reply lands on what sent it (G21).
   const [waiting, setWaiting] = useState(false);
   const [editorSays, setEditorSays] = useState('Enter does nothing');
-  const [focused, setFocused] = useState<FocusedRow | 'undo' | null>(null);
+  const [focused, setFocused] = useState<FocusedRow | 'undo' | 'add' | null>(null);
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
   const [confirmedAt, setConfirmedAt] = useState<Place>(TOP);
   const count = useRef(0);
@@ -81,15 +86,23 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
   // Undo's outcome lands after its request, through the callback of the render whose Undo sent it: `editor` is the one open then.
   const { undo, undoing } = useUndo(confirmed, (outcome) => confirm(outcome, editor?.opened));
 
-  // Opening an editor is the user's next action: the confirmation and its Undo end (G15). Its line is the row's,
-  // number and exact text, from the read this view rendered, which no later read moves (G13).
+  // Opening an editor or the Name form is the user's next action: the confirmation and its Undo end (G15), and
+  // either closes the other, storing nothing. An editor's line is the row's, number and exact text, from the
+  // read this view rendered, which no later read moves (G13).
   const openEditor = (anchor: Anchor) => {
     count.current += 1;
     focus.line.current = anchor.line;
     setConfirmed(null);
     // The editor says what Enter does in it; the pencil that opened it goes without a blur.
     setFocused(null);
+    setAdding(false);
     setEditor({ opened: count.current, anchor });
+  };
+  const openForm = () => {
+    setConfirmed(null);
+    setFocused(null);
+    setEditor(null);
+    setAdding(true);
   };
   const actions = useLatest({
     edit: (item) => {
@@ -102,14 +115,15 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
       if (control !== null) focus.line.current = control.line;
       setFocused(control);
     },
-    // A change the editor stored shows its confirmation and closes the editor; the focus goes to the changed
-    // row's pencil, or, for a removed line, to Undo, never to nothing (G32). A move keeps the editor open on its
-    // line, the focus on the control that moved it, so the next move needs no reopening.
+    // A change the editor or the form stored shows its confirmation and closes them; the focus goes to the
+    // changed row's pencil, or, for a removed line, to Undo, never to nothing (G32). A move keeps the editor open
+    // on its line, the focus on the control that moved it, so the next move needs no reopening.
     stored: (outcome) => {
       // Every other edit waits while the editor's change awaits its reply: the editor open now sent it.
       confirm(outcome, editor?.opened);
       if (outcome.kind === 'moved') return revealMove(outcome.line);
       setEditor(null);
+      setAdding(false);
       focus.ask(outcome.kind === 'removed' ? 'undo' : { line: focus.line.current });
     },
     editInstead: openEditor,
@@ -117,9 +131,15 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
       focus.ask({ line: place?.line ?? focus.line.current });
       setEditor(null);
     },
+    add: () => {
+      if (!waiting) openForm();
+    },
+    // Cancel: the form gives the focus back to *Add mapping*.
+    closeForm: () => setAdding(false),
+    addFocus: (on) => setFocused(on ? 'add' : null),
     editorSays: setEditorSays,
     busy: setWaiting,
-    // Typing into the editor is the user's next action: a confirmation shown with it ends (G15).
+    // Typing into the editor or the form is the user's next action: a confirmation shown with it ends (G15).
     typed: () => {
       if (confirmed !== null) setConfirmed(null);
     },
@@ -128,8 +148,8 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
   });
 
   // The footer names the focused row's line as now read (L2).
-  const focusedNow = focused === null || focused === 'undo' ? focused : lineNow(items, focused);
-  const enter = whatEnterDoes(focusedNow, { confirmed, undoing, waiting, editorSays: editor === null ? null : editorSays });
+  const focusedNow = focused === null || focused === 'undo' || focused === 'add' ? focused : lineNow(items, focused);
+  const enter = whatEnterDoes(focusedNow, { confirmed, undoing, waiting, editorSays: editor === null && !adding ? null : editorSays });
   useEffect(() => sayWhatEnterDoes?.(enter), [enter, sayWhatEnterDoes]);
 
   return (
@@ -142,6 +162,21 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
       {stored !== undefined && !items.some((item) => item.kind === 'mapping') && <p className="settings-text">The document has no mappings.</p>}
       {entries.length > 0 && (
         <ListLines entries={entries} stored={stored ?? ''} editor={editor} confirmed={confirmed} own={own} undoing={undoing} waiting={waiting} actions={actions} />
+      )}
+      {stored !== undefined && (
+        <AddMapping
+          document={stored}
+          open={adding}
+          waiting={waiting}
+          onOpen={actions.add}
+          onSaved={actions.stored}
+          onEditInstead={actions.editInstead}
+          onCancel={actions.closeForm}
+          onBusy={actions.busy}
+          onTyped={actions.typed}
+          sayWhatEnterDoes={actions.editorSays}
+          onFocusChange={actions.addFocus}
+        />
       )}
     </div>
   );
@@ -255,7 +290,7 @@ function useMoveRevealing(own: RefObject<HTMLElement | null>, place: Place | nul
   };
 }
 
-/** What the list's rows, editor, and confirmation call. */
+/** What the list's rows, editor, confirmation, and *Add mapping* call. */
 interface ListActions {
   edit(item: MappingItem): void;
   fix(line: number): void;
@@ -263,6 +298,9 @@ interface ListActions {
   stored(outcome: Outcome): void;
   editInstead(anchor: Anchor): void;
   closeEditor(): void;
+  add(): void;
+  closeForm(): void;
+  addFocus(on: boolean): void;
   editorSays(text: string): void;
   busy(busy: boolean): void;
   typed(): void;
@@ -282,6 +320,9 @@ function useLatest(actions: ListActions): ListActions {
       stored: (outcome) => latest.current.stored(outcome),
       editInstead: (anchor) => latest.current.editInstead(anchor),
       closeEditor: () => latest.current.closeEditor(),
+      add: () => latest.current.add(),
+      closeForm: () => latest.current.closeForm(),
+      addFocus: (on) => latest.current.addFocus(on),
       editorSays: (text) => latest.current.editorSays(text),
       busy: (busy) => latest.current.busy(busy),
       typed: () => latest.current.typed(),

@@ -80,12 +80,14 @@ test('a confirmation stands after the line its change left, where a removed line
   expect(confirmationPlace({ kind: 'refused', message: 'Not undone' }, { kind: 'before', line: 5 })).toEqual({ kind: 'before', line: 5 });
 });
 
-test("the footer names the line of a row's control and says while an edit waits; on Undo it is Undo's, in an editor the editor's", () => {
+test("the footer names the line of a row's control and Add mapping's form, and says while an edit waits; on Undo it is Undo's, in an editor or the form what it says", () => {
   const none = { confirmed: null, undoing: false, waiting: false, editorSays: null };
   expect(whatEnterDoes({ control: 'pencil', line: 3 }, none)).toBe('Enter edits line 3');
   expect(whatEnterDoes({ control: 'fix', line: 6 }, none)).toBe('Enter shows the Text view at line 6');
   expect(whatEnterDoes({ control: 'fix', line: 6 }, { ...none, waiting: true })).toBe('Enter does nothing until the change is stored');
   expect(whatEnterDoes({ control: 'pencil', line: 3 }, { ...none, waiting: true, editorSays: 'Saving · Enter does nothing until it is stored' })).toBe('Enter does nothing until the change is stored');
+  expect(whatEnterDoes('add', none)).toBe('Enter opens the Name form for a new mapping');
+  expect(whatEnterDoes('add', { ...none, waiting: true })).toBe('Enter does nothing until the change is stored');
   const confirmed = { id: 1, outcome: { kind: 'removed', name: 'cal', line: 5, undo: { kind: 'undo', act: 'reinsert', line: 5, text: 'cal u:1' } } } as const;
   expect(whatEnterDoes('undo', { ...none, confirmed })).toBe('Enter undoes the removal, putting the line back');
   expect(whatEnterDoes('undo', { ...none, confirmed, undoing: true })).toBe('Undoing · Enter does nothing until it is stored');

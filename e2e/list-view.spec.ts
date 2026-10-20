@@ -186,12 +186,12 @@ for (const host of SETTINGS_HOSTS) {
     await check();
   });
 
-  test(`in the ${host}, an empty document lists nothing and says so, with no control in the view and the focus left on List`, async ({ extension, site }) => {
+  test(`in the ${host}, an empty document lists nothing and says so, with Add mapping the view's one control and the focus left on List`, async ({ extension, site }) => {
     const { page, view, check } = await listIn(host, extension, site, '');
     await nav(page, 'List').focus();
     await expect(view.empty).toBeVisible();
     await expect(view.list).toHaveCount(0);
-    await expect(page.locator('.list-view').getByRole('button')).toHaveCount(0);
+    await expect(page.locator('.list-view').getByRole('button')).toHaveText(['Add mapping']);
     await expect(nav(page, 'List')).toBeFocused();
     await check();
   });

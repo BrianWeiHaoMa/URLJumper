@@ -59,6 +59,7 @@ export function PopupNameForm({ document, name, subject, notice, onSaved, onEdit
             onSaved={onSaved}
             onEdit={onEdit}
             onCancel={onCancel}
+            cancelSays="Enter returns to search"
             sayWhatEnterDoes={setEnterSays}
           />
         </div>

@@ -27,6 +27,8 @@ export function listView(page: Page) {
     /** The pencil of the mapping named `name`. */
     pencil: (name: string) => list.getByRole('button', { name: `Edit "${name}"`, exact: true }),
     fixInText: list.getByRole('button', { name: 'Fix in text', exact: true }),
+    /** *Add mapping*, after the list, there also when the document has no mapping. */
+    addMapping: page.locator('.list-view').getByRole('button', { name: 'Add mapping', exact: true }),
     /** What the view says when the document holds no mapping. */
     empty: page.getByText('The document has no mappings.'),
   };

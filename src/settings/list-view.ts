@@ -1,8 +1,8 @@
 // The List view's rules (In use, "Edit the list"; F14, G15, G16, P2, L2), pure, for `ListView.tsx`: the items
 // a document lists, in document order with the document's own line numbers (a mapping, a heading as one item,
 // an unreadable line; no blank line), each keyed so that a change elsewhere leaves its node as it is; where an
-// open editor and a confirmation stand among them; and what Enter does on a row's control. Every rule about
-// the document's text they rest on is the document module's (R2).
+// open editor and a confirmation stand among them; and what Enter does on a row's control and on *Add
+// mapping*. Every rule about the document's text they rest on is the document module's (R2).
 import { findAnchor, type Anchor } from '../document/anchor';
 import { readDocument, type DocumentError, type Mapping } from '../document/grammar';
 import { findSections, headingName } from '../document/sections';
@@ -109,17 +109,18 @@ export interface RowControl {
 }
 
 /**
- * What Enter does in the view (L2) with the focus on `focused`: a row's control, while `waiting` for an editor's
- * change to be stored, when every other edit waits; the confirmation's Undo; else, while an editor is open,
- * what it says (`editorSays`). Like every footer it holds no name or text of a line, which can be as long as
- * the document.
+ * What Enter does in the view (L2) with the focus on `focused`: a row's control or *Add mapping* (`add`), while
+ * `waiting` for an editor's or the Name form's change to be stored, when every other edit waits; the
+ * confirmation's Undo; else, while an editor or the Name form is open, what it says (`editorSays`). Like every
+ * footer it holds no name or text of a line, which can be as long as the document.
  */
 export function whatEnterDoes(
-  focused: RowControl | 'undo' | null,
+  focused: RowControl | 'undo' | 'add' | null,
   { confirmed, undoing, waiting, editorSays }: { confirmed: Confirmed | null; undoing: boolean; waiting: boolean; editorSays: string | null },
 ): string {
   if (focused === 'undo') return confirmed === null ? 'Enter does nothing' : undoFooter(confirmed.outcome, undoing);
   if (focused === null) return editorSays ?? 'Enter does nothing';
   if (waiting) return 'Enter does nothing until the change is stored';
+  if (focused === 'add') return 'Enter opens the Name form for a new mapping';
   return focused.control === 'pencil' ? `Enter edits line ${focused.line}` : `Enter shows the Text view at line ${focused.line}`;
 }

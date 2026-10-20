@@ -1,10 +1,11 @@
 // Saving from the Name form (G9, G12, G13, G15, G21): the line the preview shows is the line stored, in
 // the section chosen when it was chosen, or at the end when its heading is gone; another window's write is
-// followed; a refusal keeps every value; and the confirmation names the name and the line from the worker's
-// reply, until the user's next action or ten seconds.
+// followed; a refusal keeps every value, and Cancel waits for the reply, so a refusal is said in the form; and
+// the confirmation names the name and the line from the worker's reply, until the user's next action or ten
+// seconds.
 import type { Page } from '@playwright/test';
 import type { InsertRequest } from '../src/requests.ts';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, selectedRow, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
+import { checkFitAndAccessibility, closingPopup, expect, holdPageRequests, popupOnNewPage, selectedRow, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
@@ -116,6 +117,23 @@ test('while the save awaits the worker, the form fits and passes the accessibili
   await expect(popup.getByRole('button', { name: 'Save' })).toHaveAttribute('aria-disabled', 'true');
   await checkFitAndAccessibility(popup);
   await expect(footer(popup)).toHaveText('Saving · Enter does nothing until it is stored');
+});
+
+test('while the save awaits the worker, Cancel waits, its footer saying so, and the reply confirms the line in search', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'a  https://a.example/\n' });
+  const { popup } = await formOnNewPage(extension, site, 'pending');
+  const held = await holdPageRequests(popup, 'insert');
+  await popup.keyboard.press('Enter');
+  await expect.poll(held.held).toBe(1);
+  const cancel = popup.getByRole('button', { name: 'Cancel' });
+  await expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  await cancel.focus();
+  await expect(footer(popup)).toHaveText('Saving · Enter does nothing until it is stored');
+  await popup.keyboard.press('Enter');
+  await expect(nameField(popup)).toHaveValue('pending');
+  await held.release();
+  await expect(confirmation(popup)).toHaveText('Saved "pending" as line 2');
+  await expect(nameField(popup)).toHaveCount(0);
 });
 
 test('the chosen heading is found again by its identity: a heading and a line added above it leave the line in its section', async ({ extension, site }) => {
