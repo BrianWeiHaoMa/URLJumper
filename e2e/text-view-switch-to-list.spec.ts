@@ -4,18 +4,23 @@
 // Save waiting meanwhile; only a Save that stores the text switches, and one that stores nothing stays with its
 // errors, its offer, or what Chrome said, the text as typed; *Save and switch* waits whenever Save would; the
 // kept draft is offered back in the Text view; *Stay* gives the text area back; with nothing unsaved, and for
-// Preferences or a return to search, the switch asks nothing; and every state of the question fits the popup
-// and passes the accessibility pass.
-import type { Page } from '@playwright/test';
+// Preferences or a return to search, the switch asks nothing; a switch made while Import's file waits to go into
+// the text area waits with it, then asks (G20); and every state of the question fits the popup and passes the
+// accessibility pass.
+import type { Locator, Page } from '@playwright/test';
 import {
   draftLanded,
   expect,
+  holdPageReads,
   holdPageRequests,
+  importFile,
   listView,
+  listViewIn,
   refuseWorkerStorage,
   SETTINGS_HOSTS,
   storedDraft,
   test,
+  textView,
   textViewIn,
   typeAtEnd,
   type LoadedExtension,
@@ -303,3 +308,53 @@ for (const host of SETTINGS_HOSTS) {
     expect(await storedDocument(extension)).toBe(`${DOC}${NEW_LINE}`);
   });
 }
+
+test("on the options page, a switch to List made while Import's file waits for the Text view's first read waits with it, then asks; Keep the draft and switch keeps the file, offered back", async ({ extension, site }) => {
+  const imported = `${DOC}${NEW_LINE}`;
+  const { page, view, check } = await textViewIn('options page', extension, site, { mappings: DOC });
+  await nav(page, 'Preferences').click();
+  // Every read the page makes answers late from here on, as a busy page hears them: the Text view opened by
+  // Import takes no typing, and its file waits, until its first read answers.
+  const reads = await holdPageReads(page);
+  await importFile(page, 'new.txt', Buffer.from(imported));
+  await expect.poll(() => reads.held()).toBeGreaterThan(0);
+  await expect(view.area).not.toBeEditable();
+  await nav(page, 'List').click();
+  const answeredUntil = (shown: Locator) =>
+    expect
+      .poll(async () => {
+        while ((await reads.held()) > 0) await reads.release();
+        return shown.isVisible();
+      })
+      .toBe(true);
+  await answeredUntil(view.switchQuestion);
+  await expect(view.saveAndSwitch).toBeFocused();
+  await expect(view.area).toHaveValue(imported);
+  await check();
+  await view.keepAndSwitch.click();
+  await answeredUntil(listView(page).addMapping);
+  await draftLanded(extension, imported);
+  await nav(page, 'Text').click();
+  await answeredUntil(view.keptOffer);
+  expect(await storedDocument(extension)).toBe(DOC);
+});
+
+test("on the options page, a switch to List made while a kept draft the document holds is dropped, before Import's file goes in, waits with the file, then asks", async ({ extension, site }) => {
+  const imported = `${DOC}${NEW_LINE}`;
+  const { page } = await listViewIn('options page', extension, site, { mappings: DOC });
+  await nav(page, 'Preferences').click();
+  await extension.worker.evaluate((draft) => chrome.storage.local.set({ draft }), { text: DOC, base: 'a  https://a/\n', time: 1_700_000_000_000, view: 'earlier-view', number: 4 });
+  const discards = await holdPageRequests(page, 'draft-discard');
+  await importFile(page, 'new.txt', Buffer.from(imported));
+  await expect.poll(() => discards.held()).toBe(1);
+  await nav(page, 'List').click();
+  const view = textView(page);
+  await expect(nav(page, 'Text')).toHaveAttribute('aria-current', 'page');
+  await discards.release();
+  await expect(view.switchQuestion).toBeVisible();
+  await expect(view.area).toHaveValue(imported);
+  await view.keepAndSwitch.click();
+  await expect(listView(page).addMapping).toBeVisible();
+  await draftLanded(extension, imported);
+  expect(await storedDocument(extension)).toBe(DOC);
+});

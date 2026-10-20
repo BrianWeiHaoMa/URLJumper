@@ -84,6 +84,10 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, gua
   const readStored = useRef(() => {});
   // While a switch to the List view is asked about: the host's way to show it, once the user answers to switch.
   const switching = useRef<(() => void) | null>(null);
+  // A switch to the List view made while Import's file waits to go into the text area: it waits with the file.
+  const switchWithFile = useRef<(() => void) | null>(null);
+  // Whether Chrome refused the first read, which leaves Import's file no base to go in against.
+  const firstReadRefused = useRef(false);
   const [asking, setAsking] = useState(false);
   // What Enter does on the question's control that has the focus.
   const [questionSays, setQuestionSays] = useState<string | null>(null);
@@ -135,7 +139,11 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, gua
       try {
         items = await chrome.storage.local.get(['mappings', 'draft']);
       } catch (error) {
-        if (open && !everLoaded.current) setOutcome({ kind: 'unread', message: chromeMessage(error) });
+        if (open && !everLoaded.current) {
+          setOutcome({ kind: 'unread', message: chromeMessage(error) });
+          firstReadRefused.current = true;
+          settleSwitchWithFile(false);
+        }
         return;
       }
       const storedText = readMappings(items.mappings);
@@ -167,12 +175,18 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, gua
 
   // A switch to the List view (by its id in `views.ts`, which lists this view) over unsaved changes, as the
   // keeper of the draft tells them, waits on the user's answer (G19); any other switch, and one with nothing
-  // unsaved, goes at once, and the view's leaving keeps the draft, as a return to search does.
+  // unsaved, goes at once, and the view's leaving keeps the draft, as a return to search does. Import's file is
+  // an unsaved change the keeper is told of only once it is in the text area (G20): until then a switch to the
+  // List view waits with it, so the file is never dropped unasked.
   useEffect(() => {
     const mayAsk = (to: SettingsView) => to.id === 'list';
     guardSwitch?.({
       mayAsk,
       switching: (to, proceed) => {
+        if (mayAsk(to) && fileWaitsForView()) {
+          switchWithFile.current = proceed;
+          return;
+        }
         if (!mayAsk(to) || keeping.current?.unsaved(stored.current) !== true) return proceed();
         switching.current = proceed;
         setAsking(true);
@@ -203,6 +217,8 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, gua
   const showKept = (draft: Draft) => {
     keptNow.current = draft;
     setKept(draft);
+    // A kept draft found as Import's file waits is asked about first: a switch the file held gives way to it.
+    switchWithFile.current = null;
   };
 
   // A kept draft the stored document holds goes without asking (How G19), by its name alone: read with it, the
@@ -228,6 +244,22 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, gua
     keeping.current?.edited(area.value, base.current, stored.current, madeAt);
     void keeping.current?.flush();
     placeCaret(area, 0, true);
+    settleSwitchWithFile(true);
+  };
+
+  // Whether Import's file waits for the view, not for the user's answer about a kept draft: for the first read
+  // to give it a base, or for a kept draft the stored document holds to be dropped.
+  const fileWaitsForView = () => importing.current !== null && keptNow.current === null && !firstReadRefused.current;
+
+  // A switch the file held, now that the file is the draft (`asks`) or cannot be: it asks over unsaved text as
+  // any switch to the List view does, else goes.
+  const settleSwitchWithFile = (asks: boolean) => {
+    const proceed = switchWithFile.current;
+    if (proceed === null) return;
+    switchWithFile.current = null;
+    if (!asks || keeping.current?.unsaved(stored.current) !== true) return proceed();
+    switching.current = proceed;
+    setAsking(true);
   };
 
   // While a kept draft is offered or asked about, it is the draft stored now: withdrawn once there is none, or
