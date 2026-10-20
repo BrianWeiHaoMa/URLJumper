@@ -110,7 +110,9 @@ export function TextView({ sayWhatEnterDoes, caretLine, openerTab, imported, gua
       if (!everLoaded.current) return firstShown(area, storedText, draft);
       if (keptNow.current !== null) follow(storedText, draft);
       if (inFlight.current) return;
-      if (storedText !== base.current && area.value === loadedText.current) {
+      // Nothing typed since the load: the text area holds what it loaded, and the keeper keeps no text the loaded
+      // document does not hold, as it keeps one typed back to a CRLF document's, with LF endings (S14, G19).
+      if (storedText !== base.current && area.value === loadedText.current && !keeper.unsaved(base.current)) {
         const [start, end] = [area.selectionStart, area.selectionEnd];
         area.value = storedText;
         base.current = storedText;

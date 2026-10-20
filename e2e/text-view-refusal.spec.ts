@@ -1,7 +1,8 @@
 // What the Text view's Save keeps when it cannot store (G18, G21; Composition, *replace*, "Settings views";
 // State): a view with nothing typed takes in every change to the stored document, while a change that lands
 // under typing is never overwritten, before or after the view hears of it, so Save stores nothing, says so, and
-// stores nothing more until the change is brought in (e2e/text-view-merge.spec.ts);
+// stores nothing more until the change is brought in (e2e/text-view-merge.spec.ts); text typed back to a CRLF
+// document's text is typing, kept as the draft, which such a change neither loads over nor discards (G19);
 // the text area is read-only while a Save is under way and sends one; a store Chrome refuses, or a Save that gets
 // no reply, says so and keeps the text and the base it was loaded with; and a popup closed during a Save leaves
 // its outcome stored.
@@ -14,9 +15,12 @@ import {
   expect,
   popupOnNewPage,
   restartWorker,
+  SETTINGS_HOSTS,
   slowWorkerReads,
   stallWorkerAfterWriting,
+  storedDraft,
   test,
+  textViewIn,
   textViewInPopup,
   textViewOnOptionsPage,
   typeAtEnd,
@@ -67,6 +71,40 @@ test('a view with nothing typed takes in another page\'s change, and a Save afte
     await page.close();
   }
 });
+
+for (const host of SETTINGS_HOSTS) {
+  test(`in the ${host}, text typed and typed back on a CRLF document is typing: another page's change neither loads over it nor discards its draft, which the next Text view offers`, async ({ extension, site }) => {
+    const lf = 'a  https://a/\nb  https://b/\n';
+    const crlf = lf.replaceAll('\n', '\r\n');
+    // The other page is opened before the popup, which a tab opened later can close.
+    const other = await extension.openRequestPage();
+    const { page, view } = await textViewIn(host, extension, site, { mappings: crlf });
+    await typeAtEnd(view, 'x');
+    await page.keyboard.press('Backspace');
+    // The text area holds what it loaded, with LF endings (S14), which the stored CRLF document does not hold.
+    await expect(view.area).toHaveValue(lf);
+    await draftLanded(extension, lf);
+    const heard = heardAndRead(page);
+    expect(await other.send(INSERT)).toMatchObject({ kind: 'applied', line: 3 });
+    await heard;
+    await expect(view.area).toHaveValue(lf);
+    // Still unsaved, so a switch to the List view asks; kept, the text is offered by the Text view shown next in
+    // the same page, which reads `draft` once every draft request the page made has its reply.
+    const views = page.getByRole('navigation', { name: 'Settings views' });
+    await views.getByRole('button', { name: 'List', exact: true }).click();
+    await expect(view.switchQuestion).toBeVisible();
+    await view.keepAndSwitch.click();
+    await views.getByRole('button', { name: 'Text', exact: true }).click();
+    await expect(view.keptOffer).toBeVisible();
+    expect(await storedDraft(extension.worker)).toMatchObject({ text: lf, base: crlf });
+    await view.resume.click();
+    await expect(view.area).toHaveValue(lf);
+    // Its base is the document it was typed on: Save stores nothing over the change and offers it.
+    await view.save.click();
+    await expect(view.status).toHaveText(CHANGED);
+    expect(await storedDocument(extension)).toBe(`${crlf}other https://other.example/\r\n`);
+  });
+}
 
 test('a change that lands under typing is never overwritten: Save stores nothing and says so, whether pressed at once or once the view has heard of it, and nothing more until the change is brought in', async ({ extension, site }) => {
   for (const when of ['at once', 'once heard'] as const) {
