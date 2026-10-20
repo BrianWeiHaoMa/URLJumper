@@ -123,3 +123,42 @@ test('a page taller than the viewport, a footer out of view, and a popup.html in
   await inTab.goto(extension.url('popup.html'));
   expect(await fitWith(inTab, () => undefined)).toContain('this is a popup.html open in a tab, not the action popup');
 });
+
+// Chrome sizes the popup to the content in whole device pixels, rounding down: at a fractional scale, a content
+// height that is not whole in them would leave the viewport a fraction of a device pixel short.
+test.describe('at a display scale of 1.25', () => {
+  test.use({ displayScale: 1.25 });
+
+  test('a list the popup holds whole does not scroll for the fraction of a device pixel the viewport falls short by', async ({ extension, site }) => {
+    // Three rows and the This page row: a content height that is not whole in device pixels.
+    const pageUrl = site.pageUrl('Where the popup opens');
+    await extension.seedStorage({ mappings: `mail  https://mail.example.com/\nmaps  https://maps.example.com/\nmarkets  https://markets.example.com/\nhere  ${pageUrl}\n` });
+    const page = await extension.context.newPage();
+    await page.goto(pageUrl);
+    const popup = await extension.clickToolbarButton(page);
+    await popup.keyboard.type('ma');
+    await expect(popup.getByRole('option')).toHaveCount(3);
+    await expect(popup.getByText('This page is "here"')).toBeVisible();
+    const geometry = () =>
+      popup.evaluate(() => {
+        const main = document.querySelector('main')!;
+        const view = document.querySelector<HTMLElement>('.view')!;
+        const content = main.getBoundingClientRect().height - parseFloat(getComputedStyle(main).paddingBottom);
+        return {
+          // The content's height in device pixels, before the root pads it: its fraction is what Chrome drops.
+          fraction: (content * devicePixelRatio) % 1,
+          shortfall: document.documentElement.scrollHeight - innerHeight,
+          viewScroll: view.scrollHeight - view.clientHeight,
+          viewScrollbar: view.offsetWidth - view.clientWidth,
+          viewTabIndex: view.tabIndex,
+          pageScrollbar: innerWidth - document.documentElement.clientWidth,
+        };
+      });
+    // The state is one Chrome rounds: the content is a quarter to three quarters of a device pixel over a whole one.
+    await expect
+      .poll(() => geometry().then(({ fraction }) => fraction > 0.2 && fraction < 0.8), { message: 'this state is a whole number of device pixels tall' })
+      .toBe(true);
+    await expect.poll(geometry).toMatchObject({ shortfall: 0, viewScroll: 0, viewScrollbar: 0, viewTabIndex: -1, pageScrollbar: 0 });
+    await checkFit(popup);
+  });
+});

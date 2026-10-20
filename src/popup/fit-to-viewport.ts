@@ -18,6 +18,15 @@ export function useFitToViewport() {
     // Measured at the content's own height: reading layout lets Chrome size the popup to the content, up to
     // its limit, before the viewport is compared, so a popup that can still grow does.
     main.style.height = '';
+    main.style.paddingBottom = '';
+    // Chrome sizes the popup to the content in whole device pixels, rounding down, so at a fractional display
+    // scale (1.25, say) a content height that is not whole in them would leave the viewport a fraction of a
+    // device pixel short, and the view would scroll, with a scrollbar and a Tab stop, for nothing a user can
+    // see. The root is padded up to the next whole device pixel first, by a hair more than the fraction so
+    // that the padded height, rounded down, is still that pixel.
+    const scale = window.devicePixelRatio;
+    const fraction = (main.getBoundingClientRect().height * scale) % 1;
+    if (fraction > 0.001) main.style.paddingBottom = `${(1 - fraction) / scale + 0.004}px`;
     if (document.documentElement.scrollHeight > window.innerHeight) main.style.height = `${window.innerHeight}px`;
     if (view.current) {
       view.current.tabIndex = view.current.scrollHeight > view.current.clientHeight ? 0 : -1;

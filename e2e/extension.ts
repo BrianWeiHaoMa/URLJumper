@@ -31,9 +31,14 @@ export interface LocalSite {
   pageUrl(title: string): string;
 }
 
-export const test = base.extend<{ extension: LoadedExtension; site: LocalSite; release1x: Release1x }, { release1xBuild: string }>({
-  extension: async ({}, use) => {
-    const launched = await launchChrome(distDir);
+export const test = base.extend<{ displayScale: number; extension: LoadedExtension; site: LocalSite; release1x: Release1x }, { release1xBuild: string }>({
+  // The display's scale Chrome runs at, device pixels per CSS pixel, 1 unless a spec says otherwise with
+  // `test.use`; Chrome sizes the popup in device pixels, so a fractional scale is where its fit is rounded.
+  // Not Playwright's own `deviceScaleFactor`, which emulates a scale in the pages it opens, never in the popup.
+  displayScale: [1, { option: true }],
+
+  extension: async ({ displayScale }, use) => {
+    const launched = await launchChrome(distDir, displayScale);
     try {
       const worker = await launched.extensionWorker();
       // Every launch is a fresh install, whose write of the search order lands at its own pace: no check starts

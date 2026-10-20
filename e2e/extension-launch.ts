@@ -107,8 +107,11 @@ export interface LaunchedChrome {
   close(): Promise<void>;
 }
 
-/** Launches Chrome with the unpacked extension in `extensionDir`, a directory that stays put for the whole run. */
-export async function launchChrome(extensionDir: string): Promise<LaunchedChrome> {
+/**
+ * Launches Chrome with the unpacked extension in `extensionDir`, a directory that stays put for the whole run,
+ * at `deviceScaleFactor` device pixels per CSS pixel: the display's scale, which Chrome sizes the popup in.
+ */
+export async function launchChrome(extensionDir: string, deviceScaleFactor = 1): Promise<LaunchedChrome> {
   // A fresh profile and a debugging port Chrome picks itself, so parallel workers never share either.
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'urljumper-e2e-'));
   const netLog = path.join(profile, 'net-log.json');
@@ -120,6 +123,8 @@ export async function launchChrome(extensionDir: string): Promise<LaunchedChrome
       `--load-extension=${extensionDir}`,
       '--enable-unsafe-extension-debugging',
       '--remote-debugging-port=0',
+      // Only off the default: the flag itself changes by a pixel how tall a headless popup may be.
+      ...(deviceScaleFactor === 1 ? [] : [`--force-device-scale-factor=${deviceScaleFactor}`]),
       // Every request that reaches the network, from every context, for the whole run.
       `--log-net-log=${netLog}`,
       // No check reaches the public web or depends on it.
