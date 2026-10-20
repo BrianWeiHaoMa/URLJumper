@@ -1,7 +1,8 @@
 // The fit every popup state is held to (G7), through e2e/extension.ts: the real action popup inside Chrome's
 // popup size limit, its header and footer in view, and nothing of its own cut off but a row's name or URL, or
 // a List view row's note, longer than the row, shown from its start and cut with an ellipsis, and the marks a
-// text field whose line has reached its cap cuts; and whether a field draws its value whole, from its picture.
+// text field whose line has reached its cap cuts; and whether a field, or a text area at its top or bottom edge,
+// draws its value whole, from its picture.
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
@@ -151,4 +152,41 @@ export async function fieldDrawnWhole(page: Page, field: Locator): Promise<boole
     if (++differed === 2) return false;
   }
   throw new Error('the field kept moving while it was pictured');
+}
+
+/**
+ * Whether the text area `area`, scrolled to its `end`, draws the ink of its line at that edge whole (G7): the strip
+ * from 24 pixels inside that edge to 6 past it as drawn, the area's border, background, and focus ring made
+ * invisible, against the same strip with the area given 40 more pixels of padding at that edge, as much more
+ * height, and 40 fewer pixels of margin there, so nothing moves and the scroll is kept, where ink the edge cut
+ * shows. Each property it sets it clears after.
+ */
+export async function textAreaEdgeDrawnWhole(page: Page, area: Locator, end: 'top' | 'bottom'): Promise<boolean> {
+  const element = (await area.elementHandle())!;
+  const clip = await element.evaluate((input: HTMLTextAreaElement, end) => {
+    input.scrollTop = end === 'top' ? 0 : input.scrollHeight;
+    input.style.borderColor = 'transparent';
+    input.style.background = 'transparent';
+    input.style.outline = 'none';
+    const box = input.getBoundingClientRect();
+    const edge = box.top + input.clientTop + (end === 'top' ? 0 : input.clientHeight);
+    return { x: box.left + input.clientLeft, width: input.clientWidth, y: end === 'top' ? edge - 6 : edge - 24, height: 30 };
+  }, end);
+  await element.evaluate(() => new Promise((framed) => requestAnimationFrame(() => requestAnimationFrame(framed))));
+  const drawn = await page.screenshot({ clip, caret: 'hide' });
+  await element.evaluate((input: HTMLTextAreaElement, end) => {
+    const style = getComputedStyle(input);
+    const scrolled = input.scrollTop;
+    const [padding, margin] = end === 'top' ? ['paddingTop', 'marginTop'] as const : ['paddingBottom', 'marginBottom'] as const;
+    input.style[padding] = `${parseFloat(style[padding]) + 40}px`;
+    input.style[margin] = `${parseFloat(style[margin]) - 40}px`;
+    input.style.height = `${parseFloat(style.height) + 40}px`;
+    input.scrollTop = scrolled;
+  }, end);
+  await element.evaluate(() => new Promise((framed) => requestAnimationFrame(() => requestAnimationFrame(framed))));
+  const roomy = await page.screenshot({ clip, caret: 'hide' });
+  await element.evaluate((input: HTMLTextAreaElement) => {
+    for (const property of ['border-color', 'background', 'outline', 'padding-top', 'padding-bottom', 'margin-top', 'margin-bottom', 'height']) input.style.removeProperty(property);
+  });
+  return drawn.equals(roomy);
 }

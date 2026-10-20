@@ -3,11 +3,12 @@
 // Latin and its placeholder, raises its own line when its value's marks, as the machine's fonts draw them,
 // reach past that line's room, and draws the value whole; it stops at four times its font size, where marks
 // stacked past any script's writing are cut and the popup still fits (G7); and it returns to its base when its
-// value no longer needs more. A field that appears already holding a value is sized as it appears. The values
-// are drawn by the fonts Playwright's Chromium needs on Linux: Thai marks stacked by its fallback font, and
-// acute accents stacked by the sans-serif face.
+// value no longer needs more. A field that appears already holding a value is sized as it appears. The Text
+// view's text area holds as much at its top and bottom edges, where its first and last lines' marks reach. The
+// values are drawn by the fonts Playwright's Chromium needs on Linux: Thai marks stacked by its fallback font,
+// and acute accents stacked by the sans-serif face.
 import type { Locator, Page } from '@playwright/test';
-import { checkFitAndAccessibility, expect, fieldDrawnWhole, listViewIn, popupOnNewPage, rowEditor, rowPencils, selectedRow, test } from './extension.ts';
+import { checkFitAndAccessibility, expect, fieldDrawnWhole, listViewIn, popupOnNewPage, rowEditor, rowPencils, selectedRow, test, textAreaEdgeDrawnWhole, textViewInPopup } from './extension.ts';
 
 // A Thai consonant under a vowel and three tone marks, and the same consonant over three vowels: marks past the
 // room of every field's base line, above and below, short of its cap.
@@ -186,4 +187,14 @@ test("the options page's row editor raises its fields' lines as the popup's does
   await editor.name.fill(MARKS_BELOW);
   await expectRaisedAndWhole(page, editor.name, FORM);
   await check();
+});
+
+test("the popup's Text view draws the marks of its first and last lines whole at its text area's top and bottom edges", async ({ extension, site }) => {
+  const middle = Array.from({ length: 38 }, (_, i) => `m${i + 1}  https://m${i + 1}.example/`);
+  await extension.seedStorage({ mappings: [`${MARKS_ABOVE}  https://above.example/`, ...middle, `${MARKS_BELOW}  https://below.example/`].join('\n') });
+  const { popup } = await popupOnNewPage(extension, site);
+  const { area } = await textViewInPopup(popup);
+  expect(await textAreaEdgeDrawnWhole(popup, area, 'top')).toBe(true);
+  expect(await textAreaEdgeDrawnWhole(popup, area, 'bottom')).toBe(true);
+  await checkFitAndAccessibility(popup);
 });

@@ -1,7 +1,7 @@
 // The fit check itself (G7): each misfit it exists for, planted in the real popup, fails it for that reason;
-// and the picture that tells whether a field draws its value whole.
+// and the pictures that tell whether a field draws its value whole, and a text area the lines at its edges.
 import type { Page } from '@playwright/test';
-import { checkFit, expect, fieldDrawnWhole, popupOnNewPage, test } from './extension.ts';
+import { checkFit, expect, fieldDrawnWhole, popupOnNewPage, test, textAreaEdgeDrawnWhole, textViewInPopup } from './extension.ts';
 
 /** What `checkFit` says of `popup` with `plant` applied: `fits`, or its failure. */
 async function fitWith(popup: Page, plant: () => void): Promise<string> {
@@ -77,6 +77,20 @@ test('a field whose line is at its cap may cut marks stacked past it; one pixel 
   await popup.evaluate(() => (document.querySelector<HTMLElement>('.search-box')!.style.lineHeight = '30px'));
   expect(await fieldDrawnWhole(popup, box)).toBe(false);
   expect(await fitWith(popup, () => undefined)).toContain('text cut along: input.search-box ');
+});
+
+test("a text area's edge that cuts the marks of its first or last line fails its picture", async ({ extension, site }) => {
+  // A Thai consonant under a vowel and three tone marks on the first line, and over three vowels on the last.
+  const middle = Array.from({ length: 38 }, (_, i) => `m${i + 1}  https://m${i + 1}.example/`);
+  await extension.seedStorage({ mappings: ['ปั้้้  https://above.example/', ...middle, 'ปุุุ  https://below.example/'].join('\n') });
+  const { popup } = await popupOnNewPage(extension, site);
+  const { area } = await textViewInPopup(popup);
+  // Four pixels of padding at each edge, too little room for either line's marks.
+  for (const end of ['top', 'bottom'] as const) {
+    await area.evaluate((element: HTMLElement) => (element.style.paddingBlock = '4px'));
+    expect(await textAreaEdgeDrawnWhole(popup, area, end)).toBe(false);
+    await area.evaluate((element: HTMLElement) => element.style.removeProperty('padding-block'));
+  }
 });
 
 test("a row's name or URL cut without an ellipsis, or not from its start, fails the check", async ({ extension, site }) => {

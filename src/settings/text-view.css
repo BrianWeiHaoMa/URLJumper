@@ -15,7 +15,10 @@
   width: 100%;
   height: 234px;
   margin: 0;
-  padding: 4px 8px;
+  /* The area clips its first line's marks at its top edge and its last line's at its bottom edge, so each edge
+     gives the room a field's line gives at its cap of four font sizes (src/line-changes/field-line.ts): half of
+     48 px less the 16 px line. Only marks stacked past any script's writing are cut there (G7). */
+  padding: 16px 8px;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 16px;

@@ -15,7 +15,7 @@ export { expect } from '@playwright/test';
 export { addressBar, chromeShows, type AddressBar, type AddressBarInput, type ChromeRow, type Disposition } from './address-bar.ts';
 export { checkAccessibility, checkAccessibilityInBothSchemes, focusDrawn } from './accessibility.ts';
 export { distDir, type LoadedExtension, type RequestPage } from './extension-launch.ts';
-export { checkFit, fieldDrawnWhole } from './popup-fit.ts';
+export { checkFit, fieldDrawnWhole, textAreaEdgeDrawnWhole } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, followTabFocus, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
 export { caret, clipboardText, delayPageReads, draftLanded, holdFileReads, holdPageReads, holdPageRequests, importFile, retypeLine, storedDraft, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, version, watchDraftSets, watchRequests, type TextView } from './text-view.ts';
 export { type Release1x } from './upgrade-from-1x.ts';
