@@ -2,7 +2,7 @@
 
 Every release of URLJumper, newest first. The version is `version` in `manifest.config.ts`. From 2.0.0 on, each release is tagged `v<version>`; the 1.x releases are tagged `v<version>-release`, and their entries are drawn from those tags and the commit messages of the time.
 
-## 2.0.0 — unreleased
+## 2.0.0 — 2026-10-20
 
 Version 2.0 is a new implementation, built from `PRODUCT_SPECIFICATION.md` and `TECHNICAL_SPECIFICATION.md`; nothing of the 1.x code remains. An install of 1.x keeps its stored document byte for byte. From 1.1.0 on, 1.x stored the theme and named its commands as 2.0 does, so a user's theme and assigned shortcuts stay as well; 1.0.x used other names for both, and an update from one starts with the System theme and the suggested shortcuts.
 

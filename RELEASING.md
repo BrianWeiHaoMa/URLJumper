@@ -15,7 +15,7 @@ A release is the Web Store package built from a tagged commit of `main`, uploade
 ## 2. Tag and publish on GitHub
 
 1. `git tag -a v<version> -m "URLJumper <version>"`, then `git push origin main v<version>`.
-2. The Release workflow (`.github/workflows/release.yml`) runs on the tag: the checks, a check that the tag names the manifest's version, and a GitHub release with `URLJumper.zip` attached. Without it, `npm run package` on the tagged commit and `gh release create v<version> release/URLJumper.zip` do the same.
+2. The Release workflow (`.github/workflows/release.yml`) runs on the tag: the checks, a check that the tag names the manifest's version, and a GitHub release with `URLJumper.zip` attached and the version's `CHANGELOG.md` section as its notes (the workflow fails when that section is missing). Without it, `npm run package` on the tagged commit and `gh release create v<version> release/URLJumper.zip` do the same.
 
 ## 3. Upload to the Chrome Web Store
 
