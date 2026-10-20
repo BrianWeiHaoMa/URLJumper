@@ -19,16 +19,15 @@
   list-style: none;
 }
 
-/* A row out of view is not laid out or painted until it nears it, which halves the time a document of
-   10,000 lines takes to appear and keeps Tab quick (T1). That contains its painting: its padding holds the
-   4 pixels a focused control's outline takes beyond it. */
+/* A row's painting is never contained (no `content-visibility` or `contain: paint`, though skipping the rows
+   out of view would halve the time 10,000 lines take to appear): the marks a script stacks above its first line
+   or below its last reach past the row, and a contained row cuts them (G7). Every line still appears within
+   T1's second. */
 .list-row {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   padding: 4px;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 44px;
 }
 
 .list-number {

@@ -203,6 +203,7 @@ test("in the popup, the editor stands where the line with its name now stands, a
   // Another page moves the line with its name to the end, with another URL: the editor stands there.
   const moved = `\\ above\n${DOC.replace(`${CAL}\n`, '')}\ncal  https://moved.example/`;
   await extension.seedStorage({ mappings: moved });
+  await expect(view.numbers).toHaveText(['4', '6', '8']);
   expect(await items(view)).toEqual(['heading', 'row 4', 'row 6', 'heading', 'row 8', 'editor']);
   await expect(editor.note).toHaveValue('typed');
   await editor.save.click();

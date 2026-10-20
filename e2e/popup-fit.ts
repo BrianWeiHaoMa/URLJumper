@@ -1,8 +1,8 @@
 // The fit every popup state is held to (G7), through e2e/extension.ts: the real action popup inside Chrome's
 // popup size limit, its header and footer in view, and nothing of its own cut off but a row's name or URL, or
 // a List view row's note, longer than the row, shown from its start and cut with an ellipsis, and the marks a
-// text field whose line has reached its cap cuts; and whether a field, or a text area at its top or bottom edge,
-// draws its value whole, from its picture.
+// text field whose line has reached its cap cuts; and whether a field, a text area at its top or bottom edge, or a
+// box such as a List view row at its top or bottom edge, draws its text whole, from its picture.
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
@@ -188,5 +188,40 @@ export async function textAreaEdgeDrawnWhole(page: Page, area: Locator, end: 'to
   await element.evaluate((input: HTMLTextAreaElement) => {
     for (const property of ['border-color', 'background', 'outline', 'padding-top', 'padding-bottom', 'margin-top', 'margin-bottom', 'height']) input.style.removeProperty(property);
   });
+  return drawn.equals(roomy);
+}
+
+/**
+ * Whether `box`, a block such as a List view row, centred in the view that scrolls it, draws the ink of its text
+ * at its `end` whole (G7): the strip from 20 pixels inside that edge to 20 past it as drawn against the same strip
+ * with the box given 40 more pixels of padding at that edge and 40 fewer of margin, so nothing moves, where ink
+ * the box's edge cut shows. Each property it sets it clears after.
+ */
+export async function boxEdgeDrawnWhole(page: Page, box: Locator, end: 'top' | 'bottom'): Promise<boolean> {
+  const element = (await box.elementHandle())!;
+  const frames = () => element.evaluate(() => new Promise((framed) => requestAnimationFrame(() => requestAnimationFrame(framed))));
+  await element.evaluate((node: HTMLElement) => node.scrollIntoView({ block: 'center' }));
+  await frames();
+  const place = () => element.evaluate((node: HTMLElement) => JSON.stringify((node.firstElementChild ?? node).getBoundingClientRect()));
+  const before = await place();
+  const clip = await element.evaluate((node: HTMLElement, end) => {
+    const area = node.getBoundingClientRect();
+    return { x: area.left, width: area.width, y: (end === 'top' ? area.top : area.bottom) - 20, height: 40 };
+  }, end);
+  const drawn = await page.screenshot({ clip, caret: 'hide' });
+  await element.evaluate((node: HTMLElement, end) => {
+    const style = getComputedStyle(node);
+    const [padding, margin] = end === 'top' ? (['paddingTop', 'marginTop'] as const) : (['paddingBottom', 'marginBottom'] as const);
+    node.style[padding] = `${parseFloat(style[padding]) + 40}px`;
+    node.style[margin] = `${parseFloat(style[margin]) - 40}px`;
+  }, end);
+  await frames();
+  const moved = (await place()) !== before;
+  const roomy = await page.screenshot({ clip, caret: 'hide' });
+  await element.evaluate((node: HTMLElement) => {
+    for (const property of ['padding-top', 'padding-bottom', 'margin-top', 'margin-bottom']) node.style.removeProperty(property);
+  });
+  await frames();
+  if (moved) throw new Error('the box moved while it was pictured');
   return drawn.equals(roomy);
 }

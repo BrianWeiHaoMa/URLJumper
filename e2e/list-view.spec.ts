@@ -6,6 +6,7 @@
 // and every state fitting and passing the accessibility pass. Its edits are `list-view-edit.spec.ts`'s.
 import type { Page } from '@playwright/test';
 import {
+  boxEdgeDrawnWhole,
   caret,
   checkFit,
   checkFitAndAccessibility,
@@ -255,6 +256,28 @@ test('in the popup, a long name, URL, and note are each shown from their start a
   const raw = await view.raw.evaluate((element) => ({ cut: element.scrollWidth > element.clientWidth, lines: element.getBoundingClientRect().height / parseFloat(getComputedStyle(element).lineHeight) }));
   expect(raw.cut).toBe(false);
   expect(raw.lines).toBeGreaterThan(3);
+  await checkFitAndAccessibility(page);
+});
+
+// Marks stacked past a row's line, as the fonts Playwright's Chromium needs on Linux draw them: a Thai consonant
+// under a vowel and three tone marks, the same consonant over three vowels, and acute accents stacked past any
+// script's writing. Rows have no room to cut any of them (G7).
+const MARKS_ABOVE = 'ปั้้้';
+const MARKS_BELOW = 'ปุุุ';
+const PAST_ANY_WRITING = `a${'\u0301'.repeat(40)}`;
+
+test("in the popup, a row in the list draws the marks of its first and last lines whole at its own top and bottom edges", async ({ extension, site }) => {
+  const lines = Array.from({ length: 30 }, (_, i) => `m${i + 1}  https://m${i + 1}.example/  \\ note ${i + 1}`);
+  lines[7] = `${MARKS_ABOVE}  https://a.example/  \\ ${MARKS_BELOW}`;
+  lines[11] = `b  https://b.example/${MARKS_BELOW}`;
+  lines[15] = MARKS_ABOVE;
+  lines[19] = `${PAST_ANY_WRITING}  https://c.example/`;
+  const { page } = await listIn('popup', extension, site, lines.join('\n'));
+  const row = (line: number) => page.locator(`.list-row[data-line="${line}"]`);
+  // A name and a note; a URL with no note after it; an unreadable line's raw text; a name stacked past any writing.
+  for (const [line, end] of [[8, 'top'], [8, 'bottom'], [12, 'bottom'], [16, 'top'], [20, 'top']] as const) {
+    expect.soft(await boxEdgeDrawnWhole(page, row(line), end), `line ${line} at its ${end} edge`).toBe(true);
+  }
   await checkFitAndAccessibility(page);
 });
 
