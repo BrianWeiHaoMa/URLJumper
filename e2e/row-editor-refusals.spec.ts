@@ -67,6 +67,10 @@ test('a changed URL and note refuse Save without overwriting; Edit again keeps t
   await typeValues(editor);
   expect(await other.send({ kind: 'rewrite', line: 2, text: ORIGINAL_LINE, name: 'A', url: 'https://other.example/', note: 'other note' })).toMatchObject({ kind: 'applied' });
   const before = await extension.readStorage();
+  // The popup's read shows the line changed: Enter sends a change the worker will refuse, and the footer says so (L2).
+  await expect(footer(popup)).toHaveText('Enter tries to save line 2 · the line has changed');
+  await editor.delete.focus();
+  await expect(footer(popup)).toHaveText('Enter tries to delete line 2 · the line has changed');
   await editor.save.click();
   await expect(editor.stale).toHaveText('Not saved: line 2, "a", was changed since this editor opened, and nothing was stored. It is now line 2:');
   await expect(editor.staleLine).toHaveText('A https://other.example/ \\ other note');
@@ -117,6 +121,8 @@ test('Delete of a line removed elsewhere stores nothing and says the line is gon
   const editor = await editRow(popup);
   expect(await other.send({ kind: 'remove', line: 2, text: ORIGINAL_LINE })).toMatchObject({ kind: 'applied' });
   const before = await extension.readStorage();
+  await editor.delete.focus();
+  await expect(footer(popup)).toHaveText('Enter tries to delete line 2 · the line has changed');
   await editor.delete.click();
   await expect(editor.stale).toHaveText('Not deleted: line 2, "a", has gone from the document since this editor opened, and nothing was stored.');
   expect(await extension.readStorage()).toEqual(before);

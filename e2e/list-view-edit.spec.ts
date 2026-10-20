@@ -141,6 +141,8 @@ for (const host of SETTINGS_HOSTS) {
     await expect(view.numbers).toHaveText(['4', '5', '7']);
     expect(await items(view)).toEqual(['heading', 'editor', 'row 4', 'row 5', 'heading', 'row 7']);
     await expect(editor.name).toHaveValue('mine');
+    // The read shows the line gone: Enter sends a Save the worker will refuse, and the footer says so (L2).
+    if (host === 'popup') await expect(footer(page)).toHaveText('Enter tries to save line 3 · the line has changed');
     await editor.save.click();
     await expect(editor.stale).toHaveText('Not saved: line 3, "mail", has gone from the document since this editor opened, and nothing was stored.');
     expect(await storedDocument(extension)).toBe(removed);
@@ -167,6 +169,13 @@ for (const host of SETTINGS_HOSTS) {
     // The list around the editor follows the other page.
     await expect(view.names).toHaveText(['cal', 'last', 'news']);
     expect(await items(view)).toEqual(['heading', 'editor', 'row 5', 'row 6', 'heading', 'row 8', 'row 9']);
+    if (host === 'popup') {
+      // The read shows the line changed: Enter on Save or Delete sends a change the worker will refuse (L2).
+      await editor.save.focus();
+      await expect(footer(page)).toHaveText('Enter tries to save line 3 · the line has changed');
+      await editor.delete.focus();
+      await expect(footer(page)).toHaveText('Enter tries to delete line 3 · the line has changed');
+    }
     await editor.save.click();
     await expect(editor.stale).toHaveText('Not saved: line 3, "mail", was changed since this editor opened, and nothing was stored. It is now line 3:');
     expect(await editor.staleLine.textContent()).toBe(theirLine);

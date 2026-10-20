@@ -5,7 +5,7 @@
 // line is listed as unreadable and is unchanged; the moved mapping sits directly before the mapping that
 // preceded it and no other mapping changed its place among the comment and blank lines (G12, G16, F12).
 import { readDocument } from '../src/document/grammar.ts';
-import { expect, lineConfirmation, listViewIn, rowEditor, SETTINGS_HOSTS, test } from './extension.ts';
+import { checkFit, expect, lineConfirmation, listViewIn, rowEditor, SETTINGS_HOSTS, test } from './extension.ts';
 
 const NEWS = 'news                 https://news.ycombinator.com/            \\ a comment after a mapping is its note';
 const UNREADABLE = 'read later';
@@ -89,6 +89,10 @@ for (const host of SETTINGS_HOSTS) {
     expect((await extension.readStorage()).mappings).toBe(DOC.replace(NEWS, renamed));
 
     await view.pencil('bank').click();
+    // The accessibility pass walks every control by Tab in both schemes, which on forty lines outlasts the ten
+    // seconds a confirmation stands (G15): it runs on the list with the editor open here, and the state after
+    // the move, a confirmation beside the editor, is passed in `list-view-move.spec.ts`.
+    await check();
     await editor.moveUp.click();
     await expect(lineConfirmation(page).text).toHaveText('Moved "bank" to line 37');
     // Far down a long list, the Undo comes into view below the editor, which keeps the focus.
@@ -104,6 +108,6 @@ for (const host of SETTINGS_HOSTS) {
     expect(placesAmongTheOthers(stored, 'bank')).toEqual(placesAmongTheOthers(DOC, 'bank'));
     await expect(view.raw).toHaveText([UNREADABLE]);
     expect(lines[16]).toMatchObject({ kind: 'unreadable', text: UNREADABLE });
-    await check();
+    if (host === 'popup') await checkFit(page);
   });
 }

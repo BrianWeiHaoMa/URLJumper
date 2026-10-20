@@ -20,6 +20,7 @@ import { applyTheme, readSearchOrder, readTheme } from '../preferences';
 import { send } from '../requests';
 import { readMappings, readUsage } from '../stored-document';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
+import { useFieldLine } from '../line-changes/field-line';
 import type { NameSubject } from '../line-changes/NameForm';
 import { offersUndo, undoFooter } from '../line-changes/outcomes';
 import { ThisPage } from '../line-changes/ThisPage';
@@ -43,8 +44,10 @@ const WHEEL_ROW_PIXELS = 40;
 export function Popup() {
   const [state, dispatch] = useReducer(reduce, undefined, initialState);
   const wheel = useRef(0);
-  const layout = useFitToViewport();
   const searchBox = useRef<HTMLInputElement>(null);
+  // Sized before the popup fits itself to the viewport, which then measures the search bar as its text grew it (G7).
+  useFieldLine(searchBox);
+  const layout = useFitToViewport();
   // Shown, and acted on, only while its row is visible in search's view (G3).
   const selection = useSelectionInView(layout.view, state.list.selected, searchBox);
   const namePage = useRef<HTMLButtonElement>(null);

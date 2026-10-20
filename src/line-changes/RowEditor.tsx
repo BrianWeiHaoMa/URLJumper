@@ -18,9 +18,10 @@ import { mappingOfLine } from '../document/grammar';
 import { movesAdmitted, type MoveDirection, type MoveOffer } from '../document/moving';
 import type { MappingFields } from '../document/validation';
 import { chromeMessage, send, type InsertReply } from '../requests';
+import { useFieldLine } from './field-line';
 import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
 import { insertedOutcome, movedOutcome, removedOutcome, rewrittenOutcome, type Outcome } from './outcomes';
-import { destination, lineFields, moveFooter, notMovedText, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
+import { attemptFooter, destination, lineFields, moveFooter, notMovedText, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
 import './line-form.css';
 import './row-editor.css';
 
@@ -379,11 +380,14 @@ interface FieldProps {
 }
 
 function Field({ label, value, url, readOnly, invalid, describedBy, input, onChange }: FieldProps) {
+  const own = useRef<HTMLInputElement>(null);
+  const field = input ?? own;
+  useFieldLine(field);
   return (
     <label className="field">
       <span className="field-label">{label}</span>
       <input
-        ref={input}
+        ref={field}
         className={url ? 'field-input field-url' : 'field-input'}
         type="text"
         inputMode={url ? 'url' : undefined}
@@ -449,7 +453,8 @@ function whatEnterDoes(focused: Control | null, { busy, stale, anchor, check, te
     case 'edit-again':
       return stale?.became.kind === 'changed' ? `Enter edits line ${stale.became.now.line} as it is now, keeping your values` : 'Enter edits again, to save your values as a new line';
     case 'delete':
-      return stale !== null ? 'Enter does nothing · Edit again first' : `Enter deletes line ${check.line}`;
+      if (stale !== null) return 'Enter does nothing · Edit again first';
+      return check.stale ? attemptFooter(`delete line ${check.line}`) : `Enter deletes line ${check.line}`;
     case 'move-up':
     case 'move-down': {
       const direction = focused === 'move-up' ? 'up' : 'down';
@@ -459,5 +464,6 @@ function whatEnterDoes(focused: Control | null, { busy, stale, anchor, check, te
   if (stale !== null) return 'Enter does nothing · Edit again first';
   if (check.takenBy !== null) return `Enter does nothing · Line ${check.takenBy.line} already has this name.`;
   if (check.problem !== null) return `Enter does nothing · ${fieldProblemText(check.problem, check.line, fields.url)}`;
-  return anchor === null ? `Enter saves it as line ${check.line}` : `Enter saves line ${check.line}`;
+  if (anchor === null) return `Enter saves it as line ${check.line}`;
+  return check.stale ? attemptFooter(`save line ${check.line}`) : `Enter saves line ${check.line}`;
 }

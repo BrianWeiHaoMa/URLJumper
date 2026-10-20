@@ -1,6 +1,7 @@
-// The fit check itself (G7): each misfit it exists for, planted in the real popup, fails it for that reason.
+// The fit check itself (G7): each misfit it exists for, planted in the real popup, fails it for that reason;
+// and the picture that tells whether a field draws its value whole.
 import type { Page } from '@playwright/test';
-import { checkFit, expect, popupOnNewPage, test } from './extension.ts';
+import { checkFit, expect, fieldDrawnWhole, popupOnNewPage, test } from './extension.ts';
 
 /** What `checkFit` says of `popup` with `plant` applied: `fits`, or its failure. */
 async function fitWith(popup: Page, plant: () => void): Promise<string> {
@@ -56,6 +57,26 @@ test('a box moved where the view cannot show or scroll to it, and a field too sh
   expect(await fitWith(popup, () => (document.querySelector<HTMLElement>('.search-box')!.style.cssText = 'height: 8px; padding-block: 0'))).toContain(
     'field shorter than its line: input.search-box ',
   );
+});
+
+test('a field whose line is at its cap may cut marks stacked past it; one pixel below the cap, or at its base under marks past its room, it fails the check and its picture', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: 'mail  https://mail.example.com/\n' });
+  const { popup } = await popupOnNewPage(extension, site);
+  const box = popup.getByRole('combobox');
+  // Acute accents stacked past any script's writing, past the 64 px cap of the search box's 16 px text.
+  await box.fill(`a${'\u0301'.repeat(40)}`);
+  await expect(box).toHaveCSS('line-height', '64px');
+  await checkFit(popup);
+  expect(await fitWith(popup, () => (document.querySelector<HTMLElement>('.search-box')!.style.lineHeight = '63px'))).toContain('text cut along: input.search-box ');
+
+  // A Thai consonant over three vowels, past the room of the search box's 30 px base line, drawn far along the field.
+  await box.fill(`${'a'.repeat(23)}ปุุุ`);
+  await expect(box).not.toHaveCSS('line-height', '30px');
+  expect(await fieldDrawnWhole(popup, box)).toBe(true);
+  await checkFit(popup);
+  await popup.evaluate(() => (document.querySelector<HTMLElement>('.search-box')!.style.lineHeight = '30px'));
+  expect(await fieldDrawnWhole(popup, box)).toBe(false);
+  expect(await fitWith(popup, () => undefined)).toContain('text cut along: input.search-box ');
 });
 
 test("a row's name or URL cut without an ellipsis, or not from its start, fails the check", async ({ extension, site }) => {

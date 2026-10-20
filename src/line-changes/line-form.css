@@ -15,7 +15,8 @@
 .field-input {
   font: inherit;
   font-size: 14px;
-  /* The field clips its text to its line box, so the line box holds the room marks above and below need. */
+  /* The field clips its text to its line box, so the line box holds the room marks above and below need: this
+     is the base, which src/line-changes/field-line.ts raises for a value whose marks reach past it. */
   line-height: 26px;
   color: var(--text-primary);
   background: var(--bg-page);

@@ -1,7 +1,7 @@
 // The row editor's rules (G12, G13, G14, G31, L2), pure, for `RowEditor.tsx`: the fields a line fills, what
 // Save would write and what stops it, what became of a line a change found stale, the line *Open in text*
-// names, the destination *Copy link* copies, and what Enter does on a move and what a refused one says. Every
-// rule about the document's text they rest on is the document module's (R2).
+// names, the destination *Copy link* copies, what Enter does on a move or on a change to a line changed since,
+// and what a refused move says. Every rule about the document's text they rest on is the document module's (R2).
 import { anchorAt, findAnchor, type Anchor } from '../document/anchor';
 import { fillArgument } from '../document/argument';
 import { mappingOfLine, readDocument, type Mapping } from '../document/grammar';
@@ -76,8 +76,17 @@ export function destination(text: string, argument: string | null): string | und
  */
 export function moveFooter(direction: MoveDirection, offer: MoveOffer, line: number): string {
   if (offer.kind === 'applied') return `Enter moves line ${offer.from} ${direction} to line ${offer.line}`;
-  if (offer.kind === 'stale') return `Enter tries to move line ${line} ${direction} · the line has changed`;
+  if (offer.kind === 'stale') return attemptFooter(`move line ${line} ${direction}`);
   return `Enter does nothing · ${whyImmovable(direction, offer, line)}`;
+}
+
+/**
+ * What Enter does on a change (`save line N`, `delete line N`, `move line N up`) to a line the document as last
+ * read shows changed or gone since the editor loaded it (L2): it sends the change, which the worker refuses
+ * unless the line stands again as loaded (G13).
+ */
+export function attemptFooter(change: string): string {
+  return `Enter tries to ${change} · the line has changed`;
 }
 
 /** What a move the worker refused as immovable says (G13, G21), by `document`, the stored document it refused on: nothing was stored, and why. */

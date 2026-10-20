@@ -28,7 +28,8 @@
   font: inherit;
   font-size: 16px;
   /* The field clips its text to its line box, so the line box, not padding, holds the room that marks a
-     script stacks above or below the line need. */
+     script stacks above or below the line need: this is the base, which src/line-changes/field-line.ts raises
+     for a value whose marks reach past it. */
   line-height: 30px;
   color: var(--text-primary);
   background: var(--bg-page);

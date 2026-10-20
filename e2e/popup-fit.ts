@@ -1,14 +1,16 @@
 // The fit every popup state is held to (G7), through e2e/extension.ts: the real action popup inside Chrome's
 // popup size limit, its header and footer in view, and nothing of its own cut off but a row's name or URL, or
-// a List view row's note, longer than the row, shown from its start and cut with an ellipsis.
-import { expect, type Page } from '@playwright/test';
+// a List view row's note, longer than the row, shown from its start and cut with an ellipsis, and the marks a
+// text field whose line has reached its cap cuts; and whether a field draws its value whole, from its picture.
+import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Fails unless the state `popup` shows, once Chrome has sized the popup to it, fits (G7): the viewport is
  * within Chrome's 800 by 600 limit (S6) and the page does not overflow it; the header and footer are whole in
  * view; no element of the popup's own is cut across or along, or lies where a box that clips it cannot show
  * or scroll to, except a row's name, URL, or note cut with an ellipsis from its start; and a field's line holds its
- * text's height. The view may scroll, which cuts nothing; a field's value scrolls across inside the field.
+ * text's ink, except that a field whose line has reached its cap, four times its font size, may cut marks stacked
+ * past any script's writing. The view may scroll, which cuts nothing; a field's value scrolls across inside the field.
  * Headless, Chrome gives the popup at most 510 pixels of height, not the 600 it allows, so a view that would
  * fit in 600, such as the settings, scrolls here.
  */
@@ -80,8 +82,9 @@ function fitProblems(popup: Page): Promise<string[]> {
         const line = style.lineHeight === 'normal' ? ascent + descent : parseFloat(style.lineHeight);
         const room = element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
         const leading = (line - ascent - descent) / 2;
+        const atCap = line === Math.round(4 * parseFloat(style.fontSize));
         if (room < line - 0.5) problems.push(`field shorter than its line: ${described(element)}`);
-        if (text && (ink.actualBoundingBoxAscent > leading + ascent + 0.5 || ink.actualBoundingBoxDescent > leading + descent + 0.5)) {
+        if (text && !atCap && (ink.actualBoundingBoxAscent > leading + ascent + 0.5 || ink.actualBoundingBoxDescent > leading + descent + 0.5)) {
           problems.push(`text cut along: ${described(element)} "${text.slice(0, 40)}"`);
         }
         continue;
@@ -95,4 +98,57 @@ function fitProblems(popup: Page): Promise<string[]> {
     }
     return problems;
   });
+}
+
+/**
+ * Whether the single-line field `field` draws its value whole (G7): the field as drawn, its border, background,
+ * and focus ring made invisible, against the same field given 27 more pixels of line above and below around the
+ * same centre, its place in the layout kept. Each property it sets it clears after, and the field's own line is
+ * put back, so the line the product gave the field stays; the field keeps the focus and draws as before.
+ */
+export async function fieldDrawnWhole(page: Page, field: Locator): Promise<boolean> {
+  const element = (await field.elementHandle())!;
+  // Where the field is drawn, and in what viewport: Chrome resizes the popup to its content a moment after a
+  // field grows, which can move what the pictures show, so a pair counts only if the field stood still, after
+  // two frames, and a field is cut only when two such pairs differ.
+  const place = () => element.evaluate((input) => `${JSON.stringify(input.getBoundingClientRect())} in ${innerWidth} by ${innerHeight}`);
+  let differed = 0;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    await element.evaluate(() => new Promise((framed) => requestAnimationFrame(() => requestAnimationFrame(framed))));
+    await element.scrollIntoViewIfNeeded();
+    const before = await place();
+    const clip = await element.evaluate((input: HTMLInputElement) => {
+      const style = getComputedStyle(input);
+      const box = input.getBoundingClientRect();
+      const top = box.top + input.clientTop + parseFloat(style.paddingTop);
+      const height = input.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      input.scrollLeft = 0;
+      input.style.borderColor = 'transparent';
+      input.style.background = 'transparent';
+      input.style.outline = 'none';
+      // The line with room above and below it, where marks the field cut would show.
+      const above = Math.min(20, top);
+      const left = box.left + input.clientLeft + parseFloat(style.paddingLeft);
+      return { x: left, y: top - above, width: input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight), height: height + above + 20 };
+    });
+    const drawn = await page.screenshot({ clip, caret: 'hide' });
+    const own = await element.evaluate((input: HTMLElement) => {
+      const style = getComputedStyle(input);
+      const line = input.style.lineHeight;
+      input.style.marginTop = `${parseFloat(style.marginTop) - 27}px`;
+      input.style.marginBottom = `${parseFloat(style.marginBottom) - 27}px`;
+      input.style.lineHeight = `${parseFloat(style.lineHeight) + 54}px`;
+      return line;
+    });
+    const roomy = await page.screenshot({ clip, caret: 'hide' });
+    await element.evaluate((input: HTMLElement, line) => {
+      for (const property of ['border-color', 'background', 'outline', 'margin-top', 'margin-bottom']) input.style.removeProperty(property);
+      input.style.lineHeight = line;
+    }, own);
+    const after = await place();
+    if (after !== before) continue;
+    if (drawn.equals(roomy)) return true;
+    if (++differed === 2) return false;
+  }
+  throw new Error('the field kept moving while it was pictured');
 }

@@ -16,6 +16,7 @@ import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingName, namedSections, type HeadingIdentity, type Section } from '../document/sections';
 import { checkMapping } from '../document/validation';
 import { send, type InsertReply } from '../requests';
+import { useFieldLine } from './field-line';
 import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
 import { insertedOutcome, type Outcome } from './outcomes';
 import { SectionChoice, type SectionOption } from './SectionChoice';
@@ -61,6 +62,9 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   const [refusal, setRefusal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
+  const urlField = useRef<HTMLInputElement>(null);
+  useFieldLine(start);
+  useFieldLine(urlField);
   const [focusedOn, setFocusedOn] = useState<FormControl | null>(null);
   const focusOn = (control: FormControl) => (focused: boolean) => setFocusedOn(focused ? control : null);
 
@@ -187,6 +191,7 @@ export function NameForm({ document: stored, name: startName, subject, start, on
       <label className="field">
         <span className="field-label">URL</span>
         <input
+          ref={urlField}
           className="field-input field-url"
           type="text"
           inputMode="url"
