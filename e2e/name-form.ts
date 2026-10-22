@@ -11,6 +11,10 @@ export function nameForm(page: Page) {
     name: form.getByRole('textbox', { name: 'Name', exact: true }),
     url: form.getByRole('textbox', { name: 'URL', exact: true }),
     note: form.getByRole('textbox', { name: 'Note', exact: true }),
+    copyName: form.getByRole('button', { name: 'Copy name', exact: true }),
+    copyUrl: form.getByRole('button', { name: 'Copy URL', exact: true }),
+    copyNote: form.getByRole('button', { name: 'Copy note', exact: true }),
+    said: form.locator('.form-said'),
     /** The Section choice, shown when the document has headings, and its options. */
     sections: form.getByRole('listbox', { name: 'Section' }),
     section: (name: string) => form.getByRole('option', { name, exact: true }),

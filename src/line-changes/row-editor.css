@@ -59,12 +59,3 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-.row-editor-said {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.row-editor-said.refused {
-  color: var(--text-alert);
-}

@@ -1,16 +1,16 @@
 // The Name form (In use, "Name this page", "Name a link", "Edit the list"; G8, G9, G10, G11, N6, E5): what the
 // page is, or for a link the page it is on, the URL prefilled and editable, or, opened by *Add mapping*, no page
-// and an empty URL field; the name, a note, empty to start, written as the line's trailing comment, the Section
-// choice when the document has headings, and a preview of the exact line and where it goes. Every check and the
-// preview come from the document module against the document as last read, so they follow every storage change
-// and agree with what the worker writes. Save sends one insert; its outcome, which the confirmation shows, is
-// built from the worker's reply alone. A taken name is named, with the offer to edit that line instead, beside
-// any other problem (G8); that offer and *This page is*'s pencil (G10) leave the form for the editor of that
-// line, the form's values stored nowhere. They and Cancel wait while Save awaits its reply, so the reply never
-// lands on an editor opened meanwhile or on a form gone, where a failure could not be said (G21). It never reads
-// storage or draws its host's frame: the host gives it the document as last read and the name field's ref, where
-// the notice of what is new leads (G25), is told while Save awaits its reply, and shows what it says Enter does
-// in its footer (L2).
+// and an empty URL field; the name, a note, empty to start, written as the line's trailing comment, each field
+// with its copy button (G31), the Section choice when the document has headings, and a preview of the exact line
+// and where it goes. Every check and the preview come from the document module against the document as last
+// read, so they follow every storage change and agree with what the worker writes. Save sends one insert; its
+// outcome, which the confirmation shows, is built from the worker's reply alone. A taken name is named, with the
+// offer to edit that line instead, beside any other problem (G8); that offer and *This page is*'s pencil (G10)
+// leave the form for the editor of that line, the form's values stored nowhere. They, Cancel, and the copy
+// buttons wait while Save awaits its reply, so the reply never lands on an editor opened meanwhile or on a form
+// gone, where a failure could not be said (G21). It never reads storage or draws its host's frame: the host
+// gives it the document as last read and the name field's ref, where the notice of what is new leads (G25), is
+// told while Save awaits its reply, and shows what it says Enter does in its footer (L2).
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
@@ -18,8 +18,8 @@ import { mappingOfPage } from '../document/page-mapping';
 import { findSection, headingName, namedSections, type HeadingIdentity, type Section } from '../document/sections';
 import { checkMapping } from '../document/validation';
 import { send, type InsertReply } from '../requests';
-import { useFieldLine } from './field-line';
 import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
+import { copyField, copySays, MappingField, type FieldName, type Said } from './MappingField';
 import { insertedOutcome, type Outcome } from './outcomes';
 import { SectionChoice, type SectionOption } from './SectionChoice';
 import { ThisPage } from './ThisPage';
@@ -72,12 +72,10 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   const [refusal, setRefusal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
-  const urlField = useRef<HTMLInputElement>(null);
-  const noteField = useRef<HTMLInputElement>(null);
-  useFieldLine(start);
-  useFieldLine(urlField);
-  useFieldLine(noteField);
+  // What the last copy came to, until a value changes or Save is sent.
+  const [said, setSaid] = useState<Said | null>(null);
   const [focusedOn, setFocusedOn] = useState<FormControl | null>(null);
+  const [copyFocused, setCopyFocused] = useState<FieldName | null>(null);
   const focusOn = (control: FormControl) => (focused: boolean) => setFocusedOn(focused ? control : null);
 
   const read = useMemo(() => readDocument(stored), [stored]);
@@ -100,6 +98,7 @@ export function NameForm({ document: stored, name: startName, subject, start, on
     setSaving(true);
     onBusy?.(true);
     setRefusal(null);
+    setSaid(null);
     const reply = await send({ kind: 'insert', name, url, note, heading });
     onBusy?.(false);
     if (reply.kind === 'applied') {
@@ -117,6 +116,16 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   };
   const cancel = () => {
     if (!inFlight.current) onCancel();
+  };
+  // Inside the click or key handler, which the clipboard needs (S14); it waits for Save's reply, as the form's
+  // other actions do.
+  const copy = (field: FieldName) => {
+    if (!inFlight.current) copyField(field, { name, url, note }[field], setSaid);
+  };
+  const change = (set: (value: string) => void) => (value: string) => {
+    setRefusal(null);
+    setSaid(null);
+    set(value);
   };
 
   // The name field has the focus when the form appears, with the caret after a prefilled name.
@@ -156,13 +165,15 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   const editsInstead = focusedOn === 'this-page' ? thisPage?.line : focusedOn === 'edit-instead' ? takenBy?.line : undefined;
   const enterSays = saving
     ? 'Saving · Enter does nothing until it is stored'
-    : focusedOn === 'cancel'
-      ? cancelSays
-      : editsInstead !== undefined
-        ? `Enter edits line ${editsInstead} instead`
-        : result.kind === 'applied'
-          ? `Enter saves it as line ${result.line}`
-          : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : fieldProblemText(result, point.after + 1, url)}`;
+    : copyFocused !== null
+      ? copySays(copyFocused)
+      : focusedOn === 'cancel'
+        ? cancelSays
+        : editsInstead !== undefined
+          ? `Enter edits line ${editsInstead} instead`
+          : result.kind === 'applied'
+            ? `Enter saves it as line ${result.line}`
+            : `Enter does nothing · ${result.kind === 'name-taken' ? `Line ${result.line} already has this name.` : fieldProblemText(result, point.after + 1, url)}`;
   // Before the browser paints, so the host's footer never shows its own default in place of the form's.
   useLayoutEffect(() => sayWhatEnterDoes(enterSays), [enterSays, sayWhatEnterDoes]);
 
@@ -190,65 +201,26 @@ export function NameForm({ document: stored, name: startName, subject, start, on
           {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} waiting={saving} onEdit={edit} onFocusChange={focusOn('this-page')} />}
         </div>
       )}
-      <label className="field">
-        <span className="field-label">Name</span>
-        <input
-          ref={start}
-          className="field-input"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          aria-invalid={result.kind === 'name-taken' || (result.kind === 'invalid' && result.field === 'name')}
-          aria-describedby="name-form-problem"
-          value={name}
-          onChange={(event) => {
-            setRefusal(null);
-            setName(event.target.value);
-          }}
-        />
-      </label>
-      <label className="field">
-        <span className="field-label">URL</span>
-        <input
-          ref={urlField}
-          className="field-input field-url"
-          type="text"
-          inputMode="url"
-          autoComplete="off"
-          autoCapitalize="off"
-          spellCheck={false}
-          aria-invalid={result.kind === 'invalid' && result.field === 'url'}
-          aria-describedby="name-form-problem"
-          value={url}
-          onChange={(event) => {
-            setRefusal(null);
-            setUrl(event.target.value);
-          }}
-        />
-      </label>
-      <label className="field">
-        <span className="field-label">Note</span>
-        <input
-          ref={noteField}
-          className="field-input"
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          aria-invalid={result.kind === 'invalid' && result.field === 'note'}
-          aria-describedby="name-form-problem"
-          value={note}
-          onChange={(event) => {
-            setRefusal(null);
-            setNote(event.target.value);
-          }}
-        />
-      </label>
+      <MappingField
+        field="name"
+        value={name}
+        invalid={result.kind === 'name-taken' || (result.kind === 'invalid' && result.field === 'name')}
+        describedBy="name-form-problem"
+        waiting={saving}
+        input={start}
+        onChange={change(setName)}
+        onCopy={copy}
+        onCopyFocus={setCopyFocused}
+      />
+      <MappingField field="url" value={url} invalid={result.kind === 'invalid' && result.field === 'url'} describedBy="name-form-problem" waiting={saving} onChange={change(setUrl)} onCopy={copy} onCopyFocus={setCopyFocused} />
+      <MappingField field="note" value={note} invalid={result.kind === 'invalid' && result.field === 'note'} describedBy="name-form-problem" waiting={saving} onChange={change(setNote)} onCopy={copy} onCopyFocus={setCopyFocused} />
       {sections.length > 0 && (
         <SectionChoice
           options={options}
           chosen={chosenIndex}
           onChoose={(index) => {
             setRefusal(null);
+            setSaid(null);
             setHeading(index === 0 ? null : sections[index - 1]!.identity);
           }}
         />
@@ -264,6 +236,11 @@ export function NameForm({ document: stored, name: startName, subject, start, on
         <button type="button" className="form-button edit-instead" aria-disabled={saving} onClick={() => edit(takenBy.line)} onFocus={() => setFocusedOn('edit-instead')} onBlur={() => setFocusedOn(null)}>
           {editInsteadText(takenBy)}
         </button>
+      )}
+      {said !== null && (
+        <p className={said.alert ? 'form-said refused' : 'form-said'} role={said.alert ? 'alert' : 'status'}>
+          {said.text}
+        </p>
       )}
       <div className="form-actions">
         <button type="submit" className="form-button save" aria-disabled={result.kind !== 'applied' || saving}>

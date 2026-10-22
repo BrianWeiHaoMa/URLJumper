@@ -1,6 +1,6 @@
 /* The fields, problems, and actions of a form that writes one mapping line, the Name form and the row editor
-   (G7, G32): a field's value scrolls inside the field; a problem wraps. Every color is a token of
-   src/theme.css, and every line height a whole number of pixels. */
+   (G7, G32): a field's value scrolls inside the field, its copy button at its right; a problem, and what a copy
+   came to, wrap. Every color is a token of src/theme.css, and every line height a whole number of pixels. */
 .field {
   display: flex;
   flex-direction: column;
@@ -34,6 +34,17 @@
   font-size: 12px;
 }
 
+/* A field's value and, at its far right, its copy button, as tall as the field: the value takes the rest. */
+.field-value {
+  display: flex;
+  gap: 6px;
+}
+
+.field-value .field-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .form-problem {
   margin: 0;
   color: var(--text-alert);
@@ -42,6 +53,15 @@
 
 .form-problem:empty {
   display: none;
+}
+
+.form-said {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.form-said.refused {
+  color: var(--text-alert);
 }
 
 .form-actions {
@@ -66,6 +86,14 @@
 .form-button[aria-disabled="true"] {
   color: var(--text-muted);
   cursor: default;
+}
+
+/* After .form-button, whose padding it narrows to the icon's. */
+.field-copy {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 7px;
 }
 
 /* The offer to edit the line that has a taken name instead (G8): a name as long as the document wraps inside

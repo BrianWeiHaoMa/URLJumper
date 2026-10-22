@@ -227,8 +227,11 @@ test('the keyboard reaches every control of the editor, the footer saying what E
   await expect(editor.name).toHaveValue('tac');
   await expect(footer(popup)).toHaveText('Enter saves line 4');
   const walk: [ReturnType<typeof rowEditor>[keyof ReturnType<typeof rowEditor>], string][] = [
+    [editor.copyName, 'Enter copies the name'],
     [editor.url, 'Enter saves line 4'],
+    [editor.copyUrl, 'Enter copies the URL'],
     [editor.note, 'Enter saves line 4'],
+    [editor.copyNote, 'Enter copies the note'],
     [editor.save, 'Enter saves line 4'],
     [editor.delete, 'Enter deletes line 4'],
     [editor.copyLink, 'Enter copies the link'],

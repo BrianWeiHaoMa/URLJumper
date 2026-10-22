@@ -1,26 +1,27 @@
 // The row editor (In use, "Edit from a suggestion" and "Edit the list"; G12, G13, G14, G21, G31, L2): name,
-// URL, and note fields filled from one mapping line as loaded, with *Save*, which rewrites that line alone,
-// *Delete*, which removes it at once and asks nothing, *Copy link* where the host offers it, *Move up* and *Move
-// down* where the host offers them, each moving the line at once, *Open in text* where the host offers it, and
-// *Cancel*, which stores nothing. The line is the anchor from the read the editor was opened on, which no later
-// read moves: a change the worker finds stale stores nothing, and the editor says what became of the line and
-// offers *Edit again*, which anchors on the line as it now stands, keeping the typed values, or, the line gone,
-// saves them as a new line at the end (G9). Only the host moves it otherwise, keeping the editor open on the
-// line a move left. Its checks come from the document module against the document as last read, so a Save that
-// keeps its name is never blocked as taken, a taken name is named, with the offer to edit that line instead,
-// beside any other problem (G8), and a move the document does not admit is offered disabled, saying why (G12).
-// While a change awaits its reply the fields take no typing and every action waits, so the reply lands on the
-// editor that sent it (G21). It never reads storage, closes its host, or shows a confirmation: a stored
-// change's outcome goes to the host. It writes only through the worker's requests (R1); no key deletes or moves
-// a line (P1).
+// URL, and note fields filled from one mapping line as loaded, each with a copy button at its right that copies
+// the field's value as it stands (G31), with *Save*, which rewrites that line alone, *Delete*, which removes it
+// at once and asks nothing, *Copy link* where the host offers it, *Move up* and *Move down* where the host
+// offers them, each moving the line at once, *Open in text* where the host offers it, and *Cancel*, which
+// stores nothing. The line is the anchor from the read the editor was opened on, which no later read moves: a
+// change the worker finds stale stores nothing, and the editor says what became of the line and offers *Edit
+// again*, which anchors on the line as it now stands, keeping the typed values, or, the line gone, saves them
+// as a new line at the end (G9). Only the host moves it otherwise, keeping the editor open on the line a move
+// left. Its checks come from the document module against the document as last read, so a Save that keeps its
+// name is never blocked as taken, a taken name is named, with the offer to edit that line instead, beside any
+// other problem (G8), and a move the document does not admit is offered disabled, saying why (G12). While a
+// change awaits its reply the fields take no typing and every action waits, so the reply lands on the editor
+// that sent it (G21). It never reads storage, closes its host, or shows a confirmation: a stored change's
+// outcome goes to the host. It writes only through the worker's requests (R1); no key deletes or moves a line
+// (P1).
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { anchorAt, type Anchor } from '../document/anchor';
 import { mappingOfLine } from '../document/grammar';
 import { movesAdmitted, type MoveDirection, type MoveOffer } from '../document/moving';
 import type { MappingFields } from '../document/validation';
 import { chromeMessage, send, type InsertReply } from '../requests';
-import { useFieldLine } from './field-line';
 import { editInsteadText, fieldProblemText, refusedValuesText, takenNameText } from './field-problems';
+import { copyField, copySays, copyText, MappingField, type FieldName, type Said } from './MappingField';
 import { insertedOutcome, movedOutcome, removedOutcome, rewrittenOutcome, type Outcome } from './outcomes';
 import { attemptFooter, destination, lineFields, moveFooter, notMovedText, saveCheck, textViewLine, whatBecameOf, type Became, type SaveCheck } from './row-editor';
 import './line-form.css';
@@ -52,7 +53,7 @@ export interface RowEditorProps {
 }
 
 /** The editor's controls, by which the footer says what Enter does. */
-type Control = 'field' | 'save' | 'delete' | 'copy' | 'move-up' | 'move-down' | 'open' | 'cancel' | 'edit-again' | 'edit-instead';
+type Control = 'field' | `copy-${FieldName}` | 'save' | 'delete' | 'copy' | 'move-up' | 'move-down' | 'open' | 'cancel' | 'edit-again' | 'edit-instead';
 
 /** The changes the editor sends. */
 type Change = 'save' | 'delete' | 'move';
@@ -61,12 +62,6 @@ type Change = 'save' | 'delete' | 'move';
 interface Stale {
   by: Change;
   became: Became;
-}
-
-/** What the last action came to when it stored nothing, or what *Copy link* did. */
-interface Said {
-  text: string;
-  alert: boolean;
 }
 
 export function RowEditor({ document: stored, anchor: loaded, copyLink, start, openInText, offersMoves, onStored, onEditInstead, onBack, sayWhatEnterDoes, onBusy }: RowEditorProps) {
@@ -94,6 +89,10 @@ export function RowEditor({ document: stored, anchor: loaded, copyLink, start, o
     // Inside the click or key handler, which the clipboard needs (S14); it opens nothing and records no use.
     copyLink: () => {
       if (!writes.inFlight() && anchor !== null && copyLink !== undefined) copyDestination(anchor, copyLink.argument, setSaid);
+    },
+    // The field's value as it stands, typed or not, whatever its problem.
+    copyField: (field) => {
+      if (!writes.inFlight()) copyField(field, fields[field], setSaid);
     },
     openText: () => {
       if (writes.inFlight() || anchor === null || openInText === undefined) return;
@@ -141,9 +140,9 @@ export function RowEditor({ document: stored, anchor: loaded, copyLink, start, o
           "{mappingOfLine(loaded.text)?.name ?? ''}" is no longer in the document: Save adds your values as a new line, line {check.line}.
         </p>
       )}
-      <Field label="Name" value={fields.name} readOnly={busy !== null} invalid={check.takenBy !== null || check.problem?.field === 'name'} describedBy={problemId} input={start} onChange={edit('name')} />
-      <Field label="URL" url value={fields.url} readOnly={busy !== null} invalid={check.problem?.field === 'url'} describedBy={problemId} onChange={edit('url')} />
-      <Field label="Note" value={fields.note} readOnly={busy !== null} invalid={check.problem?.field === 'note'} describedBy={problemId} onChange={edit('note')} />
+      <MappingField field="name" value={fields.name} readOnly={busy !== null} waiting={busy !== null} invalid={check.takenBy !== null || check.problem?.field === 'name'} describedBy={problemId} input={start} onChange={edit('name')} onCopy={actions.copyField} />
+      <MappingField field="url" value={fields.url} readOnly={busy !== null} waiting={busy !== null} invalid={check.problem?.field === 'url'} describedBy={problemId} onChange={edit('url')} onCopy={actions.copyField} />
+      <MappingField field="note" value={fields.note} readOnly={busy !== null} waiting={busy !== null} invalid={check.problem?.field === 'note'} describedBy={problemId} onChange={edit('note')} onCopy={actions.copyField} />
       <p id={problemId} className="form-problem" aria-live="polite">
         {check.problem === null ? '' : fieldProblemText(check.problem, check.line, fields.url)}
       </p>
@@ -159,6 +158,7 @@ interface EditorActions {
   delete(): void;
   move(direction: MoveDirection): void;
   copyLink(): void;
+  copyField(field: FieldName): void;
   openText(): void;
   cancel(): void;
   editAgain(): void;
@@ -248,11 +248,7 @@ function copyDestination(anchor: Anchor, argument: string | null, say: (said: Sa
     say({ text: 'Not copied: the link is longer than Chrome opens.', alert: true });
     return;
   }
-  say(null);
-  navigator.clipboard.writeText(link).then(
-    () => say({ text: 'Copied the link', alert: false }),
-    (error: unknown) => say({ text: `Not copied. Chrome said: ${chromeMessage(error)}`, alert: true }),
-  );
+  copyText(link, 'Copied the link', say);
 }
 
 /**
@@ -305,7 +301,7 @@ function EditorMessages({ check, stale, said, loaded, busy, actions }: EditorMes
         </div>
       )}
       {said !== null && (
-        <p className={said.alert ? 'row-editor-said refused' : 'row-editor-said'} role={said.alert ? 'alert' : 'status'}>
+        <p className={said.alert ? 'form-said row-editor-said refused' : 'form-said row-editor-said'} role={said.alert ? 'alert' : 'status'}>
           {said.text}
         </p>
       )}
@@ -390,43 +386,6 @@ function EditorButtons({ anchor, offersCopy, offersOpen, moves, saveOff, busy, s
 const MOVE_LABEL: Record<MoveDirection, string> = { up: 'Move up', down: 'Move down' };
 const MOVE_ARROW: Record<MoveDirection, string> = { up: 'M8 13.5v-11M3.5 7 8 2.5 12.5 7', down: 'M8 2.5v11M3.5 9 8 13.5 12.5 9' };
 
-interface FieldProps {
-  label: string;
-  value: string;
-  /** A URL field, drawn as addresses are. */
-  url?: boolean;
-  readOnly: boolean;
-  invalid: boolean;
-  describedBy: string;
-  input?: RefObject<HTMLInputElement | null>;
-  onChange(value: string): void;
-}
-
-function Field({ label, value, url, readOnly, invalid, describedBy, input, onChange }: FieldProps) {
-  const own = useRef<HTMLInputElement>(null);
-  const field = input ?? own;
-  useFieldLine(field);
-  return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      <input
-        ref={field}
-        className={url ? 'field-input field-url' : 'field-input'}
-        type="text"
-        inputMode={url ? 'url' : undefined}
-        autoComplete="off"
-        autoCapitalize={url ? 'off' : undefined}
-        spellCheck={false}
-        readOnly={readOnly}
-        aria-invalid={invalid}
-        aria-describedby={describedBy}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
-
 function controlOf(target: EventTarget): Control {
   return target instanceof HTMLElement && target.dataset.control ? (target.dataset.control as Control) : 'field';
 }
@@ -469,6 +428,10 @@ function whatEnterDoes(focused: Control | null, { busy, stale, anchor, check, te
       return 'Enter closes the editor, storing nothing';
     case 'copy':
       return 'Enter copies the link';
+    case 'copy-name':
+    case 'copy-url':
+    case 'copy-note':
+      return copySays(focused.slice('copy-'.length) as FieldName);
     case 'open':
       return `Enter opens the Text view in a new tab at line ${textLine}`;
     case 'edit-instead':
