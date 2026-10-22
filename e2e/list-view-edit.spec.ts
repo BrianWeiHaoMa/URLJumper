@@ -1,12 +1,10 @@
 // Editing in the List view, in both settings hosts (In use, "Edit the list"; G12 to G15, G21, G22, G31, G32,
 // L2, R1, R4): a row's editor in place rewrites its line alone or removes it at once, each confirmed by name
-// and line beside the line, with Undo, itself undoable, and the focus on a visible control; *Copy link* copies
-// the destination and stores nothing; a line another page changed or removed is never overwritten and the
-// editor stays where the line now stands; a failed store keeps the typed values; while a change awaits its
+// and line beside the line, with Undo, itself undoable, and the focus on a visible control; a line another
+// page changed or removed is never overwritten and the editor stays where the line now stands; a failed store keeps the typed values; while a change awaits its
 // reply every other edit waits; and the confirmation ends at the user's next action or ten seconds.
 import type { Page } from '@playwright/test';
 import {
-  clipboardText,
   expect,
   holdPageRequests,
   lineConfirmation,
@@ -16,7 +14,6 @@ import {
   rowEditor,
   SETTINGS_HOSTS,
   test,
-  watchRequests,
   type ListView,
   type LoadedExtension,
 } from './extension.ts';
@@ -120,24 +117,6 @@ for (const host of SETTINGS_HOSTS) {
     await expect(confirmation.text).toHaveText('Put "cal" back as line 5');
     expect(await storedDocument(extension)).toBe(DOC);
     await expect(view.names).toHaveText(['mail', 'cal', 'last']);
-  });
-
-  test(`in the ${host}, Copy link copies the destination with every %s removed, storing nothing and opening nothing`, async ({ extension, site }) => {
-    const doc = `${DOC}\nyt  https://www.youtube.com/results?search_query=%s`;
-    const jumps = await watchRequests(extension.worker, 'jump');
-    const { page, view } = await listViewIn(host, extension, site, { mappings: doc });
-    const changes = await extension.watchStorage();
-    const tabs = await extension.tabUrls();
-    await view.pencil('yt').click();
-    await rowEditor(page).copyLink.click();
-    await expect(rowEditor(page).said).toHaveText('Copied the link');
-    const web = await extension.context.newPage();
-    await web.goto(site.pageUrl('Reads the clipboard'));
-    expect(await clipboardText(web)).toBe('https://www.youtube.com/results?search_query=');
-    expect(await changes()).toEqual([]);
-    expect(await jumps()).toEqual([]);
-    expect((await extension.tabUrls()).filter((url) => !tabs.includes(url))).toEqual([web.url()]);
-    expect(await storedDocument(extension)).toBe(doc);
   });
 
   test(`in the ${host}, a line another page removed refuses Save with the editor where it was; Edit again saves the values as a new line at the end`, async ({ extension, site }) => {

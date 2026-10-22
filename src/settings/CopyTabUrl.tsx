@@ -1,9 +1,10 @@
-// *Copy tab URL* (G31; Composition, "Chrome"): in the popup's Text view and its List view's *Add mapping* form
-// alone, the address of the tab the popup was opened on, as the host gives it, put on the clipboard inside the
-// user's click or key, which the clipboard needs (S14). Without Chrome's grant there is no address (E5), and
-// nothing to copy.
+// *Copy tab URL* (G31; Composition, "Chrome"): in the popup's Text view, its List view's *Add mapping* form, and
+// its row editors, the List view's and the one a suggestion opens, alone: the address of the tab the popup was
+// opened on, as the host gives it, put on the clipboard inside the user's click or key, which the clipboard
+// needs (S14). Without Chrome's grant there is no address (E5), and nothing to copy.
 import { useState } from 'react';
 import { chromeMessage } from '../requests';
+import './settings.css';
 
 interface CopyTabUrlProps {
   /** The opener tab's address; undefined when Chrome granted none. */

@@ -31,8 +31,10 @@ export function listView(page: Page) {
     addMapping: page.locator('header.settings-bar, header.options-header').getByRole('button', { name: 'Add mapping', exact: true }),
     /** The Add mapping section, at the top of the view. */
     addForm: page.locator('section.list-name-form'),
-    /** Only the popup's Add mapping section offers the opener tab's address. */
+    /** The popup's Add mapping section's *Copy tab URL*; the row editor's is `rowEditor`'s. */
     copyTabUrl: page.locator('section.list-name-form').getByRole('button', { name: 'Copy tab URL', exact: true }),
+    /** The open row editor's place in the list, with its *Copy tab URL* above its fields in the popup. */
+    editor: list.locator('.list-editor'),
     /** What the view says when the document holds no mapping. */
     empty: page.getByText('The document has no mappings.'),
   };

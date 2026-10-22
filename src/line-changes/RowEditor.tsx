@@ -1,17 +1,18 @@
 // The row editor (In use, "Edit from a suggestion" and "Edit the list"; G12, G13, G14, G21, G31, L2): name,
 // URL, and note fields filled from one mapping line as loaded, with *Save*, which rewrites that line alone,
-// *Delete*, which removes it at once and asks nothing, *Copy link*, *Move up* and *Move down* where the host
-// offers them, each moving the line at once, *Open in text* where the host offers it, and *Cancel*, which stores
-// nothing. The line is the anchor from the read the editor was opened on, which no later read moves: a change
-// the worker finds stale stores nothing, and the editor says what became of the line and offers *Edit again*,
-// which anchors on the line as it now stands, keeping the typed values, or, the line gone, saves them as a new
-// line at the end (G9). Only the host moves it otherwise, keeping the editor open on the line a move left. Its
-// checks come from the document module against the document as last read, so a Save that keeps its name is
-// never blocked as taken, a taken name is named, with the offer to edit that line instead, beside any other
-// problem (G8), and a move the document does not admit is offered disabled, saying why (G12). While a change
-// awaits its reply the fields take no typing and every action waits, so the reply lands on the editor that
-// sent it (G21). It never reads storage, closes its host, or shows a confirmation: a stored change's outcome
-// goes to the host. It writes only through the worker's requests (R1); no key deletes or moves a line (P1).
+// *Delete*, which removes it at once and asks nothing, *Copy link* where the host offers it, *Move up* and *Move
+// down* where the host offers them, each moving the line at once, *Open in text* where the host offers it, and
+// *Cancel*, which stores nothing. The line is the anchor from the read the editor was opened on, which no later
+// read moves: a change the worker finds stale stores nothing, and the editor says what became of the line and
+// offers *Edit again*, which anchors on the line as it now stands, keeping the typed values, or, the line gone,
+// saves them as a new line at the end (G9). Only the host moves it otherwise, keeping the editor open on the
+// line a move left. Its checks come from the document module against the document as last read, so a Save that
+// keeps its name is never blocked as taken, a taken name is named, with the offer to edit that line instead,
+// beside any other problem (G8), and a move the document does not admit is offered disabled, saying why (G12).
+// While a change awaits its reply the fields take no typing and every action waits, so the reply lands on the
+// editor that sent it (G21). It never reads storage, closes its host, or shows a confirmation: a stored
+// change's outcome goes to the host. It writes only through the worker's requests (R1); no key deletes or moves
+// a line (P1).
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { anchorAt, type Anchor } from '../document/anchor';
 import { mappingOfLine } from '../document/grammar';
@@ -30,8 +31,8 @@ export interface RowEditorProps {
   document: string;
   /** The line as loaded: its number and exact text from the read the editor was opened on; given anew by a host that keeps the editor open on the line a move left, which the editor then edits. */
   anchor: Anchor;
-  /** The argument of the row it was opened from: the argument row's, else null; *Copy link* fills the URL with it. */
-  argument: string | null;
+  /** *Copy link*, offered only when given, with the argument of the row it was opened from: the argument row's, else null, which fills the URL it copies. */
+  copyLink?: { argument: string | null };
   /** The name field, where the editor starts, which a host gives the focus as the notice of what is new does. */
   start: RefObject<HTMLInputElement | null>;
   /** Opens the Text view on line N, the host's way; *Open in text* is offered only when it is given. A rejection is said in the editor. */
@@ -68,7 +69,7 @@ interface Said {
   alert: boolean;
 }
 
-export function RowEditor({ document: stored, anchor: loaded, argument, start, openInText, offersMoves, onStored, onEditInstead, onBack, sayWhatEnterDoes, onBusy }: RowEditorProps) {
+export function RowEditor({ document: stored, anchor: loaded, copyLink, start, openInText, offersMoves, onStored, onEditInstead, onBack, sayWhatEnterDoes, onBusy }: RowEditorProps) {
   const problemId = `${useId()}-problem`;
   const [anchor, setAnchor] = useAnchor(loaded);
   const [fields, setFields] = useState<MappingFields>(() => lineFields(loaded.text));
@@ -92,7 +93,7 @@ export function RowEditor({ document: stored, anchor: loaded, argument, start, o
     },
     // Inside the click or key handler, which the clipboard needs (S14); it opens nothing and records no use.
     copyLink: () => {
-      if (!writes.inFlight() && anchor !== null) copyDestination(anchor, argument, setSaid);
+      if (!writes.inFlight() && anchor !== null && copyLink !== undefined) copyDestination(anchor, copyLink.argument, setSaid);
     },
     openText: () => {
       if (writes.inFlight() || anchor === null || openInText === undefined) return;
@@ -147,7 +148,7 @@ export function RowEditor({ document: stored, anchor: loaded, argument, start, o
         {check.problem === null ? '' : fieldProblemText(check.problem, check.line, fields.url)}
       </p>
       <EditorMessages check={check} stale={stale} said={said} loaded={loaded} busy={busy !== null} actions={actions} />
-      <EditorButtons anchor={anchor} offersOpen={openInText !== undefined} moves={moves} saveOff={busy !== null || stale !== null || check.problem !== null || check.takenBy !== null} busy={busy !== null} stale={stale !== null} actions={actions} />
+      <EditorButtons anchor={anchor} offersCopy={copyLink !== undefined} offersOpen={openInText !== undefined} moves={moves} saveOff={busy !== null || stale !== null || check.problem !== null || check.takenBy !== null} busy={busy !== null} stale={stale !== null} actions={actions} />
     </form>
   );
 }
@@ -315,6 +316,7 @@ function EditorMessages({ check, stale, said, loaded, busy, actions }: EditorMes
 interface EditorButtonsProps {
   /** None for a line gone, saved as a new line, which offers nothing to delete, copy, move, or open. */
   anchor: Anchor | null;
+  offersCopy: boolean;
   offersOpen: boolean;
   /** What each move would come to, where the host offers moves; null where it does not. */
   moves: Record<MoveDirection, MoveOffer> | null;
@@ -328,7 +330,7 @@ interface EditorButtonsProps {
  * *Save*, *Delete*, *Copy link*, *Move up* and *Move down*, *Open in text*, and *Cancel*; none of them a key (P1).
  * The moves are arrows, on a line of their own with *Cancel*.
  */
-function EditorButtons({ anchor, offersOpen, moves, saveOff, busy, stale, actions }: EditorButtonsProps) {
+function EditorButtons({ anchor, offersCopy, offersOpen, moves, saveOff, busy, stale, actions }: EditorButtonsProps) {
   const cancel = (
     <button type="button" className="form-button" data-control="cancel" aria-disabled={busy} onClick={actions.cancel}>
       Cancel
@@ -345,9 +347,11 @@ function EditorButtons({ anchor, offersOpen, moves, saveOff, busy, stale, action
           <button type="button" className="form-button" data-control="delete" aria-disabled={busy || stale} onClick={actions.delete}>
             Delete
           </button>
-          <button type="button" className="form-button" data-control="copy" aria-disabled={busy} onClick={actions.copyLink}>
-            Copy link
-          </button>
+          {offersCopy && (
+            <button type="button" className="form-button" data-control="copy" aria-disabled={busy} onClick={actions.copyLink}>
+              Copy link
+            </button>
+          )}
           {offersOpen && (
             <button type="button" className="form-button" data-control="open" aria-disabled={busy} onClick={actions.openText}>
               Open in text

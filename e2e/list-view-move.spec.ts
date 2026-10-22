@@ -327,7 +327,7 @@ test('a popup closed before its move replies leaves the move stored, and the nex
 });
 
 for (const host of SETTINGS_HOSTS) {
-  test(`in the ${host}, named and titled move arrows share a line with Cancel below Save, Delete, and Copy link, in keyboard order`, async ({ extension, site }) => {
+  test(`in the ${host}, named and titled move arrows share a line with Cancel below Save and Delete, in keyboard order`, async ({ extension, site }) => {
     const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
     await check();
     await view.pencil('cal').click();
@@ -341,7 +341,7 @@ for (const host of SETTINGS_HOSTS) {
       await expect(arrow.locator('svg')).toHaveCount(1);
     }
     expect(await editor.moves.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent))).toEqual(['Move up', 'Move down', 'Cancel']);
-    const upper = await Promise.all([editor.save, editor.delete, editor.copyLink].map(async (button) => (await button.boundingBox())!));
+    const upper = await Promise.all([editor.save, editor.delete].map(async (button) => (await button.boundingBox())!));
     const lower = await Promise.all([editor.moveUp, editor.moveDown, editor.cancel].map(async (button) => (await button.boundingBox())!));
     for (const box of upper) expect(box.y).toBe(upper[0]!.y);
     for (const box of lower) {
@@ -349,7 +349,7 @@ for (const host of SETTINGS_HOSTS) {
       expect(box.y).toBeGreaterThanOrEqual(Math.max(...upper.map((box) => box.y + box.height)));
     }
     await editor.save.focus();
-    for (const button of [editor.delete, editor.copyLink, editor.moveUp, editor.moveDown, editor.cancel]) {
+    for (const button of [editor.delete, editor.moveUp, editor.moveDown, editor.cancel]) {
       await page.keyboard.press('Tab');
       await expect(button).toBeFocused();
     }

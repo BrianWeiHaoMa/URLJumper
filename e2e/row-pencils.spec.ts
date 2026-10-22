@@ -274,9 +274,14 @@ test("after an update from 1.x, a pencil's click opens the editor with the notic
   await expect(editor.name).toHaveValue('stocks');
   await expect(notice).toBeVisible();
   await checkFitAndAccessibility(popup);
+  // Copy tab URL, above the fields, stands between the notice and the name field.
+  await popup.keyboard.press('Shift+Tab');
+  await expect(editor.copyTabUrl).toBeFocused();
   await popup.keyboard.press('Shift+Tab');
   await expect(close).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter closes the notice');
+  await popup.keyboard.press('Tab');
+  await expect(editor.copyTabUrl).toBeFocused();
   await popup.keyboard.press('Tab');
   await expect(editor.name).toBeFocused();
   await expect(notice).toBeVisible();

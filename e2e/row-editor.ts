@@ -15,6 +15,8 @@ export function rowEditor(page: Page) {
     save: page.getByRole('button', { name: 'Save', exact: true }),
     delete: page.getByRole('button', { name: 'Delete', exact: true }),
     copyLink: page.getByRole('button', { name: 'Copy link', exact: true }),
+    /** In the popup, above the fields, in its own editor and the List view's. */
+    copyTabUrl: page.getByRole('button', { name: 'Copy tab URL', exact: true }),
     /** The arrow icons offered in the List view, on a line with Cancel below the other actions. */
     moves: page.locator('.row-editor-moves'),
     moveUp: page.getByRole('button', { name: 'Move up', exact: true }),

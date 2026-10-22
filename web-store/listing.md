@@ -31,7 +31,7 @@ typing "yt lo-fi beats" and pressing Enter searches YouTube for lo-fi beats.
 
 • Smart order, if you want it. Lists the mappings you used recently first. New installs start with it on; if you are upgrading from 1.x, your list keeps the order of your document until you turn it on in Preferences.
 
-• Edit the way you like. The List view edits the document line by line: rename, delete, move, or copy a destination, each change saved at once with Undo. The Text view edits the whole document as text, and every error it finds names its line. Import and Export move the document as a .txt file.
+• Edit the way you like. The List view edits the document line by line: rename, delete, or move, each change saved at once with Undo. The Text view edits the whole document as text, and every error it finds names its line. Import and Export move the document as a .txt file.
 
 • Light and dark theme, following your system or set by you. Everything works from the keyboard.
 

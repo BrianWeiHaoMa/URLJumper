@@ -108,8 +108,10 @@
   border-radius: 6px;
 }
 
-/* The popup's *Copy tab URL*, between the form's heading and its fields, which are inset as it is. */
-.list-name-form-copy {
+/* The popup's *Copy tab URL*, between the form's heading and its fields, and above the editor's fields, which
+   are inset as it is. */
+.list-name-form-copy,
+.list-editor-copy {
   padding: 6px 6px 0;
 }
 

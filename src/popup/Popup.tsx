@@ -216,6 +216,7 @@ export function Popup() {
         document={state.stored.document}
         anchor={state.view.anchor}
         argument={state.view.argument}
+        tabUrl={state.opener?.url}
         notice={notice}
         onStored={(outcome) => dispatch({ kind: 'changed', outcome, now: Date.now() })}
         onEditInstead={(anchor) => dispatch({ kind: 'edit', anchor, argument: null })}

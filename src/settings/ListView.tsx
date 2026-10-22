@@ -3,15 +3,15 @@
 // its name, URL, and note, each heading (F14) as one section heading, and each line the extension cannot read
 // as an unreadable row with its raw text, why, and *Fix in text*, which shows the host's Text view on that line
 // (G16); blank lines are not listed. A mapping row's pencil opens the row editor in the row's place, one at a
-// time, with the line as this view's read holds it, offering *Move up* and *Move down*; no storage change moves
-// or closes an open editor. A change it stores is confirmed in the list beside its line, with Undo, itself
-// undoable (G15); after a move, and its Undo, the editor stays open on the moved line. *Add mapping*, a plus in
-// the host's header, opens the Name form with no page (G11) at the top of the view, one form or editor open at a
-// time, its insert confirmed as an edit is. The document is read as the view opens and after every change to it
-// (State), and every line is rendered (T1). The view writes only through the editor's, the form's, and Undo's
-// requests (R1), and nothing in it opens a URL (G4, R4). What differs by host comes in as `showTextView`, how
-// the Text view is shown, `headerControls`, the header's place for *Add mapping*, and `openerTab`, which its
-// form's *Copy tab URL* copies in the popup alone.
+// time, with the line as this view's read holds it, offering *Move up* and *Move down*, and in the popup *Copy
+// tab URL* above its fields; no storage change moves or closes an open editor. A change it stores is confirmed
+// in the list beside its line, with Undo, itself undoable (G15); after a move, and its Undo, the editor stays
+// open on the moved line. *Add mapping*, a plus in the host's header, opens the Name form with no page (G11) at
+// the top of the view, one form or editor open at a time, its insert confirmed as an edit is. The document is
+// read as the view opens and after every change to it (State), and every line is rendered (T1). The view writes
+// only through the editor's, the form's, and Undo's requests (R1), and nothing in it opens a URL (G4, R4). What
+// differs by host comes in as `showTextView`, how the Text view is shown, `headerControls`, the header's place
+// for *Add mapping*, and `openerTab`, which the form's and the editor's *Copy tab URL* copy in the popup alone.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import type { Anchor } from '../document/anchor';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
@@ -21,6 +21,7 @@ import { RowEditor } from '../line-changes/RowEditor';
 import { chromeMessage } from '../requests';
 import { readMappings } from '../stored-document';
 import { AddMapping } from './AddMapping';
+import { CopyTabUrl } from './CopyTabUrl';
 import { confirmationPlace, editorPlace, listEntries, listItems, whatEnterDoes, type ListEntry, type ListItem, type MappingItem, type Place, type RowControl } from './list-view';
 import type { SettingsViewProps } from './settings-view';
 import { errorText } from './TextErrors';
@@ -138,6 +139,7 @@ export function ListView({ sayWhatEnterDoes, showTextView, headerControls, opene
     // Cancel: the form gives the focus back to *Add mapping*.
     closeForm: () => setAdding(false),
     addFocus: setFocused,
+    copyFocus: (on) => setFocused(on ? 'copy' : null),
     editorSays: setEditorSays,
     busy: setWaiting,
     // Typing into the editor or the form is the user's next action: a confirmation shown with it ends (G15).
@@ -182,7 +184,18 @@ export function ListView({ sayWhatEnterDoes, showTextView, headerControls, opene
       {addMapping}
       {stored !== undefined && !items.some((item) => item.kind === 'mapping') && <p className="settings-text">The document has no mappings.</p>}
       {entries.length > 0 && (
-        <ListLines entries={entries} stored={stored ?? ''} editor={editor} confirmed={confirmed} own={own} undoing={undoing} waiting={waiting} actions={actions} />
+        <ListLines
+          entries={entries}
+          stored={stored ?? ''}
+          editor={editor}
+          offersTabUrl={openerTab !== undefined}
+          tabUrl={openerTab?.url}
+          confirmed={confirmed}
+          own={own}
+          undoing={undoing}
+          waiting={waiting}
+          actions={actions}
+        />
       )}
     </div>
   );
@@ -307,6 +320,8 @@ interface ListActions {
   add(): void;
   closeForm(): void;
   addFocus(on: 'add' | 'copy' | null): void;
+  /** Called with true as the editor's *Copy tab URL* gains the focus and with false as it loses it. */
+  copyFocus(on: boolean): void;
   editorSays(text: string): void;
   busy(busy: boolean): void;
   typed(): void;
@@ -329,6 +344,7 @@ function useLatest(actions: ListActions): ListActions {
       add: () => latest.current.add(),
       closeForm: () => latest.current.closeForm(),
       addFocus: (on) => latest.current.addFocus(on),
+      copyFocus: (on) => latest.current.copyFocus(on),
       editorSays: (text) => latest.current.editorSays(text),
       busy: (busy) => latest.current.busy(busy),
       typed: () => latest.current.typed(),
@@ -343,6 +359,9 @@ interface ListLinesProps {
   entries: readonly ListEntry[];
   stored: string;
   editor: OpenEditor | null;
+  /** Whether the editor offers *Copy tab URL*, in the popup alone, and the opener tab's address it copies, undefined when Chrome granted none: apart, so the list is not drawn again for a new `openerTab` object. */
+  offersTabUrl: boolean;
+  tabUrl: string | undefined;
   confirmed: Confirmed | null;
   own: RefObject<HTMLDivElement | null>;
   undoing: boolean;
@@ -354,7 +373,7 @@ interface ListLinesProps {
  * The list: every entry an item of one `ul`, never a listbox (G32). Drawn again only when what it shows changes,
  * not as the focus moves or the footer changes, which at ten thousand rows would take a quarter of a second each (T1).
  */
-const ListLines = memo(function ListLines({ entries, stored, editor, confirmed, own, undoing, waiting, actions }: ListLinesProps) {
+const ListLines = memo(function ListLines({ entries, stored, editor, offersTabUrl, tabUrl, confirmed, own, undoing, waiting, actions }: ListLinesProps) {
   const nameField = useRef<HTMLInputElement>(null);
   return (
     <ul className="list-lines" aria-label="Document lines">
@@ -363,10 +382,15 @@ const ListLines = memo(function ListLines({ entries, stored, editor, confirmed, 
           case 'editor':
             return (
               <li key={entry.key} className="list-editor" onInput={actions.typed}>
+                {/* Above the fields, as in the Add mapping form, for a URL to paste over the line's own. */}
+                {offersTabUrl && (
+                  <div className="settings-action list-editor-copy">
+                    <CopyTabUrl url={tabUrl} onFocusChange={actions.copyFocus} />
+                  </div>
+                )}
                 <RowEditor
                   document={stored}
                   anchor={editor!.anchor}
-                  argument={null}
                   start={nameField}
                   offersMoves
                   onStored={actions.stored}

@@ -112,9 +112,9 @@ export interface RowControl {
 /**
  * What Enter does in the view (L2) with the focus on `focused`: a row's control or *Add mapping* (`add`), while
  * `waiting` for an editor's or the Name form's change to be stored, when every other edit waits, and while the
- * form is open (`adding`); the confirmation's Undo; the form's *Copy tab URL* (`copy`); else, while an editor or
- * the Name form is open, what it says (`editorSays`). Like every footer it holds no name or text of a line,
- * which can be as long as the document.
+ * form is open (`adding`); the confirmation's Undo; the form's or the editor's *Copy tab URL* (`copy`); else,
+ * while an editor or the Name form is open, what it says (`editorSays`). Like every footer it holds no name or
+ * text of a line, which can be as long as the document.
  */
 export function whatEnterDoes(
   focused: RowControl | 'undo' | 'add' | 'copy' | null,

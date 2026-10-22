@@ -99,6 +99,11 @@
   padding: 6px;
 }
 
+/* The row editor's *Copy tab URL*, above its fields, which are inset as it is. */
+.editor-copy {
+  padding: 4px 6px 0;
+}
+
 .rows {
   list-style: none;
   margin: 0;

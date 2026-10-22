@@ -32,8 +32,8 @@ export interface SettingsViewProps {
   showTextView?(line: number): void;
   /**
    * In the popup alone: the tab it was opened on, with its address when Chrome granted it (E5), which the
-   * Text view's *Copy tab URL* copies, as does the one in the List view's *Add mapping* form (G31). Absent on
-   * the options page, which has no such tab.
+   * Text view's *Copy tab URL* copies, as do the ones in the List view's *Add mapping* form and row editor
+   * (G31). Absent on the options page, which has no such tab.
    */
   openerTab?: { url: string | undefined };
   /**

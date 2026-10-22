@@ -97,7 +97,7 @@ const SCREENSHOTS: Record<'jump' | 'name' | 'argument' | 'document' | 'listDark'
   listDark: {
     file: 'screenshot-5-list-view-dark.png',
     title: 'Edit line by line, in light or dark.',
-    text: 'The List view shows the same document as rows under their headings: rename, delete, move, or copy a destination, each change saved at once with Undo.',
+    text: 'The List view shows the same document as rows under their headings: rename, delete, or move, each change saved at once with Undo.',
     layout: 'top',
   },
   addressBar: {
