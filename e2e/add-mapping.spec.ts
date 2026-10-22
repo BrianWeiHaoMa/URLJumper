@@ -376,6 +376,9 @@ test('in the popup, the header Add mapping above sixty lines shows the form from
 for (const host of SETTINGS_HOSTS) {
   for (const document of ['empty', 'scrolling'] as const) {
     test(`in the ${host} with ${document === 'empty' ? 'an empty' : 'a long'} list, the plus at the header's top right opens Add mapping at the top, and returns to its name field while open`, async ({ extension, site }) => {
+      // Five states of sixteen rows, each through the accessibility pass in both schemes, outlast the default 30
+      // seconds on a slower machine.
+      test.slow(document === 'scrolling');
       const mappings = document === 'empty' ? '' : Array.from({ length: 16 }, (_, i) => lineOf(`m${i}`, `https://m${i}.example/`)).join('\n');
       const { page, view, check } = await listViewIn(host, extension, site, { mappings });
       const says = (text: string) => (host === 'popup' ? expect(footer(page)).toHaveText(text) : expect(footer(page)).toHaveCount(0));

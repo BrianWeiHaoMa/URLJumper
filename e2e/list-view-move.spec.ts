@@ -7,6 +7,7 @@
 // the user's next action or ten seconds.
 import type { Page } from '@playwright/test';
 import {
+  checkFit,
   closingPopup,
   expect,
   holdPageRequests,
@@ -157,7 +158,7 @@ for (const host of SETTINGS_HOSTS) {
 
 test("in the popup, a move down at the foot of a scrolled list brings its Undo into view below the editor, the focus kept on Move down", async ({ extension, site }) => {
   const twenty = Array.from({ length: 20 }, (_, i) => `m${i + 1}  https://m${i + 1}.example/`).join('\n');
-  const { page, view, check } = await listViewIn('popup', extension, site, { mappings: twenty });
+  const { page, view } = await listViewIn('popup', extension, site, { mappings: twenty });
   await view.pencil('m17').click();
   const editor = rowEditor(page);
   // Move down at the very foot of the view, as Tab leaves a control below it.
@@ -170,7 +171,9 @@ test("in the popup, a move down at the foot of a scrolled list brings its Undo i
   await expect(lineConfirmation(page).undo).toBeInViewport();
   await expect(editor.moveDown).toBeFocused();
   await expect(editor.moveDown).toBeInViewport();
-  await check();
+  // The accessibility pass over twenty rows can outlast the Undo's ten seconds (G15) on a slower machine; the
+  // moves above hold a move's Undo below the editor to it with fewer rows.
+  await checkFit(page);
 });
 
 test('in the popup, a move held while another page moves the line to the top: the controls follow, and the move is refused, saying why, the typed values kept', async ({ extension, site }) => {
