@@ -5,21 +5,9 @@
 // *Open in tab* names the view it shows, and its row editor's *Open in text* the Text view and the line. Both
 // hosts show their own Text view on a line when the List view asks (`showTextView`), and let the view shown
 // ask before another is shown in its place (`guardSwitch`).
-import type { ComponentType, ReactNode } from 'react';
-
-/** A file's text Import brings to the Text view as its draft (G20). */
-export interface ImportedText {
-  /** The file's text as `File.text()` read it (S14). */
-  text: string;
-  /** The file's name, which the Text view asks by before it replaces a kept draft with unsaved changes (G19). */
-  fileName: string;
-  /** When the user imported it, in milliseconds since the Unix epoch: the time of the edit it makes. */
-  time: number;
-}
+import type { ComponentType } from 'react';
 
 export interface SettingsViewProps {
-  /** What the host puts beside the view, below its own parts: on the options page, Export beside Preferences. */
-  beside?: ReactNode;
   /** Called with what Enter does where the focus is in the view, whenever that changes; the popup's footer says it (L2). */
   sayWhatEnterDoes?(text: string): void;
   /**
@@ -38,15 +26,10 @@ export interface SettingsViewProps {
   openerTab?: { url: string | undefined };
   /**
    * Given by both hosts: the place in the host's header, at the top right, where the view puts its own controls,
-   * drawn as icons: the List view's *Add mapping*. Null until the header is drawn, when the view shows none.
+   * drawn as icons: the List view's *Add mapping*, the Text view's *Import…* and *Export…*. Null until the header
+   * is drawn, when the view shows none.
    */
   headerControls?: HTMLElement | null;
-  /**
-   * On the options page alone, after Import, until another view is shown: the file, whose text the Text view
-   * takes as its draft, against the base it loads, as it first shows the document, once it has asked over a kept
-   * draft with unsaved changes; nothing is stored until Save. The view is shown afresh for each Import.
-   */
-  imported?: ImportedText;
   /**
    * Given by both hosts: the view registers what it asks before the host shows another view in its place, as
    * it is shown, and withdraws it (null) as it goes; the host consults it on every switch away from the view.

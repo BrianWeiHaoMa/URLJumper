@@ -118,6 +118,11 @@ test('on the options page, the keyboard alone reaches the Text view, the text ar
   await page.keyboard.press('Enter');
   await expect(view.area).toBeEditable();
   await expect(nav(page, 'Text')).toBeFocused();
+  // Then the Text view's own controls at the header's end, Import and Export, before the view.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Import…' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Export…' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(view.area).toBeFocused();
   await page.keyboard.press('Control+End');

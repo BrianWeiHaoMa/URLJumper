@@ -18,7 +18,7 @@ export { checkAccessibility, checkAccessibilityInBothSchemes, focusDrawn } from 
 export { distDir, type LoadedExtension, type RequestPage } from './extension-launch.ts';
 export { boxEdgeDrawnWhole, checkFit, fieldDrawnWhole, textAreaEdgeDrawnWhole } from './popup-fit.ts';
 export { assignedShortcuts, assignShortcut, createMenuItemAgain, followTabFocus, menuItemExists, recordWorkerCalls, removeMenuItems } from './menus-and-shortcuts.ts';
-export { caret, clipboardText, delayPageReads, draftLanded, holdFileReads, holdPageReads, holdPageRequests, importFile, retypeLine, storedDraft, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, version, watchDraftSets, watchRequests, type TextView } from './text-view.ts';
+export { caret, clipboardText, delayPageReads, draftLanded, exportFile, holdFileReads, holdPageReads, holdPageRequests, importFile, refuseFileOperation, retypeLine, storedDraft, textView, textViewInPopup, textViewOnOptionsPage, typeAtEnd, version, watchDraftSets, watchRequests, type TextView } from './text-view.ts';
 export { type Release1x } from './upgrade-from-1x.ts';
 export { expectNoNotice, upgradeNotice } from './upgrade-notice.ts';
 export { editSelectedRow, lineConfirmation, rowEditor, rowPencils, thisPagePencil, type RowEditor } from './row-editor.ts';

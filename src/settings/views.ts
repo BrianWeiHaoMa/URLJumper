@@ -7,7 +7,7 @@ import { Preferences } from './Preferences';
 import type { SettingsView } from './settings-view';
 import { TextView } from './TextView';
 
-/** The view a host shows Import's file in, and a line the List view asks for. */
+/** The view a host shows a line in when the List view asks for it. */
 export const TEXT_VIEW: SettingsView = { id: 'text', title: 'Text', View: TextView };
 
 export const SETTINGS_VIEWS: readonly [SettingsView, ...SettingsView[]] = [

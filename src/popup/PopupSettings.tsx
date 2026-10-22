@@ -1,11 +1,11 @@
 // The popup's settings (In use, "Preferences"; G31; Composition, "Popup"): the settings views inside the
 // popup, reached by the gear in search and in the first-run state. Its header holds the way back, the list of
-// views, the view's own controls (the List view's *Add mapping*), and *Open in tab*, which opens the options
-// page on the view shown; between header and footer the view scrolls (G7), and the footer says what Enter does
-// wherever the focus is (L2). It gives the views the tab the popup was opened on, whose address *Copy tab URL*
+// views, the view's own controls (the List view's *Add mapping*, the Text view's *Import…* and *Export…*), and
+// *Open in tab*, which opens the options page on the view shown; between header and footer the view scrolls
+// (G7), and the footer says what Enter does wherever the focus is (L2). It gives the views the tab the popup was opened on, whose address *Copy tab URL*
 // copies, shows its Text view on a line when the List view asks, and lets the view shown ask before another is
 // shown in its place. It opens on the view chosen in Preferences, Preferences unless another was chosen. It
-// holds none of the views' logic and offers no Import or Export, which are the full page's.
+// holds none of the views' logic.
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { PopupSettingsView } from '../preferences';
 import { chromeMessage } from '../requests';

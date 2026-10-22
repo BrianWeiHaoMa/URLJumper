@@ -49,7 +49,7 @@ type Focused = 'order' | 'theme' | 'popup-settings-view' | 'reset' | 'shortcuts'
 /** The reset of the learned order: not asked for, awaiting the worker, or done. */
 type Reset = 'none' | 'resetting' | 'done';
 
-export function Preferences({ beside, sayWhatEnterDoes }: SettingsViewProps) {
+export function Preferences({ sayWhatEnterDoes }: SettingsViewProps) {
   const [chosen, setChosen] = useState<Chosen | undefined>(undefined);
   const [focused, setFocused] = useState<Focused>(null);
   const [reset, setReset] = useState<Reset>('none');
@@ -180,7 +180,6 @@ export function Preferences({ beside, sayWhatEnterDoes }: SettingsViewProps) {
         </h2>
         <Shortcuts onFocusChange={(on) => setFocused(on ? 'shortcuts' : null)} onMessage={setMessage} />
       </section>
-      {beside}
     </div>
   );
 }

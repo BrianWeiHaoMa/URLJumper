@@ -1,9 +1,9 @@
-// Import on the full settings page (G20, G19, F10, G31, G32; In use, "Edit the text"; Composition, "Chrome"):
+// Import in the Text view (G20, G19, F10, G31, G32; In use, "Edit the text"; Composition, "Chrome"):
 // any chosen file is read as UTF-8, its byte-order mark dropped and an invalid byte read as U+FFFD (S14), and
 // its text becomes the Text view's draft, as the text area holds it, against the stored document as its base;
 // nothing is stored until Save. Over a kept draft with unsaved changes the Text view asks first, also over one
 // still on its way to the worker, and keeping the draft imports nothing; a file read that ends after the Text
-// view is shown still arrives. The popup's settings offer no Import.
+// view is shown still arrives. Both hosts offer Import only in the Text view.
 import type { Page } from '@playwright/test';
 import type { Draft } from '../src/draft.ts';
 import {
@@ -12,7 +12,6 @@ import {
   holdFileReads,
   holdPageReads,
   importFile,
-  popupOnNewPage,
   slowWorkerReads,
   storedDraft,
   test,
@@ -35,8 +34,10 @@ function kept(text: string, base: string): Draft {
 
 async function optionsPage(extension: LoadedExtension): Promise<Page> {
   const page = await extension.context.newPage();
-  await page.goto(extension.url('options.html'));
+  await page.goto(extension.url('options.html#view=text'));
   await expect(page.getByRole('button', { name: 'Import…' })).toBeVisible();
+  await expect(textView(page).area).toHaveValue(DOC);
+  await checkAccessibilityInBothSchemes(page);
   return page;
 }
 
@@ -58,10 +59,12 @@ test('a file with a byte-order mark, an invalid byte, and CRLF endings becomes t
   await expect(nav(page, 'Text')).toHaveAttribute('aria-current', 'page');
   await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: SHOWN, base: DOC });
   expect((await extension.readStorage()).mappings).toBe(DOC);
+  await checkAccessibilityInBothSchemes(page);
   await view.save.click();
   await expect(view.status).toHaveText('Saved');
   expect((await extension.readStorage()).mappings).toBe(SHOWN);
   await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
+  await checkAccessibilityInBothSchemes(page);
 });
 
 test('over a kept draft with unsaved changes the Text view asks before it takes the file: keeping the draft imports nothing and offers it, replacing it makes the file the draft', async ({ extension }) => {
@@ -80,12 +83,16 @@ test('over a kept draft with unsaved changes the Text view asks before it takes 
   await expect(view.resume).toBeFocused();
   await expect(view.area).not.toBeEditable();
   expect(await extension.readStorage()).toEqual({ mappings: DOC, draft });
+  await checkAccessibilityInBothSchemes(page);
   await view.resume.click();
   await expect(view.area).toHaveValue(draft.text);
+  await checkAccessibilityInBothSchemes(page);
   await page.close();
 
   const again = await optionsPage(extension);
   await importFile(again, 'mappings.txt', FILE);
+  await expect(question(again)).toBeVisible();
+  await checkAccessibilityInBothSchemes(again);
   await replaceWithFile(again).click();
   const replaced = textView(again);
   await expect(replaced.area).toHaveValue(SHOWN);
@@ -93,22 +100,26 @@ test('over a kept draft with unsaved changes the Text view asks before it takes 
   await expect(replaced.keptOffer).toHaveCount(0);
   await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: SHOWN, base: DOC });
   expect((await extension.readStorage()).mappings).toBe(DOC);
+  await checkAccessibilityInBothSchemes(again);
 });
 
-test('Import asks over an edit the Text view left for Preferences whose draft has not yet landed', async ({ extension }) => {
+test('Import asks over text just typed in this Text view whose draft has not yet landed', async ({ extension }) => {
   await extension.seedStorage({ mappings: DOC });
   const view = await textViewOnOptionsPage(extension);
   await slowWorkerReads(extension.worker, 'draft', 2_000);
   const sets = await watchRequests(extension.worker, 'draft-set');
   await typeAtEnd(view, 'mine  https://mine/\n');
-  await nav(view.page, 'Preferences').click();
-  await expect.poll(sets).toHaveLength(1);
+  // Import remounts the editor, flushing the draft still waiting on its debounce.
   await importFile(view.page, 'mappings.txt', FILE);
+  await expect.poll(sets).toHaveLength(1);
   await expect(question(view.page)).toBeVisible({ timeout: 10_000 });
   expect(await storedDraft(extension.worker)).toMatchObject({ text: `${DOC}mine  https://mine/\n`, base: DOC });
+  await checkAccessibilityInBothSchemes(view.page);
   await keepDraft(view.page).click();
+  await checkAccessibilityInBothSchemes(view.page);
   await view.resume.click();
   await expect(view.area).toHaveValue(`${DOC}mine  https://mine/\n`);
+  await checkAccessibilityInBothSchemes(view.page);
 });
 
 test("Import asks over a draft another view stored while the Text view's first read was answered late", async ({ extension }) => {
@@ -125,17 +136,18 @@ test("Import asks over a draft another view stored while the Text view's first r
   while ((await reads.held()) > 0) await reads.release();
   await expect(question(page)).toBeVisible();
   expect((await storedDraft(extension.worker))?.text).toBe(unsaved);
+  await checkAccessibilityInBothSchemes(page);
   await replaceWithFile(page).click();
   await expect(textView(page).area).toHaveValue(SHOWN);
   await expect.poll(async () => (await storedDraft(extension.worker))?.text).toBe(SHOWN);
+  await checkAccessibilityInBothSchemes(page);
 });
 
-test('a file whose read ends after the Text view is shown still becomes the draft, asked about over the edit made meanwhile', async ({ extension }) => {
+test('a file read late in Text still becomes the draft, asked about over the edit made meanwhile', async ({ extension }) => {
   await extension.seedStorage({ mappings: DOC });
   const page = await optionsPage(extension);
   const finishRead = await holdFileReads(page);
   await importFile(page, 'mappings.txt', FILE);
-  await nav(page, 'Text').click();
   const view = textView(page);
   await expect(view.area).toBeEditable();
   await finishRead();
@@ -144,17 +156,20 @@ test('a file whose read ends after the Text view is shown still becomes the draf
 
   // Read late over an edit typed meanwhile, the file waits for the answer.
   await nav(page, 'Preferences').click();
+  await checkAccessibilityInBothSchemes(page);
   await nav(page, 'Text').click();
+  await checkAccessibilityInBothSchemes(page);
   await view.discard.click();
-  await nav(page, 'Preferences').click();
   await importFile(page, 'second.txt', FILE);
-  await nav(page, 'Text').click();
   await typeAtEnd(view, 'meanwhile  https://meanwhile/\n');
   await finishRead();
   await expect(question(page)).toContainText('Importing second.txt replaces it.');
+  await checkAccessibilityInBothSchemes(page);
   await keepDraft(page).click();
+  await checkAccessibilityInBothSchemes(page);
   await view.resume.click();
   await expect(view.area).toHaveValue(`${DOC}meanwhile  https://meanwhile/\n`);
+  await checkAccessibilityInBothSchemes(page);
 });
 
 test('with no kept draft, or one the stored document holds, Import asks nothing', async ({ extension }) => {
@@ -165,6 +180,7 @@ test('with no kept draft, or one the stored document holds, Import asks nothing'
     await expect(textView(page).area).toHaveValue(SHOWN);
     await expect(question(page)).toHaveCount(0);
     await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: SHOWN, base: DOC });
+    await checkAccessibilityInBothSchemes(page);
     await page.close();
   }
 });
@@ -173,10 +189,12 @@ test('a kept draft replaced by a file whose text the stored document holds is go
   await extension.seedStorage({ mappings: DOC, draft: kept(`${DOC}mine  https://mine/\n`, DOC) });
   const page = await optionsPage(extension);
   await importFile(page, 'same.txt', Buffer.from(DOC));
+  await checkAccessibilityInBothSchemes(page);
   await replaceWithFile(page).click();
   await expect(textView(page).area).toHaveValue(DOC);
   await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
   expect((await extension.readStorage()).mappings).toBe(DOC);
+  await checkAccessibilityInBothSchemes(page);
 });
 
 test("a file imported before another window names a page is not saved over that line: Save stores nothing and offers the change; brought in, Save stores both", async ({ extension }) => {
@@ -192,16 +210,20 @@ test("a file imported before another window names a page is not saved over that 
   expect(await other.send({ kind: 'insert', name: 'named', url: 'https://named.example/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
   const named = (await extension.readStorage()).mappings as string;
 
+  await checkAccessibilityInBothSchemes(page);
   await view.save.click();
   await expect(view.status).toHaveText(/^Not saved: the stored document changed/);
   expect((await extension.readStorage()).mappings).toBe(named);
   await expect(view.conflicts).toHaveCount(0);
+  await checkAccessibilityInBothSchemes(page);
   await view.bringIn.click();
   const merged = `${named}x  https://x.example/\n`;
   await expect(view.area).toHaveValue(merged);
+  await checkAccessibilityInBothSchemes(page);
   await view.save.click();
   await expect(view.status).toHaveText('Saved');
   expect((await extension.readStorage()).mappings).toBe(merged);
+  await checkAccessibilityInBothSchemes(page);
 });
 
 test("Import's text is taken once: edited and left for Preferences, the Text view shown again offers the edit, and resumes it", async ({ extension }) => {
@@ -212,21 +234,16 @@ test("Import's text is taken once: edited and left for Preferences, the Text vie
   await expect(view.area).toHaveValue(SHOWN);
   await typeAtEnd(view, 'more  https://more/\n');
   await nav(page, 'Preferences').click();
+  await checkAccessibilityInBothSchemes(page);
   await nav(page, 'Text').click();
+  await checkAccessibilityInBothSchemes(page);
   await expect(view.keptOffer).toBeVisible();
   await expect(view.area).toHaveValue(DOC);
+  await checkAccessibilityInBothSchemes(page);
   await view.resume.click();
   await expect(view.area).toHaveValue(`${SHOWN}more  https://more/\n`);
   expect((await extension.readStorage()).mappings).toBe(DOC);
-});
-
-test("the popup's settings offer no Import", async ({ extension, site }) => {
-  await extension.seedStorage({ mappings: DOC });
-  const { popup } = await popupOnNewPage(extension, site);
-  await popup.getByRole('button', { name: 'Settings' }).click();
-  await expect(popup.getByRole('button', { name: 'Search order' }).or(popup.getByRole('listbox', { name: 'Search order' }))).toBeVisible();
-  await expect(popup.getByRole('button', { name: 'Import…' })).toHaveCount(0);
-  await expect(popup.getByRole('heading', { name: 'Import' })).toHaveCount(0);
+  await checkAccessibilityInBothSchemes(page);
 });
 
 test('the keyboard alone goes from Import… through the file chooser and the question to the Text view, and every state passes the accessibility pass', async ({ extension }) => {

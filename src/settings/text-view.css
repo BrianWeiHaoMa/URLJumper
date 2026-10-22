@@ -1,6 +1,6 @@
 /* The Text view, as both hosts show it: the grammar hint, the text area, Save and what it came to, the list
    of errors, the offer to bring in a change made since the text was loaded, the question before a switch to
-   the List view, and in the popup *Copy tab URL*. The text area has a fixed whole-pixel height and scrolls inside
+   the List view, in the popup *Copy tab URL*, and why Import or Export did nothing. The text area has a fixed whole-pixel height and scrolls inside
    itself, so the popup's view scrolls only for a long list of errors (G7); its lines do not wrap, so each
    line of the document is one row. Every color is a token of src/theme.css, and every line height a whole
    number of pixels. */
@@ -9,6 +9,11 @@
   flex-direction: column;
   gap: 8px;
   padding: 4px 6px 6px;
+}
+
+/* Import's or Export's alert, above the view and inset as its parts are. */
+.settings-alert.text-view-file-alert {
+  margin: 4px 6px 0;
 }
 
 .text-view-area {

@@ -1,4 +1,4 @@
-import { expect, shownTheme, test, watchPolicy, type LoadedExtension } from './extension.ts';
+import { checkAccessibilityInBothSchemes, expect, shownTheme, test, watchPolicy, type LoadedExtension } from './extension.ts';
 
 test('an extension page renders under the CSP with no violation and no request outside the package', async ({ extension, site }) => {
   const page = await extension.context.newPage();
@@ -43,6 +43,9 @@ test('the options page renders, follows a theme, and exports under the CSP with 
   await page.goto(extension.url('options.html'));
   await page.getByRole('listbox', { name: 'Theme' }).getByRole('option', { name: 'Dark' }).click();
   await expect(page.getByRole('listbox', { name: 'Theme' }).getByRole('option', { selected: true })).toHaveText('Dark');
+  await checkAccessibilityInBothSchemes(page);
+  await page.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'Text', exact: true }).click();
+  await checkAccessibilityInBothSchemes(page);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export…' }).click();
   await download;

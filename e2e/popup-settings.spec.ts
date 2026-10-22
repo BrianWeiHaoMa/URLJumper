@@ -3,7 +3,7 @@
 // page; the footer says what Enter does wherever the focus is (L2), Enter on a choice does nothing, Escape
 // closes the popup, and every state fits (G7) and passes the accessibility pass (G32).
 import type { Page } from '@playwright/test';
-import { checkFit, checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, selectedRowName, test } from './extension.ts';
+import { checkAccessibilityInBothSchemes, checkFit, checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, selectedRowName, test } from './extension.ts';
 
 const DOC = 'mail  https://mail.example.com/\ncal  https://cal.example.com/\n';
 
@@ -92,7 +92,7 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   await expect(order(popup)).toBeVisible();
   expect(await extension.readStorage()).toEqual(stored);
 
-  // The full page's Export and Import are not offered here.
+  // File actions belong to Text, never Preferences.
   await expect(popup.getByRole('button', { name: /Export|Import/ })).toHaveCount(0);
 
   // Back to search as it was left, the typing and its list with it.
@@ -117,7 +117,7 @@ test('Open in tab is a titled header icon after the settings views in Preference
     const nav = header.getByRole('navigation', { name: 'Settings views' });
     if (shown === 'Text') await nav.getByRole('button', { name: shown, exact: true }).click();
     await expect(nav.getByRole('button', { name: shown, exact: true })).toHaveAttribute('aria-current', 'page');
-    expect(await header.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent))).toEqual(['Back', 'Preferences', 'List', 'Text', 'Open in tab']);
+    expect(await header.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent))).toEqual(['Back', 'Preferences', 'List', 'Text', ...(shown === 'Text' ? ['Import…', 'Export…'] : []), 'Open in tab']);
     const icon = header.getByRole('button', { name: 'Open in tab', exact: true });
     await icon.hover();
     await expect(icon).toHaveAttribute('title', 'Open in tab');
@@ -230,7 +230,8 @@ test('Open in tab opens the options page in a tab on the view shown, and the pop
   const options = await opened;
   await expect.poll(() => extension.tabUrls()).toContain(extension.url('options.html#view=preferences'));
   await expect(options.getByRole('listbox', { name: 'Search order' })).toBeVisible();
-  await expect(options.getByRole('button', { name: 'Export…' })).toBeVisible();
+  await expect(options.getByRole('button', { name: /^(Import|Export)…$/ })).toHaveCount(0);
+  await checkAccessibilityInBothSchemes(options);
   await expect(options.getByRole('button', { name: /Open in tab|Back/ })).toHaveCount(0);
 });
 

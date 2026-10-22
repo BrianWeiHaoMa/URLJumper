@@ -7,6 +7,7 @@
 // reads of storage made late or answered late, and the clipboard, which *Copy tab URL* writes, read back from a
 // web page.
 import { expect, type BrowserContext, type Locator, type Page, type Worker } from '@playwright/test';
+import fs from 'node:fs';
 import type { Draft } from '../src/draft.ts';
 import type { LoadedExtension } from './extension-launch.ts';
 
@@ -114,7 +115,7 @@ export async function watchDraftSets(worker: Worker): Promise<() => Promise<{ re
   return () => worker.evaluate(() => (globalThis as Record<string, unknown>).draftSets as { received: number[]; stored: number[] });
 }
 
-/** Activates Import on the options page `page` shows and chooses a file named `name` holding `bytes`, through the file chooser it opens. */
+/** Activates Import in the Text view `page` shows, in either host, and chooses a file named `name` holding `bytes`, through the file chooser it opens. */
 export async function importFile(page: Page, name: string, bytes: Buffer, activate: () => Promise<void> = () => page.getByRole('button', { name: 'Import…' }).click()) {
   const chooser = page.waitForEvent('filechooser');
   // Playwright turns its interception of the chooser on without waiting for it: a key pressed at once can open
@@ -122,6 +123,23 @@ export async function importFile(page: Page, name: string, bytes: Buffer, activa
   await page.evaluate(() => undefined);
   await activate();
   await (await chooser).setFiles({ name, mimeType: 'text/plain', buffer: bytes });
+}
+
+/** Downloads the stored document through the Text view's Export and reads the file Chrome wrote. */
+export async function exportFile(page: Page): Promise<{ name: string; bytes: Buffer }> {
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export…', exact: true }).click();
+  const file = await downloading;
+  return { name: file.suggestedFilename(), bytes: fs.readFileSync(await file.path()) };
+}
+
+/** Makes Chrome refuse file reads or this page's storage reads, at the browser seam used by Import or Export. */
+export async function refuseFileOperation(page: Page, operation: 'import' | 'export', message: string): Promise<void> {
+  await page.evaluate(({ operation, message }) => {
+    const refuse = () => Promise.reject(new Error(message));
+    if (operation === 'import') File.prototype.text = refuse;
+    else (chrome.storage.local as unknown as { get: unknown }).get = refuse;
+  }, { operation, message });
 }
 
 /** Selects the text of `line` of the text area's text, as a user selecting the line would, and types `text` over it. */

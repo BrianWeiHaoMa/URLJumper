@@ -312,7 +312,6 @@ for (const host of SETTINGS_HOSTS) {
 test("on the options page, a switch to List made while Import's file waits for the Text view's first read waits with it, then asks; Keep the draft and switch keeps the file, offered back", async ({ extension, site }) => {
   const imported = `${DOC}${NEW_LINE}`;
   const { page, view, check } = await textViewIn('options page', extension, site, { mappings: DOC });
-  await nav(page, 'Preferences').click();
   // Every read the page makes answers late from here on, as a busy page hears them: the Text view opened by
   // Import takes no typing, and its file waits, until its first read answers.
   const reads = await holdPageReads(page);
@@ -341,10 +340,10 @@ test("on the options page, a switch to List made while Import's file waits for t
 
 test("on the options page, a switch to List made while a kept draft the document holds is dropped, before Import's file goes in, waits with the file, then asks", async ({ extension, site }) => {
   const imported = `${DOC}${NEW_LINE}`;
-  const { page } = await listViewIn('options page', extension, site, { mappings: DOC });
-  await nav(page, 'Preferences').click();
-  await extension.worker.evaluate((draft) => chrome.storage.local.set({ draft }), { text: DOC, base: 'a  https://a/\n', time: 1_700_000_000_000, view: 'earlier-view', number: 4 });
+  const { page, check } = await textViewIn('options page', extension, site, { mappings: DOC });
+  await check();
   const discards = await holdPageRequests(page, 'draft-discard');
+  await extension.worker.evaluate((draft) => chrome.storage.local.set({ draft }), { text: DOC, base: 'a  https://a/\n', time: 1_700_000_000_000, view: 'earlier-view', number: 4 });
   await importFile(page, 'new.txt', Buffer.from(imported));
   await expect.poll(() => discards.held()).toBe(1);
   await nav(page, 'List').click();
@@ -352,9 +351,11 @@ test("on the options page, a switch to List made while a kept draft the document
   await expect(nav(page, 'Text')).toHaveAttribute('aria-current', 'page');
   await discards.release();
   await expect(view.switchQuestion).toBeVisible();
+  await check();
   await expect(view.area).toHaveValue(imported);
   await view.keepAndSwitch.click();
   await expect(listView(page).addMapping).toBeVisible();
   await draftLanded(extension, imported);
+  await check();
   expect(await storedDocument(extension)).toBe(DOC);
 });
