@@ -119,7 +119,7 @@ for (const host of SETTINGS_HOSTS) {
     const moves = await watchRequests(extension.worker, 'move');
     const editor = rowEditor(page);
     await view.pencil('mail').click();
-    await editor.copyLink.focus();
+    await editor.delete.focus();
     await page.keyboard.press('Tab');
     await expect(editor.moveUp).toBeFocused();
     await expect(editor.moveUp).toHaveAttribute('aria-disabled', 'true');
