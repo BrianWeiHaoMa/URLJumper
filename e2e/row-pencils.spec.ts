@@ -117,7 +117,7 @@ test('the Name row has no pencil; address matches and the argument row each have
   await expect(rowEditor(popup).header).toHaveText('ythttps://www.youtube.com/results?search_query=lo-fi%20beats');
 });
 
-test('Tab from the search box reaches the chip, the gear, then the pencils in row order, then Name this page; Enter and Space on the second open its row, not the selected one', async ({ extension, site }) => {
+test('Tab from the search box reaches the chip, Name this page, the gear, then the pencils in row order; Enter and Space on the second open its row, not the selected one', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: STOCKS });
   const jumps = await watchRequests(extension.worker, 'jump');
   const { popup } = await popupOnNewPage(extension, site);
@@ -127,6 +127,9 @@ test('Tab from the search box reaches the chip, the gear, then the pencils in ro
   await popup.keyboard.press('Tab');
   await expect(popup.locator('.chip')).toBeFocused();
   await popup.keyboard.press('Tab');
+  await expect(namePage(popup)).toBeFocused();
+  await expect(footer(popup)).toHaveText('Enter opens the Name form');
+  await popup.keyboard.press('Tab');
   await expect(popup.getByRole('button', { name: 'Settings' })).toBeFocused();
   for (const [i, line] of [3, 4, 5].entries()) {
     await popup.keyboard.press('Tab');
@@ -134,11 +137,8 @@ test('Tab from the search box reaches the chip, the gear, then the pencils in ro
     await expect(footer(popup)).toHaveText(`Enter edits line ${line}`);
   }
   await checkFitAndAccessibility(popup);
-  await popup.keyboard.press('Tab');
-  await expect(namePage(popup)).toBeFocused();
 
   for (const key of ['Enter', 'Space']) {
-    await popup.keyboard.press('Shift+Tab');
     await popup.keyboard.press('Shift+Tab');
     await expect(rowPencils(popup).nth(1)).toHaveAccessibleName('Edit "stock fund"');
     await expect(rowPencils(popup).nth(1)).toBeFocused();
@@ -155,7 +155,7 @@ test('Tab from the search box reaches the chip, the gear, then the pencils in ro
     await popup.keyboard.press('Tab');
     await popup.keyboard.press('Tab');
     await popup.keyboard.press('Tab');
-    await expect(namePage(popup)).toBeFocused();
+    await expect(rowPencils(popup).last()).toBeFocused();
   }
   expect(await jumps()).toEqual([]);
   expect(await extension.tabUrls()).toEqual(tabs);
@@ -169,7 +169,7 @@ test('with a results region that scrolls, Tab reaches the region before the penc
   await popup.keyboard.type('stock');
   await expect(rowPencils(popup)).toHaveCount(3);
   await expect(popup.locator('.this-page')).toHaveText(`This page is "${longName}"`);
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   expect(await popup.evaluate(() => document.activeElement?.className)).toBe('view');
   for (let i = 0; i < 3; i++) {
     await popup.keyboard.press('Tab');
@@ -179,7 +179,7 @@ test('with a results region that scrolls, Tab reaches the region before the penc
   await expect(thisPagePencil(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter edits line 6');
   await popup.keyboard.press('Tab');
-  await expect(namePage(popup)).toBeFocused();
+  await expect(searchBox(popup)).toBeFocused();
 });
 
 test('seven rows of 300-character names and URLs with an address match, and with the argument row, fit with every pencil whole', async ({ extension, site }) => {
@@ -220,6 +220,7 @@ test("a change's confirmation stays while Tab and Shift+Tab cross the pencils, a
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
   await expect(undo).toBeFocused();
   for (let i = 0; i < 3; i++) {
     await popup.keyboard.press('Tab');
@@ -246,6 +247,7 @@ test('after an update from 1.x, Tab reaches the notice before any pencil, and Sh
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
   await expect(open).toBeFocused();
   await popup.keyboard.press('Tab');
   await expect(close).toBeFocused();
@@ -253,7 +255,7 @@ test('after an update from 1.x, Tab reaches the notice before any pencil, and Sh
   await expect(rowPencils(popup).first()).toBeFocused();
   await popup.keyboard.press('Tab');
   await expect(rowPencils(popup).nth(1)).toBeFocused();
-  for (let i = 0; i < 6; i++) await popup.keyboard.press('Shift+Tab');
+  for (let i = 0; i < 7; i++) await popup.keyboard.press('Shift+Tab');
   await expect(searchBox(popup)).toBeFocused();
   await expect(notice).toBeVisible();
   expect((await extension.readStorage()).upgradeNotice).toBe('pending');
@@ -292,7 +294,7 @@ test('a pencil that goes while it has the focus, its mapping removed or the wind
   const other = await extension.openRequestPage();
   const { popup } = await popupOnNewPage(extension, site);
   await popup.keyboard.type('stock');
-  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 5; i++) await popup.keyboard.press('Tab');
   await expect(rowPencils(popup).nth(1)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter edits line 4');
   expect(await other.send({ kind: 'remove', line: 4, text: 'stock fund           https://fund.example.com/' })).toMatchObject({ kind: 'applied' });
@@ -304,6 +306,7 @@ test('a pencil that goes while it has the focus, its mapping removed or the wind
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
   await expect(rowPencils(popup).first()).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter edits line 3');
   expect(await other.send({ kind: 'remove', line: 2, text: 'mail                 https://mail.example.com/' })).toMatchObject({ kind: 'applied' });
@@ -312,7 +315,7 @@ test('a pencil that goes while it has the focus, its mapping removed or the wind
 
   await extension.seedStorage({ mappings: TWENTY });
   await searchBox(popup).fill('m');
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   await expect(rowPencils(popup).first()).toHaveAccessibleName('Edit "m01"');
   await expect(rowPencils(popup).first()).toBeFocused();
   await rowPencils(popup).nth(3).hover();

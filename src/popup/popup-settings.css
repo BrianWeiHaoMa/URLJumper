@@ -1,6 +1,7 @@
 /* The popup's settings and the gear that opens them, inside the popup's fixed header, scrolling view, and
-   footer (G7): the header holds the way back, the list of views, and *Open in tab*. Every color is a token of
-   src/theme.css, and every line height a whole number of pixels. */
+   footer (G7): the header holds the way back, the list of views, the view's own controls, and *Open in tab*,
+   the last two drawn as icons (src/icons.css). Every color is a token of src/theme.css, and every line height
+   a whole number of pixels. */
 .settings-bar {
   flex: none;
   display: flex;
@@ -14,8 +15,7 @@
   flex: 1;
 }
 
-.settings-bar-button,
-.settings-gear {
+.settings-bar-button {
   flex: none;
   font: inherit;
   color: var(--text-primary);
@@ -26,13 +26,9 @@
   cursor: pointer;
 }
 
-/* As tall as the chip beside it, its 18-pixel line. */
-.settings-gear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  padding: 0 7px;
+/* The view's controls sit in the header as its own items: an empty place takes no room and adds no gap. */
+.settings-bar-view-controls {
+  display: contents;
 }
 
 /* In the first-run state's header, at its end. */

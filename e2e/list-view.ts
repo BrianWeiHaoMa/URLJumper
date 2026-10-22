@@ -27,8 +27,12 @@ export function listView(page: Page) {
     /** The pencil of the mapping named `name`. */
     pencil: (name: string) => list.getByRole('button', { name: `Edit "${name}"`, exact: true }),
     fixInText: list.getByRole('button', { name: 'Fix in text', exact: true }),
-    /** *Add mapping*, after the list, there also when the document has no mapping. */
-    addMapping: page.locator('.list-view').getByRole('button', { name: 'Add mapping', exact: true }),
+    /** *Add mapping*: the plus in the host's header, the popup's settings bar or the options page's. */
+    addMapping: page.locator('header.settings-bar, header.options-header').getByRole('button', { name: 'Add mapping', exact: true }),
+    /** The Add mapping section, at the top of the view. */
+    addForm: page.locator('section.list-name-form'),
+    /** Only the popup's Add mapping section offers the opener tab's address. */
+    copyTabUrl: page.locator('section.list-name-form').getByRole('button', { name: 'Copy tab URL', exact: true }),
     /** What the view says when the document holds no mapping. */
     empty: page.getByText('The document has no mappings.'),
   };

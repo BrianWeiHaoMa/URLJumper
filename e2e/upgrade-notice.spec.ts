@@ -155,6 +155,9 @@ test('Tab and Shift+Tab move the focus to and from the notice without dismissing
   await popup.keyboard.press('Tab');
   await expect(footer(popup)).toHaveText('Enter or Space switches to This tab');
   await popup.keyboard.press('Tab');
+  await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
+  await expect(footer(popup)).toHaveText('Enter opens the Name form');
+  await popup.keyboard.press('Tab');
   await expect(footer(popup)).toHaveText('Enter opens settings');
   await popup.keyboard.press('Tab');
   await expect(open).toBeFocused();
@@ -164,7 +167,7 @@ test('Tab and Shift+Tab move the focus to and from the notice without dismissing
   await expect(close).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter closes the notice');
   await checkFitAndAccessibility(popup);
-  for (let i = 0; i < 4; i++) await popup.keyboard.press('Shift+Tab');
+  for (let i = 0; i < 5; i++) await popup.keyboard.press('Shift+Tab');
   await expect(searchBox(popup)).toBeFocused();
   await expect(notice).toBeVisible();
   await expect(footer(popup)).toHaveText('Enter only closes the notice · Down selects a row');
@@ -176,7 +179,7 @@ test("Enter and Space on the notice's control open the what's-new page once and 
     await updateFrom1x(extension, ONE_X);
     const { popup } = await popupOnNewPage(extension, site, `Opened with ${JSON.stringify(key)}`);
     const before = await whatsNewTabs(extension);
-    for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+    for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
     await expect(upgradeNotice(popup).open).toBeFocused();
     await closingPopup(popup, () => popup.keyboard.press(key));
     await expect.poll(() => whatsNewTabs(extension), { message: JSON.stringify(key) }).toBe(before + 1);
@@ -186,7 +189,7 @@ test("Enter and Space on the notice's control open the what's-new page once and 
     await updateFrom1x(extension, ONE_X);
     const { popup } = await popupOnNewPage(extension, site, `Closed with ${JSON.stringify(key)}`);
     const tabs = await extension.tabUrls();
-    for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
+    for (let i = 0; i < 5; i++) await popup.keyboard.press('Tab');
     await expect(upgradeNotice(popup).close).toBeFocused();
     await popup.keyboard.press(key);
     await expect(upgradeNotice(popup).notice).toHaveCount(0);
@@ -203,7 +206,7 @@ test("Enter and Space on the notice's control open the what's-new page once and 
 test('a letter typed on the notice dismisses it and lands in the search box', async ({ extension, site }) => {
   await updateFrom1x(extension, ONE_X);
   const { popup } = await popupOnNewPage(extension, site);
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   await expect(upgradeNotice(popup).open).toBeFocused();
   await popup.keyboard.press('m');
   await expect(upgradeNotice(popup).notice).toHaveCount(0);
@@ -220,7 +223,7 @@ test('with a row selected and no key typed yet, Enter on the notice opens only t
   await searchBox(popup).fill('mail');
   await expect(selectedRowName(popup)).toHaveText('mail');
   await expect(upgradeNotice(popup).notice).toBeVisible();
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   await expect(upgradeNotice(popup).open).toBeFocused();
   const pages = await webPages(extension);
   await closingPopup(popup, () => popup.keyboard.press('Enter'));

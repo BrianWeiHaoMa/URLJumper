@@ -41,6 +41,7 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   await expect(selectedRowName(popup)).toHaveText('mail');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
   await expect(gear(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter opens settings');
   const tabs = await extension.tabUrls();
@@ -102,6 +103,29 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   expect(await extension.tabUrls()).toEqual(tabs);
   expect('usage' in (await extension.readStorage())).toBe(false);
   await checkFitAndAccessibility(popup);
+});
+
+test('Open in tab is a titled header icon after the settings views in Preferences and Text', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const { popup } = await popupOnNewPage(extension, site);
+  await checkFitAndAccessibility(popup);
+  await gear(popup).click();
+  const header = popup.locator('header.settings-bar');
+  for (const shown of ['Preferences', 'Text']) {
+    const nav = header.getByRole('navigation', { name: 'Settings views' });
+    if (shown === 'Text') await nav.getByRole('button', { name: shown, exact: true }).click();
+    await expect(nav.getByRole('button', { name: shown, exact: true })).toHaveAttribute('aria-current', 'page');
+    expect(await header.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent))).toEqual(['Back', 'Preferences', 'List', 'Text', 'Open in tab']);
+    const icon = header.getByRole('button', { name: 'Open in tab', exact: true });
+    await icon.hover();
+    await expect(icon).toHaveAttribute('title', 'Open in tab');
+    await expect(icon).toHaveClass('icon-button open-in-tab');
+    await expect(icon.locator('svg')).toBeVisible();
+    await expect(icon).toHaveText('');
+    const [views, button] = [(await nav.boundingBox())!, (await icon.boundingBox())!];
+    expect(views.x + views.width).toBeLessThanOrEqual(button.x);
+    await checkFitAndAccessibility(popup);
+  }
 });
 
 test('Enter on a choice stores nothing and leaves settings as they were; Escape closes the popup from settings', async ({ extension, site }) => {

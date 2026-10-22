@@ -1,7 +1,7 @@
 // The popup (In use, "Jump", "Name this page", "Name from a search", "Name a link", "Edit from a suggestion",
-// "First run"): search, with the search box, the mode chip, and the gear, the confirmation of the last change
-// with its Undo, the list seven rows at a time with a cue for the rest and each listed mapping's pencil, what
-// the page is called (G10) with its pencil, and the *Name this page* button; the Name form, also opened for a
+// "First run"): search, with the search box, the mode chip, the *Name this page* plus, and the gear, the
+// confirmation of the last change with its Undo, the list seven rows at a time with a cue for the rest and each
+// listed mapping's pencil, and what the page is called (G10) with its pencil; the Name form, also opened for a
 // command or a menu item that asked for it; a row's editor, opened by a pencil, by Ctrl+E on the selected row
 // (P1), or from the Name form; the settings, opened by the gear (G31); or, while the document is empty, the
 // first-run state in search's place (G30). After an update from 1.x, search, the first run, the Name form, and
@@ -15,6 +15,7 @@ import { isEmptyDocument } from '../document/example';
 import { readDocument } from '../document/grammar';
 import { mappingOfPage } from '../document/page-mapping';
 import type { SearchRow } from '../document/search';
+import { PlusIcon } from '../icons';
 import { intentFor, startMode, type OpenIntent, type OpenMode } from '../open-intent';
 import { applyTheme, readSearchOrder, readTheme } from '../preferences';
 import { send } from '../requests';
@@ -295,6 +296,18 @@ export function Popup() {
         >
           {MODE_LABEL[state.mode]}
         </button>
+        {/* In the header, so it stays in one place however many rows are listed. */}
+        <button
+          type="button"
+          className="icon-button name-page"
+          aria-label="Name this page"
+          title="Name this page"
+          onClick={() => openForm('')}
+          onFocus={() => dispatch({ kind: 'focused', focused: 'name-page' })}
+          onBlur={() => dispatch({ kind: 'focused', focused: null })}
+        >
+          <PlusIcon />
+        </button>
         <SettingsGear onClick={openSettings} onFocusChange={(focused) => dispatch({ kind: 'focused', focused: focused ? 'settings' : null })} />
       </header>
       <UpgradeNotice notice={notice} start={searchBox} />
@@ -328,17 +341,6 @@ export function Popup() {
           {/* In the view, which scrolls, since a name may be as long as the document. */}
           {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} onEdit={(line) => openEditor(line, null)} onFocusChange={(focused) => onEditFocus(focused ? thisPage.key : null)} />}
         </div>
-      </div>
-      <div className="page-bar">
-        <button
-          type="button"
-          className="name-page"
-          onClick={() => openForm('')}
-          onFocus={() => dispatch({ kind: 'focused', focused: 'name-page' })}
-          onBlur={() => dispatch({ kind: 'focused', focused: null })}
-        >
-          Name this page
-        </button>
       </div>
       <footer className="footer">{footerWithNotice(footer(state, selection.shown, ready, undoing, editLine), notice)}</footer>
     </main>

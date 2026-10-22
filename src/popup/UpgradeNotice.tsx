@@ -134,6 +134,7 @@ export function UpgradeNotice({ notice, start }: UpgradeNoticeProps) {
         type="button"
         className="upgrade-notice-close"
         aria-label="Close the notice of what's new"
+        title="Close"
         onClick={leave}
         onFocus={() => onFocusChange('close')}
         onBlur={() => onFocusChange(null)}

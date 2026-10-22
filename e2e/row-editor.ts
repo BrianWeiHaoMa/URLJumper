@@ -6,14 +6,17 @@ import { expect, type Page } from '@playwright/test';
 
 /** The row editor's parts in `page`. */
 export function rowEditor(page: Page) {
+  // Its own fields alone: the Name form open beside it has a Name, URL, and Note of its own.
+  const editor = page.locator('.row-editor');
   return {
-    name: page.getByRole('textbox', { name: 'Name', exact: true }),
-    url: page.getByRole('textbox', { name: 'URL', exact: true }),
-    note: page.getByRole('textbox', { name: 'Note', exact: true }),
+    name: editor.getByRole('textbox', { name: 'Name', exact: true }),
+    url: editor.getByRole('textbox', { name: 'URL', exact: true }),
+    note: editor.getByRole('textbox', { name: 'Note', exact: true }),
     save: page.getByRole('button', { name: 'Save', exact: true }),
     delete: page.getByRole('button', { name: 'Delete', exact: true }),
     copyLink: page.getByRole('button', { name: 'Copy link', exact: true }),
-    /** *Move up* and *Move down*, offered where the host offers moves: the List view. */
+    /** The arrow icons offered in the List view, on a line with Cancel below the other actions. */
+    moves: page.locator('.row-editor-moves'),
     moveUp: page.getByRole('button', { name: 'Move up', exact: true }),
     moveDown: page.getByRole('button', { name: 'Move down', exact: true }),
     openInText: page.getByRole('button', { name: 'Open in text', exact: true }),

@@ -168,7 +168,7 @@ test('long names and URLs are shown from their start and cut with an ellipsis; t
     .poll(() =>
       popup.evaluate(() => {
         const height = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().height;
-        return Math.abs(innerHeight - (height('.search-bar') + height('.view-content') + height('.page-bar') + height('footer'))) < 1;
+        return Math.abs(innerHeight - (height('.search-bar') + height('.view-content') + height('footer'))) < 1;
       }),
     )
     .toBe(true);

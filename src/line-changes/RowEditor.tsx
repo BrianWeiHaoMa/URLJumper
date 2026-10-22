@@ -324,8 +324,17 @@ interface EditorButtonsProps {
   actions: EditorActions;
 }
 
-/** *Save*, *Delete*, *Copy link*, *Move up* and *Move down*, *Open in text*, and *Cancel*; none of them a key (P1). */
+/**
+ * *Save*, *Delete*, *Copy link*, *Move up* and *Move down*, *Open in text*, and *Cancel*; none of them a key (P1).
+ * The moves are arrows, on a line of their own with *Cancel*.
+ */
 function EditorButtons({ anchor, offersOpen, moves, saveOff, busy, stale, actions }: EditorButtonsProps) {
+  const cancel = (
+    <button type="button" className="form-button" data-control="cancel" aria-disabled={busy} onClick={actions.cancel}>
+      Cancel
+    </button>
+  );
+  const moving = anchor !== null && moves !== null;
   return (
     <div className="form-actions">
       <button type="submit" className="form-button save" data-control="save" aria-disabled={saveOff}>
@@ -339,20 +348,6 @@ function EditorButtons({ anchor, offersOpen, moves, saveOff, busy, stale, action
           <button type="button" className="form-button" data-control="copy" aria-disabled={busy} onClick={actions.copyLink}>
             Copy link
           </button>
-          {moves !== null &&
-            (['up', 'down'] as const).map((direction) => (
-              // Still reached by Tab where the document does not admit it, its footer saying why (G32, L2).
-              <button
-                key={direction}
-                type="button"
-                className="form-button"
-                data-control={`move-${direction}`}
-                aria-disabled={busy || stale || moves[direction].kind === 'immovable'}
-                onClick={() => actions.move(direction)}
-              >
-                {direction === 'up' ? 'Move up' : 'Move down'}
-              </button>
-            ))}
           {offersOpen && (
             <button type="button" className="form-button" data-control="open" aria-disabled={busy} onClick={actions.openText}>
               Open in text
@@ -360,12 +355,36 @@ function EditorButtons({ anchor, offersOpen, moves, saveOff, busy, stale, action
           )}
         </>
       )}
-      <button type="button" className="form-button" data-control="cancel" aria-disabled={busy} onClick={actions.cancel}>
-        Cancel
-      </button>
+      {moving ? (
+        <div className="row-editor-moves">
+          {(['up', 'down'] as const).map((direction) => (
+            // Still reached by Tab where the document does not admit it, its footer saying why (G32, L2).
+            <button
+              key={direction}
+              type="button"
+              className="form-button row-editor-move"
+              data-control={`move-${direction}`}
+              aria-label={MOVE_LABEL[direction]}
+              title={MOVE_LABEL[direction]}
+              aria-disabled={busy || stale || moves[direction].kind === 'immovable'}
+              onClick={() => actions.move(direction)}
+            >
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d={MOVE_ARROW[direction]} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ))}
+          {cancel}
+        </div>
+      ) : (
+        cancel
+      )}
     </div>
   );
 }
+
+const MOVE_LABEL: Record<MoveDirection, string> = { up: 'Move up', down: 'Move down' };
+const MOVE_ARROW: Record<MoveDirection, string> = { up: 'M8 13.5v-11M3.5 7 8 2.5 12.5 7', down: 'M8 2.5v11M3.5 9 8 13.5 12.5 9' };
 
 interface FieldProps {
   label: string;

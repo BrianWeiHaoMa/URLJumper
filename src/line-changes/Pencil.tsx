@@ -19,6 +19,8 @@ export function Pencil({ name, waiting = false, onEdit, onFocusChange }: PencilP
       type="button"
       className="pencil"
       aria-label={`Edit "${name}"`}
+      // Brief for the pointer; the accessible name says which mapping.
+      title="Edit"
       aria-disabled={waiting}
       onClick={() => {
         if (!waiting) onEdit();

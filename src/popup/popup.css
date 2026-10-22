@@ -197,25 +197,6 @@
   overflow-wrap: anywhere;
 }
 
-/* The button that names the page, fixed above the footer. */
-.page-bar {
-  flex: none;
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 12px;
-  border-top: 1px solid var(--line-separator);
-}
-
-.name-page {
-  font: inherit;
-  color: var(--text-primary);
-  background: var(--bg-control);
-  border: 1px solid var(--line-control);
-  border-radius: 6px;
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
 .footer {
   flex: none;
   padding: 8px 12px;

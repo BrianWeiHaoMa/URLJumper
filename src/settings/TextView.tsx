@@ -22,6 +22,7 @@ import { mergeTexts, type MergePart } from '../document/merge';
 import { documentHolds, isDraft, isNamed, nameOf, type Draft } from '../draft';
 import { chromeMessage, send } from '../requests';
 import { readMappings } from '../stored-document';
+import { COPY_TAB_URL_SAYS } from './copy-tab-url';
 import { CopyTabUrl } from './CopyTabUrl';
 import { discardDraft, draftRequestsAnswered, keepDraft, type DraftKeeping } from './draft-keeping';
 import { DraftOffer } from './DraftOffer';
@@ -509,7 +510,7 @@ function whatEnterDoes(
   { loaded, saving, offered, waiting, asking }: { loaded: boolean; saving: boolean; offered: boolean; waiting: 'offer' | 'question' | 'import' | null; asking: boolean },
 ): string {
   if (focused === null) return 'Enter does nothing';
-  if (focused === 'copy') return "Enter copies the tab's address";
+  if (focused === 'copy') return COPY_TAB_URL_SAYS;
   if (typeof focused === 'object') return `Enter moves the caret to line ${focused.line}`;
   if (!loaded) return 'Enter does nothing until the document is read';
   if (saving) return 'Saving · Enter does nothing until it is stored';

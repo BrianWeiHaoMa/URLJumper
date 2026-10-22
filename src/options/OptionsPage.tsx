@@ -3,7 +3,8 @@
 // names (read once, as the page opens) with the Text view's caret on the line it names, and with Import and
 // Export beside Preferences, which the popup's settings do not offer; Import's file it shows in the Text view,
 // and the Text view on a line when the List view asks; the view shown may ask before another is shown in its place.
-// It shows the stored theme live, as the popup does. It holds none of the views' logic.
+// Its header holds the title, then the list of views with, at their end, the view's own controls (the List view's
+// *Add mapping*). It shows the stored theme live, as the popup does. It holds none of the views' logic.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { followStoredTheme } from '../preferences';
 import { Export } from '../settings/Export';
@@ -20,6 +21,8 @@ export function OptionsPage() {
   const [imported, setImported] = useState<ImportedText>();
   // Each Import shows the Text view afresh, even one already shown, so a file read late still arrives.
   const [imports, setImports] = useState(0);
+  // Where in the header the view shown puts its own controls, once drawn.
+  const [viewControls, setViewControls] = useState<HTMLElement | null>(null);
   // What the view shown asks before another is shown in its place, as it registered it (G19).
   const switchGuard = useRef<SwitchGuard | null>(null);
   const guardSwitch = useCallback((guard: SwitchGuard | null) => {
@@ -71,10 +74,21 @@ export function OptionsPage() {
     <main className="options-page">
       <header className="options-header">
         <h1 className="options-title">URLJumper settings</h1>
-        <SettingsNav views={SETTINGS_VIEWS} shown={shown} onShow={show} />
+        <div className="options-bar">
+          <SettingsNav views={SETTINGS_VIEWS} shown={shown} onShow={show} />
+          <span className="options-view-controls" ref={setViewControls} />
+        </div>
       </header>
       <section className="options-view" aria-label={shown.title}>
-        <View key={`${shown.id} ${imports}`} beside={beside[shown.id]} caretLine={caretLine} showTextView={showTextView} imported={imported} guardSwitch={guardSwitch} />
+        <View
+          key={`${shown.id} ${imports}`}
+          beside={beside[shown.id]}
+          headerControls={viewControls}
+          caretLine={caretLine}
+          showTextView={showTextView}
+          imported={imported}
+          guardSwitch={guardSwitch}
+        />
       </section>
     </main>
   );

@@ -1,15 +1,16 @@
 // The Name form (In use, "Name this page", "Name a link", "Edit the list"; G8, G9, G10, G11, N6, E5): what the
 // page is, or for a link the page it is on, the URL prefilled and editable, or, opened by *Add mapping*, no page
-// and an empty URL field; the name, the Section choice when the document has headings, and a preview of the
-// exact line and where it goes. Every check and the preview come from the document module against the document
-// as last read, so they follow every storage change and agree with what the worker writes. Save sends one
-// insert; its outcome, which the confirmation shows, is built from the worker's reply alone. A taken name is
-// named, with the offer to edit that line instead, beside any other problem (G8); that offer and *This page
-// is*'s pencil (G10) leave the form for the editor of that line, the form's values stored nowhere. They and
-// Cancel wait while Save awaits its reply, so the reply never lands on an editor opened meanwhile or on a form
-// gone, where a failure could not be said (G21). It never reads storage or draws its host's frame: the host
-// gives it the document as last read and the name field's ref, where the notice of what is new leads (G25), is
-// told while Save awaits its reply, and shows what it says Enter does in its footer (L2).
+// and an empty URL field; the name, a note, empty to start, written as the line's trailing comment, the Section
+// choice when the document has headings, and a preview of the exact line and where it goes. Every check and the
+// preview come from the document module against the document as last read, so they follow every storage change
+// and agree with what the worker writes. Save sends one insert; its outcome, which the confirmation shows, is
+// built from the worker's reply alone. A taken name is named, with the offer to edit that line instead, beside
+// any other problem (G8); that offer and *This page is*'s pencil (G10) leave the form for the editor of that
+// line, the form's values stored nowhere. They and Cancel wait while Save awaits its reply, so the reply never
+// lands on an editor opened meanwhile or on a form gone, where a failure could not be said (G21). It never reads
+// storage or draws its host's frame: the host gives it the document as last read and the name field's ref, where
+// the notice of what is new leads (G25), is told while Save awaits its reply, and shows what it says Enter does
+// in its footer (L2).
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { readDocument, type Mapping } from '../document/grammar';
 import { insertionPoint, insertMapping, type InsertResult } from '../document/insertion';
@@ -64,6 +65,7 @@ type FormControl = 'cancel' | 'this-page' | 'edit-instead';
 export function NameForm({ document: stored, name: startName, subject, start, onSaved, onEdit, onCancel, cancelSays, onBusy, sayWhatEnterDoes }: NameFormProps) {
   const [name, setName] = useState(startName);
   const [url, setUrl] = useState(subject.kind === 'none' ? '' : (subject.url ?? ''));
+  const [note, setNote] = useState('');
   // The heading as named when chosen, found again by that identity at every read, never by its position (G9).
   const [heading, setHeading] = useState<HeadingIdentity | null>(null);
   // Why the last save stored nothing, until a value changes.
@@ -71,14 +73,16 @@ export function NameForm({ document: stored, name: startName, subject, start, on
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const urlField = useRef<HTMLInputElement>(null);
+  const noteField = useRef<HTMLInputElement>(null);
   useFieldLine(start);
   useFieldLine(urlField);
+  useFieldLine(noteField);
   const [focusedOn, setFocusedOn] = useState<FormControl | null>(null);
   const focusOn = (control: FormControl) => (focused: boolean) => setFocusedOn(focused ? control : null);
 
   const read = useMemo(() => readDocument(stored), [stored]);
   const sections = useMemo(() => namedSections(read.lines), [read]);
-  const result = useMemo(() => insertMapping(stored, { name, url, note: '' }, heading), [stored, name, url, heading]);
+  const result = useMemo(() => insertMapping(stored, { name, url, note }, heading), [stored, name, url, note, heading]);
   // The line that has the name, whatever else the values break (G8); `insertMapping` names only the first problem.
   const takenBy = useMemo(() => checkMapping({ name, url, note: '' }, read.mappings).takenBy, [name, url, read]);
   const point = insertionPoint(read.lines, heading);
@@ -96,7 +100,7 @@ export function NameForm({ document: stored, name: startName, subject, start, on
     setSaving(true);
     onBusy?.(true);
     setRefusal(null);
-    const reply = await send({ kind: 'insert', name, url, note: '', heading });
+    const reply = await send({ kind: 'insert', name, url, note, heading });
     onBusy?.(false);
     if (reply.kind === 'applied') {
       onSaved(insertedOutcome(reply));
@@ -222,6 +226,23 @@ export function NameForm({ document: stored, name: startName, subject, start, on
           }}
         />
       </label>
+      <label className="field">
+        <span className="field-label">Note</span>
+        <input
+          ref={noteField}
+          className="field-input"
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={result.kind === 'invalid' && result.field === 'note'}
+          aria-describedby="name-form-problem"
+          value={note}
+          onChange={(event) => {
+            setRefusal(null);
+            setNote(event.target.value);
+          }}
+        />
+      </label>
       {sections.length > 0 && (
         <SectionChoice
           options={options}
@@ -284,7 +305,7 @@ type Refused = Exclude<InsertResult, { kind: 'applied' }>;
 
 /**
  * Why Save is blocked (L2): a value's problem, naming the line the mapping would be, and the line that has a
- * taken name, together (G8). The form sends no note; the worker checks one all the same.
+ * taken name, together (G8).
  */
 function problemText(problem: Refused, line: number, url: string, takenBy: Mapping | null): string {
   const field = problem.kind === 'invalid' ? fieldProblemText(problem, line, url) : '';

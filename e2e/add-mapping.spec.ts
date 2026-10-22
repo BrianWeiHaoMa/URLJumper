@@ -1,11 +1,12 @@
 // *Add mapping* in the List view, in both settings hosts (In use, "Edit the list"; G8, G9, G11, G12, G13, G15,
-// G21, G32, N6, L2, R1): the control after the last line opens the Name form in its place with no page, an
-// empty URL field, and the name field empty with the focus; Save inserts one line after the document's last
-// line that holds text, or at the end when the chosen heading is gone, confirmed by name and line beside the new
-// row with Undo, itself undoable, the focus on the new row's pencil; a taken name blocks Save and *Edit
-// instead* opens that line's editor where the line now stands; a store Chrome refuses keeps the values; while
-// Save awaits its reply every other edit and Cancel wait; one form or editor is open at a time; Cancel gives the
-// focus back to the control; and every state fits the popup and passes the accessibility pass (G7, G32).
+// G21, G32, N6, L2, R1): the plus at the top right of the host's header opens the Name form above the list, with
+// no page, an empty URL field, and the name field empty with the focus, and while it is open goes back to that
+// field; Save inserts one line after the document's last line that holds text, or at the end when the chosen
+// heading is gone, its note as the line's comment, confirmed by name and line beside the new row with Undo,
+// itself undoable, the focus on the new row's pencil; a taken name blocks Save and *Edit instead* opens that
+// line's editor where the line now stands; a store Chrome refuses keeps the values; while Save awaits its reply
+// every other edit and Cancel wait; one form or editor is open at a time; Cancel gives the focus back to the
+// control; and every state fits the popup and passes the accessibility pass (G7, G32).
 import type { Page } from '@playwright/test';
 import {
   checkFit,
@@ -55,7 +56,7 @@ async function listOpenedOn(host: SettingsHost, extension: LoadedExtension, site
 for (const host of SETTINGS_HOSTS) {
   const says = (page: Page, text: string) => (host === 'popup' ? expect(footer(page)).toHaveText(text) : expect(footer(page)).toHaveCount(0));
 
-  test(`in the ${host}, Add mapping opens the Name form in its place with no page, the name empty and focused; Save inserts one line after the last, confirmed beside it with Undo, whose own Undo works`, async ({ extension, site }) => {
+  test(`in the ${host}, Add mapping opens the Name form above the list with no page, the name empty and focused; Save inserts one line after the last, confirmed beside it with Undo, whose own Undo works`, async ({ extension, site }) => {
     const opener = site.pageUrl('A page with a mapping');
     const doc = `${DOC}${lineOf('here', opener)}\n`;
     const { page, view, check } = await listOpenedOn(host, extension, site, doc, opener);
@@ -69,10 +70,10 @@ for (const host of SETTINGS_HOSTS) {
     await expect(form.subject).toHaveCount(0);
     await expect(form.thisPage).toHaveCount(0);
     for (const text of [opener, new URL(opener).host, 'A page with a mapping', 'Chrome gave no address']) await expect(form.form).not.toContainText(text);
-    // In the control's place, after the last line.
-    await expect(view.addMapping).toHaveCount(0);
-    const list = (await view.list.boundingBox())!;
-    expect((await form.form.boundingBox())!.y).toBeGreaterThanOrEqual(list.y + list.height);
+    // The header plus stays; its section precedes the document's lines.
+    await expect(view.addMapping).toBeVisible();
+    await expect(page.locator('.list-view > :first-child')).toHaveClass('list-name-form');
+    expect(await view.addForm.evaluate((form) => form.nextElementSibling?.getAttribute('aria-label') === 'Document lines')).toBe(true);
     await expect(form.where).toHaveText('Line 8, at the end of the document');
     await says(page, 'Enter does nothing · Line 8 needs a name.');
     await check();
@@ -93,7 +94,7 @@ for (const host of SETTINGS_HOSTS) {
     await expect(form.form).toHaveCount(0);
     await expect(view.pencil('new one')).toBeFocused();
     await says(page, 'Enter edits line 8');
-    // Beside the new row, its Undo in view; the control back after the list.
+    // Beside the new row, its Undo in view; Add mapping is available again.
     await expect(view.list.locator('.list-row:has(+ .list-confirmation) .list-number')).toHaveText('8');
     await expect(confirmation.undo).toBeInViewport();
     await expect(view.addMapping).toBeVisible();
@@ -112,14 +113,33 @@ for (const host of SETTINGS_HOSTS) {
     await expect(rowEditor(page).name).toHaveValue('new one');
   });
 
-  test(`in the ${host}, by keyboard alone: Tab from the last pencil reaches Add mapping, whose Enter opens the form and ends the confirmation shown; Cancel stores nothing and gives the focus back`, async ({ extension, site }) => {
+  test(`in the ${host}, a note typed in Add mapping's form is the new line's comment, listed as its row's note`, async ({ extension, site }) => {
+    const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
+    await view.addMapping.click();
+    const form = nameForm(page);
+    await expect(form.note).toHaveValue('');
+    await form.name.fill('noted');
+    await form.url.fill('https://noted.example/');
+    await form.note.fill('read later');
+    const line = `${lineOf('noted', 'https://noted.example/')} \\ read later`;
+    await expect(form.previewLine).toHaveText(line);
+    await says(page, 'Enter saves it as line 7');
+    await check();
+    await form.note.press('Enter');
+    await expect(lineConfirmation(page).text).toHaveText('Saved "noted" as line 7');
+    expect(await storedDocument(extension)).toBe(`${DOC}${line}\n`);
+    await expect(view.list.locator('li[data-line="7"] .list-note')).toHaveText('read later');
+    await check();
+  });
+
+  test(`in the ${host}, by keyboard alone: Tab from the views' Text reaches Add mapping, whose Enter opens the form and ends the confirmation shown; Cancel stores nothing and gives the focus back`, async ({ extension, site }) => {
     const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
     await view.pencil('cal').click();
     await rowEditor(page).delete.click();
     const confirmation = lineConfirmation(page);
     await expect(confirmation.text).toHaveText('Removed "cal" from line 3');
     const removed = DOC.replace(`${lineOf('cal', 'https://cal.example/')}\n`, '');
-    await view.pencil('last').focus();
+    await page.locator('.settings-nav').getByRole('button', { name: 'Text', exact: true }).focus();
     await page.keyboard.press('Tab');
     await expect(view.addMapping).toBeFocused();
     await says(page, 'Enter opens the Name form for a new mapping');
@@ -146,7 +166,8 @@ for (const host of SETTINGS_HOSTS) {
   test(`in the ${host}, an empty document says it has no mappings and offers Add mapping alone; its Save stores the one line, listed as line 1`, async ({ extension, site }) => {
     const { page, view, check } = await listViewIn(host, extension, site, { mappings: '' });
     await expect(view.empty).toBeVisible();
-    await expect(page.locator('.list-view').getByRole('button')).toHaveText(['Add mapping']);
+    await expect(view.addMapping).toBeVisible();
+    await expect(page.locator('.list-view').getByRole('button')).toHaveCount(0);
     await check();
     await view.addMapping.click();
     const form = nameForm(page);
@@ -258,6 +279,13 @@ for (const host of SETTINGS_HOSTS) {
     await says(page, 'Enter does nothing until the change is stored');
     await page.keyboard.press('Enter');
     await view.fixInText.click({ force: true });
+    await expect(view.addMapping).toHaveAttribute('aria-disabled', 'true');
+    await view.addMapping.focus();
+    await says(page, 'Enter does nothing until the change is stored');
+    await page.keyboard.press('Enter');
+    await view.addMapping.click({ force: true });
+    await expect(view.addMapping).toBeFocused();
+    await expect(view.addForm).toHaveCount(1);
     await expect(form.name).toHaveValue('pending');
     await expect(rowEditor(page).note).toHaveCount(0);
     await expect(view.fixInText).toBeVisible();
@@ -311,7 +339,7 @@ for (const host of SETTINGS_HOSTS) {
 }
 
 // The accessibility pass over sixty rows takes ten seconds a state; the checks above hold these states to it.
-test('in the popup, Add mapping after sixty lines shows the form from its top, as much as the view holds, and the form, a taken name, and the confirmation each fit', async ({ extension, site }) => {
+test('in the popup, the header Add mapping above sixty lines shows the form from its top, as much as the view holds, and the form, a taken name, and the confirmation each fit', async ({ extension, site }) => {
   const lines: string[] = [];
   for (let index = 1; index <= 60; index++) {
     // Headings, so the Section choice makes the form taller than the view.
@@ -344,3 +372,72 @@ test('in the popup, Add mapping after sixty lines shows the form from its top, a
   await expect(view.pencil('m61')).toBeFocused();
   await check();
 });
+
+for (const host of SETTINGS_HOSTS) {
+  for (const document of ['empty', 'scrolling'] as const) {
+    test(`in the ${host} with ${document === 'empty' ? 'an empty' : 'a long'} list, the plus at the header's top right opens Add mapping at the top, and returns to its name field while open`, async ({ extension, site }) => {
+      const mappings = document === 'empty' ? '' : Array.from({ length: 16 }, (_, i) => lineOf(`m${i}`, `https://m${i}.example/`)).join('\n');
+      const { page, view, check } = await listViewIn(host, extension, site, { mappings });
+      const says = (text: string) => (host === 'popup' ? expect(footer(page)).toHaveText(text) : expect(footer(page)).toHaveCount(0));
+      const header = page.locator(host === 'popup' ? 'header.settings-bar' : 'header.options-header');
+      const views = ['Preferences', 'List', 'Text'];
+      expect(await header.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent))).toEqual(
+        host === 'popup' ? ['Back', ...views, 'Add mapping', 'Open in tab'] : [...views, 'Add mapping'],
+      );
+      await expect(view.addMapping).toHaveClass('icon-button list-add');
+      await expect(view.addMapping).toHaveAttribute('title', 'Add mapping');
+      await expect(view.addMapping).toHaveText('');
+      await expect(view.addMapping.locator('svg')).toHaveCount(1);
+      await expect(page.locator('.list-view').getByRole('button', { name: 'Add mapping', exact: true })).toHaveCount(0);
+      // At the top right: after the views, and in the popup before Open in tab alone; on the options page at the bar's end.
+      const plus = (await view.addMapping.boundingBox())!;
+      const nav = (await header.locator('.settings-nav').boundingBox())!;
+      expect(plus.x).toBeGreaterThanOrEqual(nav.x + nav.width);
+      if (host === 'options page') {
+        const bar = (await page.locator('.options-bar').boundingBox())!;
+        expect(Math.abs(bar.x + bar.width - (plus.x + plus.width))).toBeLessThan(1);
+      }
+      await header.getByRole('button', { name: 'Text', exact: true }).focus();
+      await page.keyboard.press('Tab');
+      await expect(view.addMapping).toBeFocused();
+      await says('Enter opens the Name form for a new mapping');
+      if (host === 'popup') {
+        await page.keyboard.press('Tab');
+        await expect(header.getByRole('button', { name: 'Open in tab', exact: true })).toBeFocused();
+      }
+      await check();
+
+      await view.addMapping.click();
+      const form = nameForm(page);
+      await expect(form.name).toBeFocused();
+      await expect(view.addForm.getByRole('heading', { name: 'Add mapping', exact: true })).toBeVisible();
+      await expect(page.locator('.list-view > :first-child')).toHaveClass('list-name-form');
+      const below = document === 'empty' ? view.empty : view.list;
+      expect((await below.boundingBox())!.y).toBeGreaterThanOrEqual((await view.addForm.boundingBox())!.y + (await view.addForm.boundingBox())!.height);
+      await expect(view.addMapping).toBeVisible();
+      await check();
+
+      await form.name.fill('kept while open');
+      if (document === 'scrolling') await view.pencil('m15').focus();
+      else await form.cancel.focus();
+      // The popup's view scrolls the form away; a page tall enough for that is not guaranteed by sixteen rows.
+      if (document === 'scrolling' && host === 'popup') await expect(view.addForm).not.toBeInViewport();
+      await view.addMapping.focus();
+      await says('Enter goes to the Name form');
+      await check();
+      await page.keyboard.press('Enter');
+      await expect(form.name).toBeFocused();
+      await expect(form.name).toHaveValue('kept while open');
+      await expect(view.addForm).toBeInViewport({ ratio: 1 });
+      await expect(view.addForm).toHaveCount(1);
+      await check();
+
+      await form.cancel.click();
+      await expect(view.addForm).toHaveCount(0);
+      await expect(view.addMapping).toBeFocused();
+      await says('Enter opens the Name form for a new mapping');
+      expect(await storedDocument(extension)).toBe(mappings);
+      await check();
+    });
+  }
+}

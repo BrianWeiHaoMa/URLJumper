@@ -130,14 +130,14 @@ test.describe('at a display scale of 1.25', () => {
   test.use({ displayScale: 1.25 });
 
   test('a list the popup holds whole does not scroll for the fraction of a device pixel the viewport falls short by', async ({ extension, site }) => {
-    // Three rows and the This page row: a content height that is not whole in device pixels.
+    // Two rows and the This page row: a content height that is not whole in device pixels.
     const pageUrl = site.pageUrl('Where the popup opens');
-    await extension.seedStorage({ mappings: `mail  https://mail.example.com/\nmaps  https://maps.example.com/\nmarkets  https://markets.example.com/\nhere  ${pageUrl}\n` });
+    await extension.seedStorage({ mappings: `mail  https://mail.example.com/\nmaps  https://maps.example.com/\nhere  ${pageUrl}\n` });
     const page = await extension.context.newPage();
     await page.goto(pageUrl);
     const popup = await extension.clickToolbarButton(page);
     await popup.keyboard.type('ma');
-    await expect(popup.getByRole('option')).toHaveCount(3);
+    await expect(popup.getByRole('option')).toHaveCount(2);
     await expect(popup.getByText('This page is "here"')).toBeVisible();
     const geometry = () =>
       popup.evaluate(() => {

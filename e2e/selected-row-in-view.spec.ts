@@ -133,8 +133,8 @@ test("PageDown on the view's own Tab stop holds the selection back: Enter, Shift
   const opened = await search(extension, site);
   const { popup } = opened;
   expect(await viewScrolls(popup)).toBe(true);
-  // Chrome makes the scrolling view a Tab stop after the chip and the gear.
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  // Chrome makes the scrolling view a Tab stop after the chip, Name this page, and the gear.
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   await expect(view(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText(OPENS);
   await popup.keyboard.press('PageDown');
@@ -164,7 +164,7 @@ test("PageDown on the view's own Tab stop holds the selection back: Enter, Shift
 test("Space and End on the view's own Tab stop hold the selection back as PageDown does; after End the end of This page is is in view", async ({ extension, site }) => {
   const opened = await search(extension, site);
   const { popup } = opened;
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   await expect(view(popup)).toBeFocused();
   for (const key of ['Space', 'End']) {
     await popup.keyboard.press(key);
@@ -218,8 +218,6 @@ test("Tab to This page is's pencil scrolls the view to the pencil and holds the 
   await expect(thisPagePencil(popup)).toBeFocused();
   await expect(selectedRow(popup)).toHaveCount(0);
 
-  await popup.keyboard.press('Tab');
-  await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
   // Tab from the last control wraps through Chrome's own frame and lands after the key has come up.
   await popup.keyboard.press('Tab');
   await expect(searchBox(popup)).toBeFocused();
@@ -259,7 +257,7 @@ test('a row cut at the edge of the view is not selected, nor is the next row in 
 test('Up from a selection held back wraps to the last row, the window following it into view', async ({ extension, site }) => {
   const opened = await search(extension, site);
   const { popup } = opened;
-  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 4; i++) await popup.keyboard.press('Tab');
   await popup.keyboard.press('PageDown');
   await expectHeldBack(popup);
   await settled(popup);
@@ -282,6 +280,13 @@ test('Down and Up move the selection with the focus on any button of search, whi
   await popup.keyboard.press('ArrowDown');
   await expectSelected(popup, 'm2');
   await expect(chip).toBeFocused();
+  await popup.keyboard.press('Tab');
+  await expect(namePage).toBeFocused();
+  await popup.keyboard.press('ArrowDown');
+  await expectSelected(popup, 'm3');
+  await expect(namePage).toBeFocused();
+  await popup.keyboard.press('ArrowUp');
+  await expectSelected(popup, 'm2');
   await popup.keyboard.press('Tab');
   await expect(gear).toBeFocused();
   await popup.keyboard.press('ArrowUp');
@@ -307,7 +312,7 @@ test('Down and Up move the selection with the focus on any button of search, whi
   await expectSelected(popup, 'm3');
   await expect(searchBox(popup)).toBeFocused();
 
-  // From *Name this page*, below the view, Up wraps at the top to the last row, the window following it.
+  // From *Name this page* in the header, Up wraps at the top to the last row, the window following it.
   await popup.keyboard.press('ArrowUp');
   await popup.keyboard.press('ArrowUp');
   await namePage.focus();
@@ -323,7 +328,7 @@ test('Down and Up move the selection with the focus on any button of search, whi
 
 test('in a one-row list scrolled out of view, Down selects that row and brings it into view', async ({ extension, site }) => {
   // A name long enough that the view scrolls below one row, its text still shorter than the view.
-  const opened = await search(extension, site, { letters: 900, typed: 'm1' });
+  const opened = await search(extension, site, { letters: 1_100, typed: 'm1' });
   const { popup } = opened;
   await expect(popup.getByRole('option')).toHaveCount(1);
   expect(await viewScrolls(popup)).toBe(true);
@@ -415,8 +420,6 @@ test('in a view shorter than the seven rows, Tab to the last pencil and back kee
   expect(await inView(lastPencil)).toBe(true);
   if ((await selectedRow(popup).count()) > 0) expect(await inView(selectedRow(popup))).toBe(true);
   await checkFitAndAccessibility(popup);
-  await popup.keyboard.press('Tab');
-  await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
   await popup.keyboard.press('Tab');
   await expect(searchBox(popup)).toBeFocused();
   await expectSelected(popup, 'm1');

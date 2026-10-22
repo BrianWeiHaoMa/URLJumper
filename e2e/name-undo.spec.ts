@@ -44,7 +44,8 @@ test('keyboard alone: Undo of a save, its Undo, and Undo again leave the documen
   await expect(searchBox(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
 
-  // Past the chip and the gear.
+  // Past the chip, Name this page, and the gear.
+  await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
@@ -91,11 +92,9 @@ test('the offer stays across Shift+Tab round to Undo; a key typed there goes to 
   await extension.seedStorage({ mappings: DOC });
   const { popup, saved } = await savedOnNewPage(extension, site, 'one');
   await expect(searchBox(popup)).toBeFocused();
-  // Back from the search box, round through the page bar's button and the listed rows' pencils, to Undo. From
+  // Back from the search box, round through This page is's pencil and the listed rows' pencils, to Undo. From
   // the first control the focus wraps through Chrome's own frame and lands after the key has come up: a key sent
   // before it lands starts from no control, so the next waits for it, as a user sees it land.
-  await popup.keyboard.press('Shift+Tab');
-  await expect(popup.getByRole('button', { name: 'Name this page' })).toBeFocused();
   // The page now has the name just saved, which *This page is* says with its pencil.
   await popup.keyboard.press('Shift+Tab');
   await expect(thisPagePencil(popup)).toBeFocused();

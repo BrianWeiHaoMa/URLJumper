@@ -90,8 +90,8 @@ for (const host of SETTINGS_HOSTS) {
       [view.fixInText, 'Enter shows the Text view at line 6'],
       [view.pencil('last'), 'Enter edits line 8'],
     ];
-    // After List: Text, in the popup Open in tab, then the view.
-    for (let stop = 0; stop < (host === 'popup' ? 3 : 2); stop++) await page.keyboard.press('Tab');
+    // After List: Text, Add mapping, in the popup Open in tab, then the view.
+    for (let stop = 0; stop < (host === 'popup' ? 4 : 3); stop++) await page.keyboard.press('Tab');
     for (const [control, text] of walk) {
       if (control !== walk[0]![0]) await page.keyboard.press('Tab');
       await expect(control).toBeFocused();
@@ -186,12 +186,13 @@ for (const host of SETTINGS_HOSTS) {
     await check();
   });
 
-  test(`in the ${host}, an empty document lists nothing and says so, with Add mapping the view's one control and the focus left on List`, async ({ extension, site }) => {
+  test(`in the ${host}, an empty document lists nothing and says so, with Add mapping in the header and the focus left on List`, async ({ extension, site }) => {
     const { page, view, check } = await listIn(host, extension, site, '');
     await nav(page, 'List').focus();
     await expect(view.empty).toBeVisible();
     await expect(view.list).toHaveCount(0);
-    await expect(page.locator('.list-view').getByRole('button')).toHaveText(['Add mapping']);
+    await expect(view.addMapping).toBeVisible();
+    await expect(page.locator('.list-view').getByRole('button')).toHaveCount(0);
     await expect(nav(page, 'List')).toBeFocused();
     await check();
   });

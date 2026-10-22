@@ -1,0 +1,21 @@
+/* A header's icon button (G7): square around its 16-pixel icon, as tall as the chip beside it, its 18-pixel
+   line. Every color is a token of src/theme.css. */
+.icon-button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 7px;
+  color: var(--text-primary);
+  background: var(--bg-control);
+  border: 1px solid var(--line-control);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.icon-button[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: default;
+}

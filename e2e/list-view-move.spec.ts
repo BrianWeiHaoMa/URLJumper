@@ -325,3 +325,34 @@ test('a popup closed before its move replies leaves the move stored, and the nex
   await expect(listed.names).toHaveText(['cal', 'mail', 'news']);
   await expect(listed.numbers).toHaveText(['2', '3', '6']);
 });
+
+for (const host of SETTINGS_HOSTS) {
+  test(`in the ${host}, named and titled move arrows share a line with Cancel below Save, Delete, and Copy link, in keyboard order`, async ({ extension, site }) => {
+    const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
+    await check();
+    await view.pencil('cal').click();
+    const editor = rowEditor(page);
+    for (const [arrow, name, control] of [[editor.moveUp, 'Move up', 'move-up'], [editor.moveDown, 'Move down', 'move-down']] as const) {
+      await expect(arrow).toHaveAccessibleName(name);
+      await expect(arrow).toHaveAttribute('title', name);
+      await expect(arrow).toHaveAttribute('data-control', control);
+      await expect(arrow).toHaveClass('form-button row-editor-move');
+      await expect(arrow).toHaveText('');
+      await expect(arrow.locator('svg')).toHaveCount(1);
+    }
+    expect(await editor.moves.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? button.textContent))).toEqual(['Move up', 'Move down', 'Cancel']);
+    const upper = await Promise.all([editor.save, editor.delete, editor.copyLink].map(async (button) => (await button.boundingBox())!));
+    const lower = await Promise.all([editor.moveUp, editor.moveDown, editor.cancel].map(async (button) => (await button.boundingBox())!));
+    for (const box of upper) expect(box.y).toBe(upper[0]!.y);
+    for (const box of lower) {
+      expect(box.y).toBe(lower[0]!.y);
+      expect(box.y).toBeGreaterThanOrEqual(Math.max(...upper.map((box) => box.y + box.height)));
+    }
+    await editor.save.focus();
+    for (const button of [editor.delete, editor.copyLink, editor.moveUp, editor.moveDown, editor.cancel]) {
+      await page.keyboard.press('Tab');
+      await expect(button).toBeFocused();
+    }
+    await check();
+  });
+}

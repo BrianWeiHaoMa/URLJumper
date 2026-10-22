@@ -1,7 +1,7 @@
 /* The List view, as both hosts show it (G7, G32): one list of the document's lines, each mapping row with
    its line number, name, URL, and note beside its pencil; a heading's text; an unreadable row's raw text,
    wrapped and never cut, with why and *Fix in text*; the open editor and the confirmation in their places;
-   after the list, *Add mapping* or the Name form it opens. A name, URL, or note longer than the row is shown
+   the Name form *Add mapping* opens, above the list. A name, URL, or note longer than the row is shown
    from its start and cut with an ellipsis; nothing else is cut. Every color is a token of src/theme.css, and
    every line height a whole number of pixels. */
 .list-view {
@@ -108,9 +108,9 @@
   border-radius: 6px;
 }
 
-/* *Add mapping*, after the last line at its own width, and the Name form it opens in its place. */
-.list-add {
-  align-self: flex-start;
+/* The popup's *Copy tab URL*, between the form's heading and its fields, which are inset as it is. */
+.list-name-form-copy {
+  padding: 6px 6px 0;
 }
 
 .list-name-form-heading {

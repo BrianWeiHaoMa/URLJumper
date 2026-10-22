@@ -32,9 +32,15 @@ export interface SettingsViewProps {
   showTextView?(line: number): void;
   /**
    * In the popup alone: the tab it was opened on, with its address when Chrome granted it (E5), which the
-   * Text view's *Copy tab URL* copies (G31). Absent on the options page, which has no such tab.
+   * Text view's *Copy tab URL* copies, as does the one in the List view's *Add mapping* form (G31). Absent on
+   * the options page, which has no such tab.
    */
   openerTab?: { url: string | undefined };
+  /**
+   * Given by both hosts: the place in the host's header, at the top right, where the view puts its own controls,
+   * drawn as icons: the List view's *Add mapping*. Null until the header is drawn, when the view shows none.
+   */
+  headerControls?: HTMLElement | null;
   /**
    * On the options page alone, after Import, until another view is shown: the file, whose text the Text view
    * takes as its draft, against the base it loads, as it first shows the document, once it has asked over a kept

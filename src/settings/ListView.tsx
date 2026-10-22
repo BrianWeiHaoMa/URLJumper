@@ -5,12 +5,13 @@
 // (G16); blank lines are not listed. A mapping row's pencil opens the row editor in the row's place, one at a
 // time, with the line as this view's read holds it, offering *Move up* and *Move down*; no storage change moves
 // or closes an open editor. A change it stores is confirmed in the list beside its line, with Undo, itself
-// undoable (G15); after a move, and its Undo, the editor stays open on the moved line. *Add mapping* after the
-// last line opens the Name form with no page in its place (G11), one form or editor open at a time, its insert
-// confirmed as an edit is. The document is read as the view opens and after every change to it (State), and
-// every line is rendered (T1). The view writes only through the editor's, the form's, and Undo's requests (R1),
-// and nothing in it opens a URL (G4, R4). What differs by host, how the Text view is shown, comes in as
-// `showTextView`.
+// undoable (G15); after a move, and its Undo, the editor stays open on the moved line. *Add mapping*, a plus in
+// the host's header, opens the Name form with no page (G11) at the top of the view, one form or editor open at a
+// time, its insert confirmed as an edit is. The document is read as the view opens and after every change to it
+// (State), and every line is rendered (T1). The view writes only through the editor's, the form's, and Undo's
+// requests (R1), and nothing in it opens a URL (G4, R4). What differs by host comes in as `showTextView`, how
+// the Text view is shown, `headerControls`, the header's place for *Add mapping*, and `openerTab`, which its
+// form's *Copy tab URL* copies in the popup alone.
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import type { Anchor } from '../document/anchor';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
@@ -48,7 +49,7 @@ interface FocusRequest {
 /** A row's control with the focus, by the row's key, its line as it was then: lines above it may come and go since. */
 type FocusedRow = RowControl & { key: string };
 
-export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) {
+export function ListView({ sayWhatEnterDoes, showTextView, headerControls, openerTab }: SettingsViewProps) {
   const root = useRef<HTMLDivElement>(null);
   const { stored, unread } = useStoredDocument();
   const [editor, setEditor] = useState<OpenEditor | null>(null);
@@ -57,7 +58,7 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
   // While the editor's or the form's change awaits its reply, every other edit waits, so the reply lands on what sent it (G21).
   const [waiting, setWaiting] = useState(false);
   const [editorSays, setEditorSays] = useState('Enter does nothing');
-  const [focused, setFocused] = useState<FocusedRow | 'undo' | 'add' | null>(null);
+  const [focused, setFocused] = useState<FocusedRow | 'undo' | 'add' | 'copy' | null>(null);
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
   const [confirmedAt, setConfirmedAt] = useState<Place>(TOP);
   const count = useRef(0);
@@ -136,7 +137,7 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
     },
     // Cancel: the form gives the focus back to *Add mapping*.
     closeForm: () => setAdding(false),
-    addFocus: (on) => setFocused(on ? 'add' : null),
+    addFocus: setFocused,
     editorSays: setEditorSays,
     busy: setWaiting,
     // Typing into the editor or the form is the user's next action: a confirmation shown with it ends (G15).
@@ -148,9 +149,27 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
   });
 
   // The footer names the focused row's line as now read (L2).
-  const focusedNow = focused === null || focused === 'undo' || focused === 'add' ? focused : lineNow(items, focused);
-  const enter = whatEnterDoes(focusedNow, { confirmed, undoing, waiting, editorSays: editor === null && !adding ? null : editorSays });
+  const focusedNow = focused === null || typeof focused === 'string' ? focused : lineNow(items, focused);
+  const enter = whatEnterDoes(focusedNow, { confirmed, undoing, waiting, adding, editorSays: editor === null && !adding ? null : editorSays });
   useEffect(() => sayWhatEnterDoes?.(enter), [enter, sayWhatEnterDoes]);
+
+  const addMapping = stored !== undefined && (
+    <AddMapping
+      document={stored}
+      open={adding}
+      header={headerControls}
+      openerTab={openerTab}
+      waiting={waiting}
+      onOpen={actions.add}
+      onSaved={actions.stored}
+      onEditInstead={actions.editInstead}
+      onCancel={actions.closeForm}
+      onBusy={actions.busy}
+      onTyped={actions.typed}
+      sayWhatEnterDoes={actions.editorSays}
+      onFocusChange={actions.addFocus}
+    />
+  );
 
   return (
     <div className="list-view" ref={root} {...focus.watch}>
@@ -159,24 +178,11 @@ export function ListView({ sayWhatEnterDoes, showTextView }: SettingsViewProps) 
           The document could not be read. Chrome said: {unread}
         </p>
       )}
+      {/* At the top, below the header whose plus opens it. */}
+      {addMapping}
       {stored !== undefined && !items.some((item) => item.kind === 'mapping') && <p className="settings-text">The document has no mappings.</p>}
       {entries.length > 0 && (
         <ListLines entries={entries} stored={stored ?? ''} editor={editor} confirmed={confirmed} own={own} undoing={undoing} waiting={waiting} actions={actions} />
-      )}
-      {stored !== undefined && (
-        <AddMapping
-          document={stored}
-          open={adding}
-          waiting={waiting}
-          onOpen={actions.add}
-          onSaved={actions.stored}
-          onEditInstead={actions.editInstead}
-          onCancel={actions.closeForm}
-          onBusy={actions.busy}
-          onTyped={actions.typed}
-          sayWhatEnterDoes={actions.editorSays}
-          onFocusChange={actions.addFocus}
-        />
       )}
     </div>
   );
@@ -300,7 +306,7 @@ interface ListActions {
   closeEditor(): void;
   add(): void;
   closeForm(): void;
-  addFocus(on: boolean): void;
+  addFocus(on: 'add' | 'copy' | null): void;
   editorSays(text: string): void;
   busy(busy: boolean): void;
   typed(): void;

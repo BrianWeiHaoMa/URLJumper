@@ -354,8 +354,8 @@ test('the Name form keeps a visible focus when the Section choice it is on goes'
   const { popup } = await popupOnNewPage(extension, site);
   await popup.getByRole('button', { name: 'Name this page' }).click();
   await popup.getByRole('textbox', { name: 'Name', exact: true }).fill('new');
-  await popup.keyboard.press('Tab');
-  await popup.keyboard.press('Tab');
+  // Past the URL and the note.
+  for (let i = 0; i < 3; i++) await popup.keyboard.press('Tab');
   await expect(popup.getByRole('listbox', { name: 'Section' })).toBeFocused();
   await popup.keyboard.press('ArrowDown');
   await extension.seedStorage({ mappings: 'w w:1\n' });

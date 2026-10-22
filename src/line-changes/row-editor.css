@@ -13,6 +13,19 @@
   flex-wrap: wrap;
 }
 
+/* The moves, as arrows, and *Cancel* on a line below *Save*, *Delete*, and *Copy link*, together at any width. */
+.row-editor-moves {
+  flex-basis: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.row-editor-move {
+  display: flex;
+  align-items: center;
+  padding: 4px 7px;
+}
+
 .row-editor-note {
   margin: 0;
   overflow-wrap: anywhere;

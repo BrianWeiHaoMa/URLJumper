@@ -68,10 +68,7 @@ test("This page is names the first line with the tab's address, and its pencil, 
   const doc = twice(page.url());
   await expect(popup.locator('.view-content > .this-page')).toHaveText('This page is "here"');
   await expect(thisPagePencil(popup)).toHaveAccessibleName('Edit "here"');
-  // Back from the search box, round through the page bar's button: the focus wraps through Chrome's own frame
-  // and lands after the key has come up, so the next key waits for it.
-  await popup.keyboard.press('Shift+Tab');
-  await expect(namePage(popup)).toBeFocused();
+  // Back from the search box wraps through Chrome's own frame to the last control, the page's pencil.
   await popup.keyboard.press('Shift+Tab');
   await expect(thisPagePencil(popup)).toBeFocused();
   await expect(footer(popup)).toHaveText('Enter edits line 4');
@@ -123,14 +120,12 @@ test("after Tab to a long This page is's pencil, which scrolls the view past the
     }, SELECTED_ROW);
   await popup.keyboard.type('mail');
   await expect(selectedRowName(popup)).toHaveText('mail');
-  for (let i = 0; i < 5; i++) await popup.keyboard.press('Tab');
+  for (let i = 0; i < 6; i++) await popup.keyboard.press('Tab');
   await expect(thisPagePencil(popup)).toBeFocused();
   // The row the view scrolled away from is held back: neither drawn nor named as selected (G3).
   await expect(selectedRow(popup)).toHaveCount(0);
   await expect(searchBox(popup)).not.toHaveAttribute('aria-activedescendant');
   await expect(footer(popup)).toHaveText('Enter edits line 2');
-  await popup.keyboard.press('Tab');
-  await expect(namePage(popup)).toBeFocused();
   // Tab from the last control wraps through Chrome's own frame and lands after the key has come up.
   await popup.keyboard.press('Tab');
   await expect(searchBox(popup)).toBeFocused();
@@ -203,8 +198,6 @@ test("This page is's pencil and Edit instead that go while they have the focus g
   // Another page's changes, each one write of the worker's, as another window makes them (E1).
   const other = await extension.openRequestPage();
   const { page, popup } = await popupWith(extension, site, twice);
-  await popup.keyboard.press('Shift+Tab');
-  await expect(namePage(popup)).toBeFocused();
   await popup.keyboard.press('Shift+Tab');
   await expect(thisPagePencil(popup)).toBeFocused();
   // Another page changes line 4's URL: the page is now line 9's.

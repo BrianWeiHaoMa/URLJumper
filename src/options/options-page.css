@@ -1,5 +1,6 @@
 /* The full settings page's layout: a column of readable width with the page's title and the list of views
-   above the view shown. Every color is a token of src/theme.css. */
+   above the view shown, the view's own controls at the list's end, drawn as icons (src/icons.css). Every color
+   is a token of src/theme.css. */
 .options-page {
   box-sizing: border-box;
   max-width: 640px;
@@ -16,6 +17,21 @@
   padding-bottom: 12px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--line-separator);
+}
+
+.options-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.options-bar .settings-nav {
+  flex: 1;
+}
+
+/* The view's controls sit in the bar as its own items: an empty place takes no room and adds no gap. */
+.options-view-controls {
+  display: contents;
 }
 
 .options-title {

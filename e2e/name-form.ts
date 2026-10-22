@@ -10,6 +10,7 @@ export function nameForm(page: Page) {
     form,
     name: form.getByRole('textbox', { name: 'Name', exact: true }),
     url: form.getByRole('textbox', { name: 'URL', exact: true }),
+    note: form.getByRole('textbox', { name: 'Note', exact: true }),
     /** The Section choice, shown when the document has headings, and its options. */
     sections: form.getByRole('listbox', { name: 'Section' }),
     section: (name: string) => form.getByRole('option', { name, exact: true }),

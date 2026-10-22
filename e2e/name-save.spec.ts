@@ -10,6 +10,7 @@ import { checkFitAndAccessibility, closingPopup, expect, holdPageRequests, popup
 const footer = (popup: Page) => popup.locator('footer');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
 const urlField = (popup: Page) => popup.getByRole('textbox', { name: 'URL' });
+const noteField = (popup: Page) => popup.getByRole('textbox', { name: 'Note', exact: true });
 const sectionChoice = (popup: Page) => popup.getByRole('listbox', { name: 'Section' });
 const problem = (popup: Page) => popup.locator('#name-form-problem');
 const where = (popup: Page) => popup.locator('.preview-where');
@@ -73,6 +74,33 @@ test('the button, a name, and Enter save; the preview of a CRLF document is the 
   await popup.keyboard.press('Enter');
   await expect(confirmation(popup)).toHaveText('Saved "stocks" as line 3');
   expect(await storedDocument(extension)).toBe(`${doc}${line}\r\n`);
+});
+
+test("a note typed in the form is the line's trailing comment, trimmed, as the preview shows; a backslash in it blocks Save and stays in its field", async ({ extension, site }) => {
+  const doc = 'mail                 https://mail.example.com/\n';
+  await extension.seedStorage({ mappings: doc });
+  const { page, popup } = await formOnNewPage(extension, site, 'stocks');
+  await expect(noteField(popup)).toHaveValue('');
+  await noteField(popup).fill('a \\ b');
+  const refused = 'Line 2: a note cannot contain a backslash (\\).';
+  await expect(problem(popup)).toHaveText(refused);
+  await expect(noteField(popup)).toHaveAttribute('aria-invalid', 'true');
+  await expect(footer(popup)).toHaveText(`Enter does nothing · ${refused}`);
+  await popup.keyboard.press('Enter');
+  await expect(noteField(popup)).toHaveValue('a \\ b');
+  expect(await storedDocument(extension)).toBe(doc);
+  await checkFitAndAccessibility(popup);
+
+  await noteField(popup).fill('  daily prices  ');
+  // F12: a new line's note follows the URL after one space and a backslash.
+  const line = `stocks               ${page.url()} \\ daily prices`;
+  expect(await previewShown(popup)).toBe(line);
+  await expect(noteField(popup)).toHaveAttribute('aria-invalid', 'false');
+  await expect(footer(popup)).toHaveText('Enter saves it as line 2');
+  await checkFitAndAccessibility(popup);
+  await popup.keyboard.press('Enter');
+  await expect(confirmation(popup)).toHaveText('Saved "stocks" as line 2');
+  expect(await storedDocument(extension)).toBe(`${doc}${line}\n`);
 });
 
 test('while it saves the footer says Enter does nothing; a long name is confirmed whole, the footer in view', async ({ extension, site }) => {

@@ -19,6 +19,7 @@ test('in the popup, the keyboard alone reaches the Text view and each of its con
   await expect(footer(popup)).toHaveText('Enter does nothing · Down selects a row');
   await popup.keyboard.press('Tab');
   await popup.keyboard.press('Tab');
+  await popup.keyboard.press('Tab');
   await expect(popup.getByRole('button', { name: 'Settings' })).toBeFocused();
   await popup.keyboard.press('Enter');
   await expect(popup.getByRole('listbox', { name: 'Search order' })).toBeFocused();
