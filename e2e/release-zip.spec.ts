@@ -73,7 +73,7 @@ test("the upload's manifest declares exactly URLJumper 2.0's keys and values", (
   );
   expect(manifest.manifest_version).toBe(3);
   expect(manifest.name).toBe('URLJumper');
-  expect(manifest.version).toBe('2.0.0');
+  expect(manifest.version).toBe('2.1.0');
   expect(manifest.minimum_chrome_version).toBe('127');
   expect([...manifest.permissions].sort()).toEqual(['activeTab', 'clipboardWrite', 'contextMenus', 'storage']);
   expect(manifest.permissions).toHaveLength(4);

@@ -48,7 +48,7 @@ One mapping per line: a name, spaces, and a URL. A backslash starts a comment; a
 
 PRIVATE BY DESIGN
 
-Everything stays in your Chrome profile. URLJumper makes no network requests of its own and has no account, no sync, and no telemetry. It uses only these permissions: storage (your document and preferences), the active tab (the address and title of the page you are on, only when you open URLJumper on it), the clipboard (to copy a link), and the right-click menu.
+Everything stays in your Chrome profile. URLJumper makes no network requests of its own and has no account, no sync, and no telemetry. It uses only these permissions: storage (your document and preferences), the active tab (the address and title of the page you are on, only when you open URLJumper on it), the clipboard (to copy a link or a field's text), and the right-click menu.
 
 UPGRADING FROM 1.x
 
@@ -72,7 +72,7 @@ Developers: Brian Wei Hao Ma, Ryan B. Green
 Each is a real capture of the built extension in Chromium at a display scale of 1.25, set in a captioned frame.
 
 1. `screenshot-1-jump.png`: the popup over a page with `ma` typed, three matches, and the footer saying what Enter does.
-2. `screenshot-2-name-this-page.png`: the Name form for the page the popup was opened on, with its title, host, URL, the Section choice, and the preview of the line to be written.
+2. `screenshot-2-name-this-page.png`: the Name form for the page the popup was opened on, with its title, host, URL, an empty Note field, the Section choice, and the preview of the line to be written.
 3. `screenshot-3-search-through-a-name.png`: `yt lo-fi beats` typed, and the argument row showing the filled YouTube search URL.
 4. `screenshot-4-your-document.png`: the settings page's Text view, showing the document with comment headings, notes, and aligned columns.
 5. `screenshot-5-list-view-dark.png`: the settings page's List view in the dark theme, rows under their heading with line numbers and a note.
@@ -93,7 +93,7 @@ The store takes five screenshots at most. Upload 1, 2, 3, 4, and 6: each shows a
 
 - `storage`: holds the user's document, their learned usage for Smart order, their preferences, and an unsaved text draft, in the extension's local storage only.
 - `activeTab`: reads the address and title of the page in front when the user opens the popup on it, names it, or copies its address; nothing is read without the user's own action.
-- `clipboardWrite`: *Copy link* and *Copy tab URL* put a URL on the clipboard.
+- `clipboardWrite`: *Copy link* and *Copy tab URL* put a URL on the clipboard, and the copy button at the right of each field of the Name form and the row editors puts that field's text there.
 - `contextMenus`: the two right-click items, *Name this page in URLJumper* and *Name this link in URLJumper*.
 - No host permissions. The keyboard commands and the address-bar keyword `j` are manifest declarations, not permissions.
 

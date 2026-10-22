@@ -2,6 +2,25 @@
 
 Every release of URLJumper, newest first. The version is `version` in `manifest.config.ts`. From 2.0.0 on, each release is tagged `v<version>`; the 1.x releases are tagged `v<version>-release`, and their entries are drawn from those tags and the commit messages of the time.
 
+## 2.1.0 — 2026-10-22
+
+### Added
+
+- **Popup settings open on**: a choice in Preferences, below Theme, of the view the popup's settings open on: *Preferences*, *List*, or *Text*. It starts at Preferences and applies to the popup's settings only.
+- **Note** in the Name form, wherever it opens (Name this page, Name this link, the Name row, Add mapping): empty to start, saved as the new line's note.
+- A **copy button** at the right of the name, URL, and note fields of the Name form and of every row editor: it copies the field's value as it stands, typed or not, and stores and opens nothing.
+- **Copy tab URL** in more of the popup: in the row editor a search row opens, in the List view's row editor, and in the Add mapping form, copying the address of the tab the popup was opened on so it can be pasted over a URL.
+- **Import…** and **Export…** in the popup's settings as well as on the settings page.
+- Every icon button shows a short title on hover.
+
+### Changed
+
+- The popup's *Name this page* is a plus in the header, left of the gear, so it stays in one place however many rows are listed; the bar below the list is gone. In the popup's settings, *Open in tab* is an icon.
+- In the List view, *Add mapping* is a plus at the top right and opens its form at the top of the view; activated while the form is open, it returns to the form's name field. A row editor's *Move up* and *Move down* are arrows, on one line with *Cancel*.
+- *Import…* and *Export…* are icon buttons at the top right of the Text view, in both settings hosts, and are no longer in Preferences. Import opens the Text view afresh with the file as the unsaved text, asking first over unsaved text as before; while Chrome is not keeping the view's unsaved text, Import takes nothing and says so instead of replacing it.
+- A note typed in the Name form or a row editor may hold a backslash, as a note written in the Text view already could; a line break is still refused.
+- The List view's row editor no longer offers *Copy link*: the URL field's copy button copies what it showed. The row editor a search row opens keeps *Copy link*, which copies an argument row's filled URL.
+
 ## 2.0.0 — 2026-10-20
 
 Version 2.0 is a new implementation, built from `PRODUCT_SPECIFICATION.md` and `TECHNICAL_SPECIFICATION.md`; nothing of the 1.x code remains. An install of 1.x keeps its stored document byte for byte. From 1.1.0 on, 1.x stored the theme and named its commands as 2.0 does, so a user's theme and assigned shortcuts stay as well; 1.0.x used other names for both, and an update from one starts with the System theme and the suggested shortcuts.
