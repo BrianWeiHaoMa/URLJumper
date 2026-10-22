@@ -17,7 +17,7 @@ import { mappingOfPage } from '../document/page-mapping';
 import type { SearchRow } from '../document/search';
 import { PlusIcon } from '../icons';
 import { intentFor, startMode, type OpenIntent, type OpenMode } from '../open-intent';
-import { applyTheme, readSearchOrder, readTheme } from '../preferences';
+import { applyTheme, readPopupSettingsView, readSearchOrder, readTheme } from '../preferences';
 import { send } from '../requests';
 import { readMappings, readUsage } from '../stored-document';
 import { Confirmation, useConfirmationLifetime, useUndo } from '../line-changes/Confirmation';
@@ -38,7 +38,7 @@ import { useFitToViewport } from './fit-to-viewport';
 import { footerWithNotice } from './upgrade-notice';
 import { UpgradeNotice, useUpgradeNotice } from './UpgradeNotice';
 
-const STORED_KEYS = ['mappings', 'usage', 'searchOrder', 'themePref', 'upgradeNotice'];
+const STORED_KEYS = ['mappings', 'usage', 'searchOrder', 'themePref', 'popupSettingsView', 'upgradeNotice'];
 // Pixels of wheel movement that move the window by one row.
 const WHEEL_ROW_PIXELS = 40;
 
@@ -226,7 +226,7 @@ export function Popup() {
   }
 
   // Back to search as it was left, its list redrawn for any change made meanwhile (G27).
-  if (state.view.kind === 'settings') return <PopupSettings tabUrl={state.opener?.url} onBack={() => dispatch({ kind: 'cancel' })} />;
+  if (state.view.kind === 'settings') return <PopupSettings tabUrl={state.opener?.url} opensOn={state.stored!.popupSettingsView} onBack={() => dispatch({ kind: 'cancel' })} />;
 
   const shownConfirmation = state.confirmed !== null && (
     <Confirmation
@@ -348,12 +348,13 @@ export function Popup() {
 }
 
 function readStored(items: Record<string, unknown>): Stored {
-  const { mappings, usage, searchOrder, themePref, upgradeNotice } = items;
+  const { mappings, usage, searchOrder, themePref, popupSettingsView, upgradeNotice } = items;
   return {
     document: readMappings(mappings),
     order: readSearchOrder(searchOrder),
     usage: readUsage(usage),
     theme: readTheme(themePref),
+    popupSettingsView: readPopupSettingsView(popupSettingsView),
     upgradeNotice: upgradeNotice === 'pending',
   };
 }

@@ -1,5 +1,7 @@
 // The settings views both hosts offer, in the order they list them; the first is the one a host opens on
-// (G31). A new view is a file beside this one and one entry here.
+// (G31) unless the options page's fragment or, for the popup's settings, Preferences names another. A new
+// view is a file beside this one and one entry here; for the popup's settings to open on it, its id joins
+// `PopupSettingsView` in `src/preferences.ts` and the choice in Preferences.
 import { ListView } from './ListView';
 import { Preferences } from './Preferences';
 import type { SettingsView } from './settings-view';

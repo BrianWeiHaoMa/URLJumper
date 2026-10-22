@@ -30,7 +30,7 @@ const DOCUMENT = [
 // Mappings named m1 … m<count>, one per line: more than the seven rows a window shows.
 const many = (count: number) => Array.from({ length: count }, (_, i) => `m${i + 1}  https://e.example/${i + 1}`).join('\n');
 
-const stored = (document: string): Stored => ({ document, order: 'document', usage: undefined, theme: 'system', upgradeNotice: false });
+const stored = (document: string): Stored => ({ document, order: 'document', usage: undefined, theme: 'system', popupSettingsView: 'preferences', upgradeNotice: false });
 
 const opener = (extra: Partial<Opener> = {}): Opener => ({
   tabId: 7,

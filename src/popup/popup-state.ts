@@ -9,7 +9,7 @@ import type { Mapping } from '../document/grammar';
 import type { SearchOrder, SearchRow } from '../document/search';
 import type { Usage } from '../document/score';
 import type { OpenMode } from '../open-intent';
-import type { Theme } from '../preferences';
+import type { PopupSettingsView, Theme } from '../preferences';
 import type { JumpReply, JumpRequest } from '../requests';
 import type { NameSubject } from '../line-changes/NameForm';
 import { offersUndo, undoFooter, type Confirmed, type Outcome } from '../line-changes/outcomes';
@@ -21,6 +21,8 @@ export interface Stored {
   order: SearchOrder;
   usage: Usage | undefined;
   theme: Theme;
+  /** The view the settings open on, which the user chose in Preferences. */
+  popupSettingsView: PopupSettingsView;
   /** Whether the worker's mark of an update from 1.x is pending (G25). */
   upgradeNotice: boolean;
 }

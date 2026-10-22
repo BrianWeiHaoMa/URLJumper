@@ -4,8 +4,10 @@
 // page on the view shown; between header and footer the view scrolls (G7), and the footer says what Enter does
 // wherever the focus is (L2). It gives the views the tab the popup was opened on, whose address *Copy tab URL*
 // copies, shows its Text view on a line when the List view asks, and lets the view shown ask before another is
-// shown in its place. It holds none of the views' logic and offers no Import or Export, which are the full page's.
+// shown in its place. It opens on the view chosen in Preferences, Preferences unless another was chosen. It
+// holds none of the views' logic and offers no Import or Export, which are the full page's.
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import type { PopupSettingsView } from '../preferences';
 import { chromeMessage } from '../requests';
 import { settingsFragment, type SettingsView, type SwitchGuard } from '../settings/settings-view';
 import { enterOnView, SettingsNav } from '../settings/SettingsNav';
@@ -17,14 +19,15 @@ import './popup-settings.css';
 interface PopupSettingsProps {
   /** The address of the tab the popup was opened on; undefined when Chrome granted none (E5). */
   tabUrl: string | undefined;
+  /** The view the settings open on, as stored when they opened: a later choice shows the next time. */
+  opensOn: PopupSettingsView;
   /** Returns to search, or to the first-run state while the document is empty. */
   onBack(): void;
 }
 
-export function PopupSettings({ tabUrl, onBack }: PopupSettingsProps) {
+export function PopupSettings({ tabUrl, opensOn, onBack }: PopupSettingsProps) {
   const layout = useFitToViewport();
-  // Settings open on the first view of the list.
-  const [shown, setShown] = useState<SettingsView>(SETTINGS_VIEWS[0]);
+  const [shown, setShown] = useState<SettingsView>(() => SETTINGS_VIEWS.find((view) => view.id === opensOn) ?? SETTINGS_VIEWS[0]);
   // The line the Text view shows when the List view asked for it; showing another view drops it.
   const [caretLine, setCaretLine] = useState<number>();
   const [viewSays, setViewSays] = useState('Enter does nothing');

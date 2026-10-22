@@ -1,6 +1,7 @@
 // Preferences, as the popup's settings and the options page both show them (In use, "Preferences"): the search
-// order (G2, G27) with *Reset learned order* through the worker (R1), the theme (F3, F15), the keyword (F6,
-// N10), and the shortcuts as Chrome has assigned them (E6). Nothing is stored until the user chooses.
+// order (G2, G27) with *Reset learned order* through the worker (R1), the theme (F3, F15), the view the popup's
+// settings open on, the keyword (F6, N10), and the shortcuts as Chrome has assigned them (E6). Nothing is
+// stored until the user chooses.
 import type { Page } from '@playwright/test';
 import {
   assignShortcut,
@@ -24,6 +25,8 @@ const SHORTCUTS_PAGE = 'chrome://extensions/shortcuts';
 const footer = (popup: Page) => popup.locator('footer');
 const order = (page: Page) => page.getByRole('listbox', { name: 'Search order' });
 const theme = (page: Page) => page.getByRole('listbox', { name: 'Theme' });
+const opensOn = (page: Page) => page.getByRole('listbox', { name: 'Popup settings open on' });
+const shownView = (page: Page) => page.getByRole('navigation', { name: 'Settings views' }).locator('[aria-current="page"]');
 const chosen = (choice: ReturnType<typeof order>) => choice.getByRole('option', { selected: true });
 const reset = (page: Page) => page.getByRole('button', { name: 'Reset learned order' });
 const listed = (popup: Page) => popup.locator('[role=option] .row-name');
@@ -42,7 +45,7 @@ async function optionsPage(extension: LoadedExtension) {
   return page;
 }
 
-test('with no order or theme stored, both hosts show Document order and System, and opening either stores nothing', async ({ extension, site }) => {
+test('with no preference stored, both hosts show Document order, System, and Preferences, and opening either stores nothing', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: DOC });
   // The options page opens first, so it takes no focus from the popup.
   const changes = await extension.watchStorage();
@@ -51,6 +54,7 @@ test('with no order or theme stored, both hosts show Document order and System, 
   for (const page of [popup, options]) {
     await expect(chosen(order(page))).toHaveText('Document order');
     await expect(chosen(theme(page))).toHaveText('System');
+    await expect(chosen(opensOn(page))).toHaveText('Preferences');
   }
   await checkFitAndAccessibility(popup);
   await popup.waitForTimeout(500);
@@ -183,6 +187,52 @@ test('Light, Dark, and System chosen in the popup store light, dark, and no key,
   await expect(chosen(theme(next.popup))).toHaveText('Dark');
 });
 
+test("List and Text chosen for the popup's settings store list and text, Preferences no key, and the next popup's settings open on each; the options page still opens on Preferences", async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const options = await optionsPage(extension);
+  const { page, popup } = await settingsInPopup(extension, site);
+  const changes = await extension.watchStorage();
+
+  await opensOn(popup).focus();
+  await expect(footer(popup)).toHaveText('The arrow keys choose · Enter does nothing');
+  await popup.keyboard.press('ArrowRight');
+  for (const host of [popup, options]) await expect(chosen(opensOn(host))).toHaveText('List');
+  expect((await extension.readStorage()).popupSettingsView).toBe('list');
+  // The settings already open stay on the view shown.
+  await expect(shownView(popup)).toHaveText('Preferences');
+  await checkFitAndAccessibility(popup);
+
+  await closingPopup(popup, () => popup.keyboard.press('Escape'));
+  const onList = await extension.clickToolbarButton(page);
+  await onList.getByRole('button', { name: 'Settings' }).click();
+  await expect(shownView(onList)).toHaveText('List');
+  await expect(onList.getByRole('region', { name: 'List' })).toBeVisible();
+  await checkFitAndAccessibility(onList);
+  await closingPopup(onList, () => onList.keyboard.press('Escape'));
+
+  // Chosen on the options page, which opens on Preferences whatever the popup's settings open on.
+  await opensOn(options).getByRole('option', { name: 'Text' }).click();
+  expect((await extension.readStorage()).popupSettingsView).toBe('text');
+  await options.reload();
+  await expect(shownView(options)).toHaveText('Preferences');
+  await expect(chosen(opensOn(options))).toHaveText('Text');
+  const onText = await extension.clickToolbarButton(page);
+  await onText.getByRole('button', { name: 'Settings' }).click();
+  await expect(shownView(onText)).toHaveText('Text');
+  await expect(onText.getByRole('region', { name: 'Text' })).toBeVisible();
+  await checkFitAndAccessibility(onText);
+
+  // Preferences is no key, and the next popup's settings open on it, on its first control.
+  await onText.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'Preferences' }).click();
+  await opensOn(onText).getByRole('option', { name: 'Preferences' }).click();
+  for (const host of [onText, options]) await expect(chosen(opensOn(host))).toHaveText('Preferences');
+  expect('popupSettingsView' in (await extension.readStorage())).toBe(false);
+  expect((await changes()).filter((change) => 'popupSettingsView' in change).map((change) => change.popupSettingsView)).toEqual([{ newValue: 'list' }, { oldValue: 'list', newValue: 'text' }, { oldValue: 'text' }]);
+  await closingPopup(onText, () => onText.keyboard.press('Escape'));
+  const onPreferences = await settingsInPopup(extension, site, 'After the view changed');
+  await expect(shownView(onPreferences.popup)).toHaveText('Preferences');
+});
+
 test("a choice Chrome refuses to store leaves the stored one shown and says so with Chrome's message", async ({ extension, site }) => {
   await extension.seedStorage({ mappings: DOC });
   const { popup } = await settingsInPopup(extension, site);
@@ -194,8 +244,11 @@ test("a choice Chrome refuses to store leaves the stored one shown and says so w
   await popup.keyboard.press('ArrowRight');
   await expect(popup.getByRole('alert')).toHaveText(/^Smart order was not stored\. Chrome said: \S/);
   await expect(chosen(order(popup))).toHaveText('Document order');
+  await opensOn(popup).getByRole('option', { name: 'List' }).click();
+  await expect(popup.getByRole('alert')).toHaveText(/^Opening on List was not stored\. Chrome said: \S/);
+  await expect(chosen(opensOn(popup))).toHaveText('Preferences');
   const stored = await extension.readStorage();
-  expect('themePref' in stored || 'searchOrder' in stored).toBe(false);
+  expect('themePref' in stored || 'searchOrder' in stored || 'popupSettingsView' in stored).toBe(false);
   await checkFitAndAccessibility(popup);
 });
 

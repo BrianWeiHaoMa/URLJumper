@@ -14,6 +14,7 @@ const openInTab = (popup: Page) => popup.getByRole('button', { name: 'Open in ta
 const viewButton = (popup: Page) => popup.getByRole('navigation', { name: 'Settings views' }).getByRole('button', { name: 'Preferences' });
 const order = (popup: Page) => popup.getByRole('listbox', { name: 'Search order' });
 const theme = (popup: Page) => popup.getByRole('listbox', { name: 'Theme' });
+const opensOn = (popup: Page) => popup.getByRole('listbox', { name: 'Popup settings open on' });
 const reset = (popup: Page) => popup.getByRole('button', { name: 'Reset learned order' });
 const changeShortcuts = (popup: Page) => popup.getByRole('button', { name: 'Change shortcuts in Chrome' });
 const searchBox = (popup: Page) => popup.getByRole('combobox');
@@ -56,6 +57,7 @@ test('from search the keyboard reaches the gear and opens settings on a control,
   const along: [() => ReturnType<typeof order>, string][] = [
     [() => reset(popup), 'Enter removes the learned order'],
     [() => theme(popup), 'The arrow keys choose · Enter does nothing'],
+    [() => opensOn(popup), 'The arrow keys choose · Enter does nothing'],
     [() => changeShortcuts(popup), "Enter opens Chrome's shortcuts page"],
   ];
   for (const [control, says] of along) {
@@ -135,7 +137,7 @@ test('Enter on a choice stores nothing and leaves settings as they were; Escape 
   await expect(order(popup)).toBeFocused();
   const stored = await extension.readStorage();
   const changes = await extension.watchStorage();
-  for (const choice of [order(popup), theme(popup)]) {
+  for (const choice of [order(popup), theme(popup), opensOn(popup)]) {
     await choice.focus();
     await popup.keyboard.press('Enter');
     await expect(choice).toBeFocused();
@@ -143,6 +145,7 @@ test('Enter on a choice stores nothing and leaves settings as they were; Escape 
   }
   await expect(order(popup).getByRole('option', { selected: true })).toHaveText('Document order');
   await expect(theme(popup).getByRole('option', { selected: true })).toHaveText('System');
+  await expect(opensOn(popup).getByRole('option', { selected: true })).toHaveText('Preferences');
   await checkFitAndAccessibility(popup);
   await popup.waitForTimeout(300);
   expect(await changes()).toEqual([]);
@@ -286,6 +289,7 @@ test('in settings that scroll, each control the focus moves to stays in sight as
     [order(popup), 'The arrow keys choose · Enter does nothing'],
     [reset(popup), 'Enter removes the learned order'],
     [theme(popup), 'The arrow keys choose · Enter does nothing'],
+    [opensOn(popup), 'The arrow keys choose · Enter does nothing'],
     [changeShortcuts(popup), "Enter opens Chrome's shortcuts page"],
   ] as const) {
     await pressUntilFocused(popup, 'Tab', control, 2);
