@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { EXAMPLE_DOCUMENT } from './example';
+import { mappingOfLine } from './grammar';
 import { splitLines } from './lines';
 import { rewriteChecks, rewriteMapping } from './rewriting';
 import type { MappingFields } from './validation';
@@ -89,7 +90,6 @@ describe('a rewrite whose values break G8 or G14 names the field and the rule, a
     [fields('a', 'u:1\n'), { field: 'url', rule: 'whitespace' }],
     [fields('a', 'u:1\\x'), { field: 'url', rule: 'backslash' }],
     [fields('a', 'example.com/path'), { field: 'url', rule: 'no-scheme' }],
-    [fields('a', 'u:1', 'a\\b'), { field: 'note', rule: 'backslash' }],
     [fields('a', 'u:1', 'a\nb'), { field: 'note', rule: 'line-break' }],
     [fields('a', 'u:1', 'note\r'), { field: 'note', rule: 'line-break' }],
   ];
@@ -101,6 +101,13 @@ describe('a rewrite whose values break G8 or G14 names the field and the rule, a
 
   test('a line break at the edge of the name is trimmed away and accepted', () => {
     expect(rewriteMapping('a  u:1\n', anchor, fields('\nb\r\n', 'u:1'))).toMatchObject({ kind: 'applied', text: 'b  u:1' });
+  });
+
+  test('a backslash in the note is written as typed, and the line reads back with that note (F4)', () => {
+    const result = rewriteMapping('a  u:1\n', anchor, fields('a', 'u:1', 'see \\ docs'));
+    expect(result).toMatchObject({ kind: 'applied', text: 'a  u:1 \\ see \\ docs' });
+    if (result.kind !== 'applied') throw new Error(result.kind);
+    expect(mappingOfLine(result.text)?.note).toBe('see \\ docs');
   });
 });
 

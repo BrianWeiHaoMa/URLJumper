@@ -132,7 +132,7 @@ test('the requests that write the document, each with the replies declared for i
       { kind: 'applied', line: 4, text: 'shares  https://s.example/' },
       { kind: 'stale', document: 'a  x:1\n' },
       { kind: 'name-taken', line: 2 },
-      { kind: 'invalid', field: 'note', rule: 'backslash' },
+      { kind: 'invalid', field: 'note', rule: 'line-break' },
       { kind: 'storage-failed', message: 'Resource::kQuotaBytes quota exceeded' },
     ]],
     [REMOVE, [{ kind: 'applied', line: 3, text: REMOVE.text }, { kind: 'stale', document: '' }, { kind: 'storage-failed', message: 'IO error' }]],

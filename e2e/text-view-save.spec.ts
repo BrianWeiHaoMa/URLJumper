@@ -129,7 +129,7 @@ test('every error is listed in line order, each naming its line, and the first o
   await checkAccessibilityInBothSchemes(view.page);
 });
 
-test("F4 is the rule, not the Name form's: a note holding a backslash, a tab in a name, and a no-break space are stored as typed", async ({ extension }) => {
+test("F4 is the rule: a note holding a backslash, a tab in a name, and a no-break space are stored as typed", async ({ extension }) => {
   await extension.seedStorage({ mappings: 'x  https://x/\n' });
   const view = await textViewOnOptionsPage(extension);
   const draft = 'a  https://a/ \\ note\\more\nteam  calendar\t https://c/\nno break  https://n/\n';

@@ -180,10 +180,10 @@ describe('the errors of a document (G17)', () => {
     for (const document of ['', '\n', '   \t\r\n\u00A0\n', '\\ only a comment\r\n\n']) expect(documentErrors(document), JSON.stringify(document)).toEqual([]);
   });
 
-  test("lines F4 reads are no error, a note holding a backslash among them, which the rules for typed values refuse", () => {
+  test("lines F4 reads are no error, a note holding a backslash among them, which the rules for typed values accept too", () => {
     const draft = 'a  https://a/ \\ note\\more\nteam  calendar\t https://c/\nno\u00A0break space  https://n/\n';
     expect(documentErrors(draft)).toEqual([]);
-    expect(validateMapping({ name: 'a', url: 'https://a/', note: 'note\\more' }, [])).toMatchObject({ kind: 'invalid', field: 'note' });
+    expect(validateMapping({ name: 'a', url: 'https://a/', note: 'note\\more' }, [])).toMatchObject({ kind: 'valid', fields: { note: 'note\\more' } });
   });
 });
 

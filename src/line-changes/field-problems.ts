@@ -17,7 +17,7 @@ export function fieldProblemText(problem: FieldProblem, line: number, url: strin
     if (problem.rule === 'backslash') return `Line ${line}: a URL cannot contain a backslash (\\), which starts a comment.`;
     return url === '' ? `Line ${line} needs a URL.` : `Line ${line}: a URL must begin with a scheme, such as https:`;
   }
-  return problem.rule === 'backslash' ? `Line ${line}: a note cannot contain a backslash (\\).` : `Line ${line}: a note cannot contain a line break.`;
+  return `Line ${line}: a note cannot contain a line break.`;
 }
 
 /**

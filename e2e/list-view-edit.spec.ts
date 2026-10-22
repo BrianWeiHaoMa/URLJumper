@@ -88,6 +88,19 @@ for (const host of SETTINGS_HOSTS) {
     expect(await storedDocument(extension)).toBe(rewritten);
   });
 
+  test(`in the ${host}, Save with a backslash in the note writes it as typed, and the row shows it as its note`, async ({ extension, site }) => {
+    const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
+    await view.pencil('mail').click();
+    const editor = rowEditor(page);
+    await editor.note.fill('see \\ docs');
+    await expect(editor.note).toHaveAttribute('aria-invalid', 'false');
+    await editor.save.click();
+    await expect(lineConfirmation(page).text).toHaveText('Changed "mail" on line 3');
+    expect(await storedDocument(extension)).toBe(DOC.replace(MAIL, 'mail  https://mail.example/  \\ see \\ docs'));
+    await expect(view.notes).toHaveText(['see \\ docs']);
+    await check();
+  });
+
   test(`in the ${host}, Delete removes the line at once, the focus on Undo, which puts it back`, async ({ extension, site }) => {
     const { page, view, check } = await listViewIn(host, extension, site, { mappings: DOC });
     await view.pencil('cal').click();

@@ -60,8 +60,7 @@ describe('the URL (G8)', () => {
 });
 
 describe('the note (G14)', () => {
-  test('holds no backslash or line break, at its edges too: unlike the name, it is checked as given', () => {
-    expect(check({ note: 'a\\b' })).toEqual({ kind: 'invalid', field: 'note', rule: 'backslash' });
+  test('holds no line break, at its edges too: unlike the name, it is checked as given', () => {
     expect(check({ note: 'a\nb' })).toEqual({ kind: 'invalid', field: 'note', rule: 'line-break' });
     expect(check({ note: 'a\rb' })).toEqual({ kind: 'invalid', field: 'note', rule: 'line-break' });
     expect(check({ note: '\nhello\r\n' })).toEqual({ kind: 'invalid', field: 'note', rule: 'line-break' });
@@ -70,6 +69,10 @@ describe('the note (G14)', () => {
 
   test('is given back trimmed', () => {
     expect(check({ note: '  see docs  ' })).toMatchObject({ kind: 'valid', fields: { note: 'see docs' } });
+  });
+
+  test('may hold a backslash, as a note in the Text view may', () => {
+    expect(check({ note: 'a \\ b\\' })).toMatchObject({ kind: 'valid', fields: { note: 'a \\ b\\' } });
   });
 });
 

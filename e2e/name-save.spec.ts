@@ -76,24 +76,14 @@ test('the button, a name, and Enter save; the preview of a CRLF document is the 
   expect(await storedDocument(extension)).toBe(`${doc}${line}\r\n`);
 });
 
-test("a note typed in the form is the line's trailing comment, trimmed, as the preview shows; a backslash in it blocks Save and stays in its field", async ({ extension, site }) => {
+test("a note typed in the form is the line's trailing comment, trimmed, as the preview shows, a backslash in it kept as typed", async ({ extension, site }) => {
   const doc = 'mail                 https://mail.example.com/\n';
   await extension.seedStorage({ mappings: doc });
   const { page, popup } = await formOnNewPage(extension, site, 'stocks');
   await expect(noteField(popup)).toHaveValue('');
-  await noteField(popup).fill('a \\ b');
-  const refused = 'Line 2: a note cannot contain a backslash (\\).';
-  await expect(problem(popup)).toHaveText(refused);
-  await expect(noteField(popup)).toHaveAttribute('aria-invalid', 'true');
-  await expect(footer(popup)).toHaveText(`Enter does nothing · ${refused}`);
-  await popup.keyboard.press('Enter');
-  await expect(noteField(popup)).toHaveValue('a \\ b');
-  expect(await storedDocument(extension)).toBe(doc);
-  await checkFitAndAccessibility(popup);
-
-  await noteField(popup).fill('  daily prices  ');
-  // F12: a new line's note follows the URL after one space and a backslash.
-  const line = `stocks               ${page.url()} \\ daily prices`;
+  await noteField(popup).fill('  daily \\ prices  ');
+  // F12: a new line's note follows the URL after one space and a backslash; F4 reads a later backslash as the note's own.
+  const line = `stocks               ${page.url()} \\ daily \\ prices`;
   expect(await previewShown(popup)).toBe(line);
   await expect(noteField(popup)).toHaveAttribute('aria-invalid', 'false');
   await expect(footer(popup)).toHaveText('Enter saves it as line 2');

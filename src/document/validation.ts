@@ -16,7 +16,7 @@ export interface MappingFields {
 export type FieldProblem =
   | { field: 'name'; rule: 'empty' | 'backslash' | 'line-break' }
   | { field: 'url'; rule: 'whitespace' | 'backslash' | 'no-scheme' }
-  | { field: 'note'; rule: 'backslash' | 'line-break' };
+  | { field: 'note'; rule: 'line-break' };
 
 export type Validation =
   /** `fields` as the line will hold them: well-formed, the name and the note trimmed. */
@@ -84,8 +84,9 @@ function urlProblem(url: string): FieldProblem | undefined {
   return undefined;
 }
 
+// A backslash may stand in a note, as in the Text view: F4's comment starts at the line's first backslash, so a
+// later one reads back as part of the note.
 function noteProblem(note: string): FieldProblem | undefined {
-  if (note.includes('\\')) return { field: 'note', rule: 'backslash' };
   if (LINE_BREAK.test(note)) return { field: 'note', rule: 'line-break' };
   return undefined;
 }

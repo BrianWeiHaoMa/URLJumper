@@ -120,7 +120,6 @@ test('a refused rewrite or remove writes nothing: a line changed, gone, or unrea
     [['a', 'u:1 x', ''], { field: 'url', rule: 'whitespace' }],
     [['a', 'u:1\\x', ''], { field: 'url', rule: 'backslash' }],
     [['a', 'é:x', ''], { field: 'url', rule: 'no-scheme' }],
-    [['a', 'u:1', 'a\\b'], { field: 'note', rule: 'backslash' }],
     [['a', 'u:1', 'a\rb'], { field: 'note', rule: 'line-break' }],
   ] as const) {
     const [name, url, note] = values;

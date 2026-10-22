@@ -208,7 +208,6 @@ for (const name of ['a', 'A']) {
 }
 
 for (const invalid of [
-  { field: 'note' as const, value: 'bad \\ note', message: 'Line 2: a note cannot contain a backslash (\\).' },
   { field: 'url' as const, value: 'https://a.example/with space', message: 'Line 2: a URL cannot contain spaces or other whitespace.' },
   { field: 'name' as const, value: '', message: 'Line 2 needs a name.' },
 ]) {

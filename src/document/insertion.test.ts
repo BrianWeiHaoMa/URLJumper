@@ -245,6 +245,14 @@ const CASES: Record<string, Case> = {
     inserted: `n${' '.repeat(20)}u:1 \\ see docs\n`,
     line: 1,
   },
+  'a note holding a backslash, written as typed': {
+    document: '',
+    name: 'n',
+    url: 'u:1',
+    note: 'see \\ docs',
+    inserted: `n${' '.repeat(20)}u:1 \\ see \\ docs\n`,
+    line: 1,
+  },
   'a note of whitespace writes no comment': {
     document: '',
     name: 'n',
