@@ -2,6 +2,13 @@
 
 Every release of URLJumper, newest first. The version is `version` in `manifest.config.ts`. From 2.0.0 on, each release is tagged `v<version>`; the 1.x releases are tagged `v<version>-release`, and their entries are drawn from those tags and the commit messages of the time.
 
+## 2.2.0 — 2026-10-25
+
+### Added
+
+- **Search from the address bar**: after `j` and a space, text that matches no mapping offers a search with Chrome's configured default search engine. Enter searches the text after `j`, in the current tab or the new foreground or background tab Chrome's modifier selects. Nothing is sent before Enter, and blank input opens nothing.
+- The **search** permission, so Chrome can use your default search engine. A search changes neither your mappings nor their learned order.
+
 ## 2.1.0 — 2026-10-22
 
 ### Added

@@ -23,7 +23,7 @@ A release is the Web Store package built from a tagged commit of `main`, uploade
 2. In the developer dashboard, open the item (the listing at https://chromewebstore.google.com/detail/url-jumper/dbhbcgodajbjmemahnaigmlgjdkgghik), then *Package* › *Upload new package*, and choose the zip. The dashboard reads the name, version, and summary from the manifest.
 3. *Store listing*: the description and category from `web-store/listing.md`; the screenshots and promo tiles from `web-store/`, in the order `listing.md` gives.
 4. *Privacy*: the single-purpose description, the permission justifications, and the data-use declaration from `web-store/listing.md`.
-5. *Submit for review*. The permissions are those of 1.1.0 and later plus `contextMenus`, which shows no warning, so those users update without a prompt; a profile still on 1.0.x lacked `clipboardWrite` and may be asked.
+5. *Submit for review*. The permissions are those of 1.1.0 and later plus `contextMenus` and `search`, which [show no warning](https://developer.chrome.com/docs/extensions/reference/permissions-list), so those users update without a prompt; a profile still on 1.0.x lacked `clipboardWrite` and may be asked.
 
 ## 4. After publication
 

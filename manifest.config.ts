@@ -5,7 +5,7 @@ import { defineManifest } from '@crxjs/vite-plugin';
 export default defineManifest({
   manifest_version: 3,
   name: 'URLJumper',
-  version: '2.1.0',
+  version: '2.2.0',
   minimum_chrome_version: '127',
   description: 'Open web pages by names you keep in one text document. Type a name, press Enter, arrive.',
   // Drawn by scripts/icons.ts.

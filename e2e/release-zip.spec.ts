@@ -50,7 +50,7 @@ test('the upload holds exactly the files of dist/, byte for byte, with manifest.
   for (const name of built) expect(zipped.get(name)?.equals(fs.readFileSync(path.join(distDir, name))), name).toBe(true);
 });
 
-test("the upload's manifest declares exactly URLJumper 2.0's keys and values", () => {
+test("the upload's manifest declares exactly the released extension's keys and values", () => {
   const manifest = JSON.parse(readZip(zipPath).get('manifest.json')!.toString('utf8'));
   const shortcut = (key: string) => ({ suggested_key: { default: key, mac: key }, description: expect.stringMatching(/\S/) });
 
@@ -73,7 +73,7 @@ test("the upload's manifest declares exactly URLJumper 2.0's keys and values", (
   );
   expect(manifest.manifest_version).toBe(3);
   expect(manifest.name).toBe('URLJumper');
-  expect(manifest.version).toBe('2.1.0');
+  expect(manifest.version).toBe('2.2.0');
   expect(manifest.minimum_chrome_version).toBe('127');
   expect([...manifest.permissions].sort()).toEqual(['activeTab', 'clipboardWrite', 'contextMenus', 'search', 'storage']);
   expect(manifest.permissions).toHaveLength(5);
