@@ -27,7 +27,7 @@ WHAT IT DOES
   yt   https://www.youtube.com/results?search_query=%s
 typing "yt lo-fi beats" and pressing Enter searches YouTube for lo-fi beats.
 
-• Jump from the address bar. Type j, a space, and a name: Chrome lists your mappings in the order the popup would, and Enter opens the top one.
+• Jump from the address bar. Type j, a space, and a name: Chrome lists your mappings in the order the popup would, and Enter opens the top one. If nothing matches, Enter searches your text with your default search engine.
 
 • Smart order, if you want it. Lists the mappings you used recently first. New installs start with it on; if you are upgrading from 1.x, your list keeps the order of your document until you turn it on in Preferences.
 
@@ -48,7 +48,7 @@ One mapping per line: a name, spaces, and a URL. A backslash starts a comment; a
 
 PRIVATE BY DESIGN
 
-Everything stays in your Chrome profile. URLJumper makes no network requests of its own and has no account, no sync, and no telemetry. It uses only these permissions: storage (your document and preferences), the active tab (the address and title of the page you are on, only when you open URLJumper on it), the clipboard (to copy a link or a field's text), and the right-click menu.
+Your document and preferences stay in your Chrome profile. URLJumper makes no network requests of its own and has no account, no sync, and no telemetry. Unmatched address-bar text goes to your default search engine only when you press Enter. It uses only these permissions: storage (your document and preferences), the active tab (the address and title of the page you are on, only when you open URLJumper on it), the clipboard (to copy a link or a field's text), the right-click menu, and search (to search unmatched address-bar text with your default search engine).
 
 UPGRADING FROM 1.x
 
@@ -95,6 +95,7 @@ The store takes five screenshots at most. Upload 1, 2, 3, 4, and 6: each shows a
 - `activeTab`: reads the address and title of the page in front when the user opens the popup on it, names it, or copies its address; nothing is read without the user's own action.
 - `clipboardWrite`: *Copy link* and *Copy tab URL* put a URL on the clipboard, and the copy button at the right of each field of the Name form and the row editors puts that field's text there.
 - `contextMenus`: the two right-click items, *Name this page in URLJumper* and *Name this link in URLJumper*.
+- `search`: searches nonblank address-bar text that matches no mapping through Chrome's configured default search engine, only after the user presses Enter.
 - No host permissions. The keyboard commands and the address-bar keyword `j` are manifest declarations, not permissions.
 
 **Remote code:** none. Every script is in the package; the content security policy allows the package's own origin only.

@@ -13,7 +13,7 @@ import { textViewInPopup, textViewOnOptionsPage } from './text-view.ts';
 import { keptRelease1xBuild, withRelease1x, type Release1x } from './upgrade-from-1x.ts';
 
 export { expect } from '@playwright/test';
-export { addressBar, chromeShows, type AddressBar, type AddressBarInput, type ChromeRow, type Disposition } from './address-bar.ts';
+export { addressBar, chromeShows, makeDefaultSearchEngine, type AddressBar, type AddressBarInput, type ChromeRow, type Disposition, type TestSearchEngine } from './address-bar.ts';
 export { checkAccessibility, checkAccessibilityInBothSchemes, focusDrawn } from './accessibility.ts';
 export { distDir, type LoadedExtension, type RequestPage } from './extension-launch.ts';
 export { boxEdgeDrawnWhole, checkFit, fieldDrawnWhole, textAreaEdgeDrawnWhole } from './popup-fit.ts';

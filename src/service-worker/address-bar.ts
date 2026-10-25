@@ -1,5 +1,6 @@
 // The address-bar keyword `j` (F6, G28): each input lists the popup's mappings for the text as Chrome's
-// suggestions, and Enter opens the chosen one through the one *jump*, which records the use (G26). Both run
+// suggestions, and Enter opens the chosen one through the one *jump*, which records the use (G26), or searches
+// unmatched text through Chrome's default engine without recording a mapping use. Both run
 // on the worker's queue, so an input's record is stored before the next input's and before the Enter that
 // follows it; Enter reads the record from storage, since the worker's memory may not have survived (S2).
 import { readSearchOrder } from '../preferences';
@@ -34,7 +35,7 @@ export function listInAddressBar(text: string, suggest: Suggest): Promise<void> 
   }).catch(() => undefined);
 }
 
-/** Opens what `text` names (How G28) in the tab `disposition` asks for; nothing when it names nothing. */
+/** Opens a mapping or a default-engine search (G28) in the tab `disposition` asks for; blank input does nothing. */
 export function openFromAddressBar(text: string, disposition: Disposition): Promise<void> {
   // The tab and window Enter was pressed in are those in front as Enter arrives, asked for before the queue:
   // while earlier operations run, the user can bring another tab or window to the front.
@@ -44,6 +45,15 @@ export function openFromAddressBar(text: string, disposition: Disposition): Prom
     const target = enteredTarget(text, readAddressBarRecord(omnibox), searchInputs(items));
     if (target === undefined) return;
     const [tab] = await front;
+    if ('search' in target) {
+      // Target the captured tab or create one in its window, so queue delays cannot redirect the search.
+      const destination = disposition === 'currentTab' ? tab : await chrome.tabs.create({
+        active: disposition === 'newForegroundTab',
+        ...(tab === undefined ? {} : { windowId: tab.windowId }),
+      });
+      if (destination?.id !== undefined) await chrome.search.query({ text: target.search, tabId: destination.id });
+      return;
+    }
     // Called directly, not through `perform`: this operation is already on the queue, and would wait for itself.
     if (disposition !== 'currentTab') {
       const active = disposition === 'newForegroundTab';

@@ -2,7 +2,9 @@
 // and press Enter there, re-exported by e2e/extension.ts. `addressBar` dispatches Chrome's omnibox events to the
 // worker's own listeners with the arguments Chrome passes; what the worker hands Chrome is recorded on the
 // way and still reaches it. `chromeShows` has Chrome's own autocomplete call the worker and reads the rows it shows.
-import type { BrowserContext, Worker } from '@playwright/test';
+// `makeDefaultSearchEngine` points Chrome's configured default engine at a local URL, for the search an
+// unmatched Enter makes.
+import { expect, type BrowserContext, type Worker } from '@playwright/test';
 import type { Request } from '../src/requests.ts';
 
 export type Disposition = `${chrome.omnibox.OnInputEnteredDisposition}`;
@@ -41,6 +43,50 @@ export function addressBar(worker: Worker, requests: { send(request: Request): P
       // A request that writes nothing: the worker runs it on its one queue after everything queued before it.
       await requests.send({ kind: 'remove-intent', windowId: -1, time: 0 });
     },
+  };
+}
+
+/** A search engine configured as Chrome's default, and the address a search for a text navigates to. */
+export interface TestSearchEngine {
+  /** The name Chrome's settings shows for it. */
+  name: string;
+  /** The address Chrome navigates to for a search for `text`. */
+  urlFor(text: string): string;
+}
+
+/**
+ * Adds a site search to Chrome's settings and makes it the default, as a user does: `url` is its URL template,
+ * `%s` where Chrome puts the query. Using Chrome's settings page gives the search API a real configured
+ * default provider. Spaces in the query become `+`, as Chrome's search URL escaping does.
+ */
+export async function makeDefaultSearchEngine(
+  context: BrowserContext,
+  { name, url }: { name: string; url: string },
+): Promise<TestSearchEngine> {
+  if (!url.includes('%s')) throw new Error(`a search engine URL template needs %s: ${url}`);
+  const keyword = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (keyword === '') throw new Error(`a search engine needs a name with a letter or digit: ${name}`);
+  const page = await context.newPage();
+  try {
+    await page.goto('chrome://settings/searchEngines');
+    await page.getByRole('button', { name: 'Click to open Add Site Search dialog' }).click();
+    const dialog = page.locator('cr-dialog');
+    await dialog.locator('cr-input#searchEngine input').fill(name);
+    await dialog.locator('cr-input#keyword input').fill(keyword);
+    await dialog.locator('cr-input#queryUrl input').fill(url);
+    await dialog.locator('cr-button#actionButton').click();
+    const entry = page.locator('settings-search-engine-entry', { has: page.getByRole('button', { name: `More actions for ${name}` }) });
+    await entry.getByRole('button', { name: `More actions for ${name}` }).click();
+    await entry.getByRole('menuitem', { name: 'Make default' }).click();
+    // Chrome marks the default entry; waiting for it means a later Enter already sees this engine.
+    await expect(entry).toHaveAttribute('is-default', '');
+  } finally {
+    await page.close();
+  }
+  return {
+    name,
+    // Chrome canonicalizes the filled URL too, escaping apostrophes in an HTTP query as %27.
+    urlFor: (text) => new URL(url.replaceAll('%s', encodeURIComponent(text).replaceAll('%20', '+'))).href,
   };
 }
 

@@ -75,8 +75,8 @@ test("the upload's manifest declares exactly URLJumper 2.0's keys and values", (
   expect(manifest.name).toBe('URLJumper');
   expect(manifest.version).toBe('2.1.0');
   expect(manifest.minimum_chrome_version).toBe('127');
-  expect([...manifest.permissions].sort()).toEqual(['activeTab', 'clipboardWrite', 'contextMenus', 'storage']);
-  expect(manifest.permissions).toHaveLength(4);
+  expect([...manifest.permissions].sort()).toEqual(['activeTab', 'clipboardWrite', 'contextMenus', 'search', 'storage']);
+  expect(manifest.permissions).toHaveLength(5);
   for (const key of ['host_permissions', 'optional_permissions', 'optional_host_permissions', 'incognito']) {
     expect(manifest).not.toHaveProperty(key);
   }

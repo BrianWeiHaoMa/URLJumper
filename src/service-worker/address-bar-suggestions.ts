@@ -35,15 +35,18 @@ export interface AddressBarList {
   suggestions: Suggestion[];
 }
 
-/** What an entered text opens, as a *jump* takes it. */
-export interface AddressBarTarget {
+/** The mapping an entered text opens, as a *jump* takes it. */
+interface AddressBarMapping {
   name: string;
   url: string;
   argument: string | null;
 }
 
+/** A mapping jump or a query for Chrome's default search engine; undefined means blank input. */
+export type AddressBarTarget = AddressBarMapping | { search: string };
+
 const NOTHING_TYPED = 'Type the name of a URLJumper mapping';
-const NOTHING_MATCHES = 'No URLJumper mapping matches';
+const NOTHING_MATCHES = 'No URLJumper mapping matches — Enter searches your default search engine';
 
 /**
  * How many rows at most follow the default. Chrome ranks suggestion i (from 0) at the default's relevance less
@@ -88,22 +91,27 @@ export function addressBarList(input: SearchInput): AddressBarList {
 /**
  * What the text Chrome passed on Enter opens (How G28), compared in `comparisonForm`: equal to the stored
  * typed text, the stored row 1 (the default accepted); else the stored row whose rebuilt content it equals;
- * else row 1 of a fresh list for it, from `inputs`, which for blank text lists nothing. Undefined: nothing
- * opens. A stored row opens with the name and URL stored for it, so a document changed since still opens
- * what was shown.
+ * else row 1 of a fresh list for it, from `inputs`. Without a row, nonblank input searches and blank input
+ * opens nothing. A stored row opens with the name and URL stored for it, so a document changed since still
+ * opens what was shown; a stored no-match default likewise stays a search.
  */
 export function enteredTarget(text: string, stored: AddressBarRecord | undefined, inputs: Omit<SearchInput, 'typed'>): AddressBarTarget | undefined {
   const entered = comparisonForm(text);
   if (stored !== undefined) {
     // In the comparison form like every other text, not `trim` alone, so the typed text matches in whichever
     // form Chrome hands it back (S7); no content can, since contents differ from it in this form.
-    if (entered === comparisonForm(stored.typed)) return targetOf(stored, 0);
+    if (entered === comparisonForm(stored.typed)) return targetOf(stored, 0) ?? searchTarget(stored.typed);
     for (let index = 0; index < stored.rows.length; index++) {
       const content = contentOf(stored, index);
       if (content !== undefined && comparisonForm(content) === entered) return targetOf(stored, index);
     }
   }
-  return targetOf(addressBarList({ ...inputs, typed: text }).record, 0);
+  return targetOf(addressBarList({ ...inputs, typed: text }).record, 0) ?? searchTarget(text);
+}
+
+function searchTarget(text: string): { search: string } | undefined {
+  // Keep the original query: Chrome may have sanitized the accepted default's text (S7).
+  return text.trim() === '' ? undefined : { search: text };
 }
 
 /** The `omnibox` record as stored, or undefined when what is stored is not one. */
@@ -151,7 +159,7 @@ function contentOf(record: AddressBarRecord, index: number): string | undefined 
   return bare === undefined ? undefined : bare + suffix;
 }
 
-function targetOf(record: AddressBarRecord, index: number): AddressBarTarget | undefined {
+function targetOf(record: AddressBarRecord, index: number): AddressBarMapping | undefined {
   const row = record.rows[index];
   if (row === undefined) return undefined;
   const [, name, url] = row;

@@ -95,12 +95,12 @@ describe('the list (G28, N4)', () => {
     expect(list([], '').defaultDescription).toBe('Type the name of a URLJumper mapping');
   });
 
-  test('text matching no mapping lists no row, never the Name row, and the default says nothing matches', () => {
+  test('text matching no mapping lists no row, never the Name row, and offers a default-engine search', () => {
     for (const lines of [document, []]) {
       const shown = list(lines, 'qqq');
       expect(shown.record.rows).toEqual([]);
       expect(shown.suggestions).toEqual([]);
-      expect(shown.defaultDescription).toBe('No URLJumper mapping matches');
+      expect(shown.defaultDescription).toBe('No URLJumper mapping matches — Enter searches your default search engine');
     }
   });
 
@@ -277,7 +277,7 @@ describe('what Enter opens (How G28)', () => {
     expect(shown.suggestions.map(({ content }) => content)).toEqual(['https://e.example/?q=Cat']);
     expect(enteredTarget('https://e.example/?q=Cat', shown.record, inputs(lines))).toEqual({ name: 'İ', url: 'https://e.example/?q=%s', argument: 'Cat' });
     // Cut at the lowercased name's length, the argument would be `at`: no row has that content.
-    expect(enteredTarget('https://e.example/?q=at', shown.record, inputs(lines))).toBeUndefined();
+    expect(enteredTarget('https://e.example/?q=at', shown.record, inputs(lines))).toEqual({ search: 'https://e.example/?q=at' });
   });
 
   test('a stored row opens with the name and URL stored for it, whatever the document holds now', () => {
@@ -287,18 +287,18 @@ describe('what Enter opens (How G28)', () => {
     expect(enteredTarget('gm', record, changed)).toEqual({ name: 'gm', url: 'https://gm.example/', argument: null });
   });
 
-  test('text that is neither the stored text nor a content opens row 1 of a fresh list for it, if any', () => {
+  test('text that is neither the stored text nor a content opens row 1 of a fresh list or searches', () => {
     const { record } = list(document, 'zz');
     expect(record.rows).toEqual([]);
     expect(enteredTarget('gmail', record, inputs(document))).toEqual({ name: 'gmail', url: 'https://mail.example/', argument: null });
     expect(enteredTarget('g lo-fi', record, inputs(document))).toEqual({ name: 'g', url: 'https://g.example/?q=%s', argument: 'lo-fi' });
-    expect(enteredTarget('qqq', record, inputs(document))).toBeUndefined();
+    expect(enteredTarget('qqq', record, inputs(document))).toEqual({ search: 'qqq' });
     expect(enteredTarget('gmx', undefined, inputs(document))).toEqual({ name: 'gmx', url: 'https://gmx.example/', argument: null });
   });
 
   test('blank text opens nothing, with or without a record', () => {
     for (const stored of [undefined, list(document, '').record, list(document, 'gm').record]) {
-      for (const text of ['', '   ', '\u0085']) expect(enteredTarget(text, stored, inputs(document)), JSON.stringify([text, stored?.typed])).toBeUndefined();
+      for (const text of ['', '   ', '\t\u3000']) expect(enteredTarget(text, stored, inputs(document)), JSON.stringify([text, stored?.typed])).toBeUndefined();
     }
   });
 
@@ -309,12 +309,20 @@ describe('what Enter opens (How G28)', () => {
     expect(enteredTarget('', undefined, inputs(lines))).toBeUndefined();
   });
 
-  test('a list with no row opens nothing for its own text', () => {
-    expect(enteredTarget('qqq', list(document, 'qqq').record, inputs(document))).toBeUndefined();
-    // Also when the document came to match it since: the one suggestion shown said nothing matches (G28).
+  test('a list with no row searches its own text, even if the document has since come to match it', () => {
+    expect(enteredTarget('qqq', list(document, 'qqq').record, inputs(document))).toEqual({ search: 'qqq' });
+    // The default offered a search, so a later document change must not turn it into a mapping jump.
     const { record } = list(['other https://other.example/'], 'gmail');
     expect(enteredTarget('gmail', undefined, inputs(document))).toEqual({ name: 'gmail', url: 'https://mail.example/', argument: null });
-    expect(enteredTarget('gmail', record, inputs(document))).toBeUndefined();
+    expect(enteredTarget('gmail', record, inputs(document))).toEqual({ search: 'gmail' });
+  });
+
+  test('a search keeps the stored typed text when Chrome sanitizes the accepted default', () => {
+    const typed = '  absent\twords & café %s  ';
+    expect(enteredTarget(sanitized(typed), list(document, typed).record, inputs(document))).toEqual({ search: typed });
+    expect(enteredTarget('\u0085', undefined, inputs(document))).toEqual({ search: '\u0085' });
+    expect(enteredTarget('', list(document, '\u0085').record, inputs(document))).toEqual({ search: '\u0085' });
+    expect(enteredTarget('absent', undefined, inputs([]))).toEqual({ search: 'absent' });
   });
 
   test("an alias with 500 %s opens its filled URL from its content", () => {

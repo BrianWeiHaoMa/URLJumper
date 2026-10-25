@@ -2,7 +2,7 @@
 // popup's mappings for the same text, groups (a) to (e) in G2's order, row 1 the default, each described by
 // its name and URL in XML Chrome parses; Enter opens the row Chrome hands back, from the `omnibox` record the
 // worker keeps (State; S2, S7), through the one jump, which records the use (G26), in the tab Chrome's
-// disposition asks for. Nothing typed, or nothing matching, opens nothing (N4).
+// disposition asks for. Nothing typed opens nothing; address-bar-search.spec.ts checks unmatched searches.
 import type { Page } from '@playwright/test';
 import { addressBar, checkFitAndAccessibility, chromeShows, expect, popupOnNewPage, restartWorker, selectedRow, slowWorkerReads, test, type LoadedExtension, type LocalSite } from './extension.ts';
 
@@ -80,7 +80,7 @@ test('nothing typed after the keyword lists nothing, and Enter then opens nothin
   expect(await usageOf(extension)).toEqual(usage);
 });
 
-test("the suggestions are the popup's rows for the same text, in its order, under either order preference; text the popup answers with only its Name row lists none and opens nothing", async ({ extension, site }) => {
+test("the suggestions are the popup's rows for the same text, in its order, under either order preference; text the popup answers with only its Name row offers a search", async ({ extension, site }) => {
   const now = Date.now();
   // `mail` gives an exact row, prefix rows, contained names, and address matches; `st go` gives an exact row,
   // prefix rows, the argument row, and contained names. No text gives both of the last two groups: an argument
@@ -135,10 +135,7 @@ test("the suggestions are the popup's rows for the same text, in its order, unde
 
   const none = await bar.type('zzz');
   expect(none.suggestions).toEqual([]);
-  expect(none.defaultDescription).toBe('No URLJumper mapping matches');
-  const tabs = await extension.tabUrls();
-  await bar.enter('zzz', 'newForegroundTab');
-  expect(await extension.tabUrls()).toEqual(tabs);
+  expect(none.defaultDescription).toBe('No URLJumper mapping matches — Enter searches your default search engine');
   expect(await usageOf(extension)).toEqual(usage);
 
   // Changed in storage as Preferences changes it: the next input in the same worker follows it.
@@ -308,7 +305,7 @@ test('Enter after the worker was stopped and started again opens the row shown b
   for (const url of ['https://mail.example/', 'https://gm.example/new', 'https://gmx.example/new']) expect(await tabsAt(extension, url), url).toBe(0);
 });
 
-test('text that is neither the listed text nor a row opens row 1 of its own list, and nothing when that is empty', async ({ extension }) => {
+test('text that is neither the listed text nor a row opens row 1 of its own list when it matches', async ({ extension }) => {
   await extension.seedStorage({ mappings: 'gmail https://mail.example/\ngmx https://gmx.example/\n' });
   const bar = addressBar(extension.worker, await extension.openRequestPage());
   expect((await bar.type('zz')).suggestions).toEqual([]);
@@ -316,9 +313,6 @@ test('text that is neither the listed text nor a row opens row 1 of its own list
 
   await bar.enter('gmail', 'newForegroundTab');
   await expect.poll(() => tabsAt(extension, 'https://mail.example/')).toBe(1);
-  const tabs = await extension.tabUrls();
-  await bar.enter('qqq', 'newForegroundTab');
-  expect(await extension.tabUrls()).toEqual(tabs);
 });
 
 test("Enter opens in the tab Chrome's disposition asks for: the front tab, a new active tab, or a new tab behind", async ({ extension, site }) => {

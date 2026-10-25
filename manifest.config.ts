@@ -24,7 +24,7 @@ export default defineManifest({
     service_worker: 'src/service-worker/index.ts',
     type: 'module',
   },
-  permissions: ['storage', 'activeTab', 'clipboardWrite', 'contextMenus'],
+  permissions: ['storage', 'activeTab', 'clipboardWrite', 'contextMenus', 'search'],
   commands: {
     'open-new-tab': {
       suggested_key: { default: 'Alt+N', mac: 'Alt+N' },
