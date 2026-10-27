@@ -74,7 +74,7 @@ test('a real update from 1.3.0 keeps the document byte for byte, the dark theme,
   await assignShortcut(release1x.context, release1x.id, 'open-new-tab', 'Alt+J');
 
   const extension = await release1x.update();
-  expect(await extension.worker.evaluate(() => chrome.management.getSelf())).toMatchObject({ name: 'URLJumper', version: '2.2.0', enabled: true });
+  expect(await extension.worker.evaluate(() => chrome.management.getSelf())).toMatchObject({ name: 'URLJumper', version: '2.3.0', enabled: true });
   // Nothing migrated: 1.3.0's keys as it left them, and the mark of the update.
   expect(await extension.readStorage()).toEqual({ ...before, upgradeNotice: 'pending' });
   expect((await assignedShortcuts(extension.worker))['open-new-tab']).toBe('Alt+J');

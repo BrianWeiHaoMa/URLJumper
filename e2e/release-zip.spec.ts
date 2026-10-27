@@ -73,7 +73,7 @@ test("the upload's manifest declares exactly the released extension's keys and v
   );
   expect(manifest.manifest_version).toBe(3);
   expect(manifest.name).toBe('URLJumper');
-  expect(manifest.version).toBe('2.2.0');
+  expect(manifest.version).toBe('2.3.0');
   expect(manifest.minimum_chrome_version).toBe('127');
   expect([...manifest.permissions].sort()).toEqual(['activeTab', 'clipboardWrite', 'contextMenus', 'search', 'storage']);
   expect(manifest.permissions).toHaveLength(5);
