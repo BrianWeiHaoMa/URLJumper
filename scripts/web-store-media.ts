@@ -103,7 +103,7 @@ const SCREENSHOTS: Record<'jump' | 'name' | 'argument' | 'document' | 'listDark'
   addressBar: {
     file: 'screenshot-6-address-bar.png',
     title: 'Or jump from the address bar.',
-    text: 'Type j, a space, and a name: Chrome suggests your mappings in the order the popup would, and Enter opens the top one.',
+    text: 'Type uj, a space, and a name: Chrome suggests your mappings in the order the popup would, and Enter opens the top one.',
     layout: 'top',
   },
 };
@@ -398,7 +398,7 @@ async function captureAll(display: string, site: { port: number; spki: string },
     dark.focusPage();
     execFileSync('xdotool', ['key', '--clearmodifiers', 'ctrl+l'], { env });
     await sleep(300);
-    execFileSync('xdotool', ['type', '--delay', '120', 'j '], { env });
+    execFileSync('xdotool', ['type', '--delay', '120', 'uj '], { env });
     await sleep(500);
     execFileSync('xdotool', ['type', '--delay', '120', 'ma'], { env });
     await sleep(1500);

@@ -252,14 +252,14 @@ test("a choice Chrome refuses to store leaves the stored one shown and says so w
   await checkFitAndAccessibility(popup);
 });
 
-test('the keyword shows as j, as text in both hosts and in no field', async ({ extension, site }) => {
+test('the keyword shows as uj, as text in both hosts and in no field', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: DOC });
   const options = await optionsPage(extension);
   const { popup } = await settingsInPopup(extension, site);
   for (const page of [popup, options]) {
     const section = page.getByRole('region', { name: 'Address bar' });
-    await expect(section).toContainText("In Chrome's address bar, type j and a space, then a name.");
-    await expect(section.locator('kbd')).toHaveText('j');
+    await expect(section).toContainText("In Chrome's address bar, type uj and a space, then a name.");
+    await expect(section.locator('kbd')).toHaveText('uj');
     await expect(page.getByRole('textbox')).toHaveCount(0);
   }
 });

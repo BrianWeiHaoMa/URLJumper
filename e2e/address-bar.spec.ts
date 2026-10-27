@@ -1,4 +1,4 @@
-// The address-bar keyword `j` (In use, "Jump from the address bar"; F6, G28): the text typed after it lists the
+// The address-bar keyword `uj` (In use, "Jump from the address bar"; F6, G28): the text typed after it lists the
 // popup's mappings for the same text, groups (a) to (e) in G2's order, row 1 the default, each described by
 // its name and URL in XML Chrome parses; Enter opens the row Chrome hands back, from the `omnibox` record the
 // worker keeps (State; S2, S7), through the one jump, which records the use (G26), in the tab Chrome's
@@ -166,7 +166,7 @@ test("Chrome's own autocomplete shows the list in its order however long it is, 
   const shown = await chromeShows(extension.context, 'a');
   // Chrome shows a tab in a name as nothing, so the third row reads like the second.
   expect(shown.map(({ contents }) => contents)).toEqual(['a – https://a.example/', 'ab – https://ab.example/', 'ab – https://atb.example/']);
-  expect(shown.map(({ fillIntoEdit }) => fillIntoEdit)).toEqual(['j a', 'j ab', 'j ab (line 3)']);
+  expect(shown.map(({ fillIntoEdit }) => fillIntoEdit)).toEqual(['uj a', 'uj ab', 'uj ab (line 3)']);
 });
 
 test("every description is XML Chrome's parser takes, reading as the name and the URL, as row 1 and as a later row", async ({ extension }) => {

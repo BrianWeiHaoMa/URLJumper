@@ -1,4 +1,4 @@
-// Chrome's address bar, which headless Chrome cannot show: what a check needs to type after the keyword `j`
+// Chrome's address bar, which headless Chrome cannot show: what a check needs to type after the keyword `uj`
 // and press Enter there, re-exported by e2e/extension.ts. `addressBar` dispatches Chrome's omnibox events to the
 // worker's own listeners with the arguments Chrome passes; what the worker hands Chrome is recorded on the
 // way and still reaches it. `chromeShows` has Chrome's own autocomplete call the worker and reads the rows it shows.
@@ -114,7 +114,7 @@ export async function chromeShows(context: BrowserContext, text: string): Promis
       await page.getByRole('button', { name: 'Disable internal debugging pages', exact: true }).waitFor();
     }
     await page.goto('chrome://omnibox');
-    const input = `j ${text}`;
+    const input = `uj ${text}`;
     await page.locator('#input-text').fill(input);
     // `responsesHistory` is the page's own record of each autocomplete pass for the latest input.
     await page.waitForFunction((input) => {

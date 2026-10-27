@@ -9,7 +9,7 @@ A release is the Web Store package built from a tagged commit of `main`, uploade
 3. If users should be told what is new: the one-line notice and `whats-new.html` are shown only after an update from 1.x (`src/service-worker/install.ts`). A later release that wants a notice of its own needs a product amendment first.
 4. If the popup or a settings view changed in a way a store screenshot shows, redraw the listing's media: `npm run build`, then `node scripts/web-store-media.ts` (Linux with Xvfb, xdotool, ImageMagick, and openssl installed; the script names what is missing), and look at every image under `web-store/`. Update `web-store/listing.md` where the description or a caption no longer matches the product.
 5. Run every check: `npm ci && npm test && npm run e2e`. The last also writes `release/URLJumper.zip`. CI runs the same on every push.
-6. Load `dist/` unpacked (`README.md`, *Load it unpacked*) and try the release by hand, for what the checks cannot see: a real Alt+N and Alt+Shift+N on your keyboard, a jump, Name this page, `j` and a name in the address bar, the settings page, and the popup on a display scaled at 125% if you have one.
+6. Load `dist/` unpacked (`README.md`, *Load it unpacked*) and try the release by hand, for what the checks cannot see: a real Alt+N and Alt+Shift+N on your keyboard, a jump, Name this page, `uj` and a name in the address bar, the settings page, and the popup on a display scaled at 125% if you have one.
 7. Stage everything the release changes and commit on `main`: `git add -A && git commit -m "URLJumper <version>"`.
 
 ## 2. Tag and publish on GitHub

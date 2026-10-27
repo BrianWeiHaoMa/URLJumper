@@ -2,6 +2,12 @@
 
 Every release of URLJumper, newest first. The version is `version` in `manifest.config.ts`. From 2.0.0 on, each release is tagged `v<version>`; the 1.x releases are tagged `v<version>-release`, and their entries are drawn from those tags and the commit messages of the time.
 
+## Unreleased
+
+### Changed
+
+- The **address-bar keyword** is `uj` instead of `j`: type `uj`, a space, and a name. Chrome lets an extension's keyword take over a site search you made yourself with the same shortcut, so `j` hid any `j` shortcut of your own; it works again.
+
 ## 2.2.0 — 2026-10-25
 
 ### Added

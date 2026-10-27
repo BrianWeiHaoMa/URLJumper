@@ -85,7 +85,7 @@ test("the upload's manifest declares exactly the released extension's keys and v
     'open-same-tab': shortcut('Alt+M'),
     'name-this-page': shortcut('Alt+Shift+N'),
   });
-  expect(manifest.omnibox).toEqual({ keyword: 'j' });
+  expect(manifest.omnibox).toEqual({ keyword: 'uj' });
   expect(manifest.content_security_policy).toEqual({ extension_pages: "default-src 'self'" });
   expect(manifest.background).toEqual({ service_worker: expect.stringMatching(/\.js$/), type: 'module' });
   expect(manifest.action).toEqual({ default_popup: 'popup.html', default_title: 'URLJumper' });

@@ -1,4 +1,4 @@
-// What the address-bar keyword `j` lists and opens (G28), without Chrome's API, which `address-bar.ts` calls:
+// What the address-bar keyword `uj` lists and opens (G28), without Chrome's API, which `address-bar.ts` calls:
 // the popup's list for the typed text, groups (a) to (e), as Chrome's suggestions, each with the content Chrome
 // hands back when it is chosen and the description it shows; the record of that list kept in `omnibox`
 // (State); and which row an entered text opens (How G28).

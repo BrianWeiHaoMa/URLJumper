@@ -386,7 +386,7 @@ test("the what's-new page names URLJumper and the five changes, follows the stor
     'A name typed in full comes first',
     'Search through a name with %s',
     'Name this page',
-    'The keyword j in the address bar',
+    'The keyword uj in the address bar',
     'Smart order',
   ]);
   await expect(items.nth(0)).toContainText('an earlier line');
@@ -395,7 +395,7 @@ test("the what's-new page names URLJumper and the five changes, follows the stor
   await expect(items.nth(2)).toContainText('Name this page in URLJumper');
   await expect(items.nth(2)).toContainText('Name this link in URLJumper');
   await expect(items.nth(2)).toContainText('its last row');
-  await expect(items.nth(3)).toContainText('type j, a space, and a name');
+  await expect(items.nth(3)).toContainText('type uj, a space, and a name');
   await expect(items.nth(4)).toContainText('It is off for you');
   await expect(items.nth(4)).toContainText('Preferences');
   expect(await page.locator('body').textContent()).not.toMatch(/URL Jumper/);

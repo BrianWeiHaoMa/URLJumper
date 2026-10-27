@@ -1,4 +1,4 @@
-// Unmatched Enter in the address-bar keyword `j` (F8, G28): one search, through Chrome's configured default
+// Unmatched Enter in the address-bar keyword `uj` (F8, G28): one search, through Chrome's configured default
 // search engine, for the text after the keyword, in the tab Chrome's disposition selects and in the window
 // Enter was pressed in. The engines are real site searches Chrome's settings stores at local addresses, so a
 // hardcoded provider cannot pass. Blank input still opens nothing, and a stored no-match stays a search when

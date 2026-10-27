@@ -27,7 +27,7 @@ WHAT IT DOES
   yt   https://www.youtube.com/results?search_query=%s
 typing "yt lo-fi beats" and pressing Enter searches YouTube for lo-fi beats.
 
-• Jump from the address bar. Type j, a space, and a name: Chrome lists your mappings in the order the popup would, and Enter opens the top one. If nothing matches, Enter searches your text with your default search engine.
+• Jump from the address bar. Type uj, a space, and a name: Chrome lists your mappings in the order the popup would, and Enter opens the top one. If nothing matches, Enter searches your text with your default search engine.
 
 • Smart order, if you want it. Lists the mappings you used recently first. New installs start with it on; if you are upgrading from 1.x, your list keeps the order of your document until you turn it on in Preferences.
 
@@ -76,7 +76,7 @@ Each is a real capture of the built extension in Chromium at a display scale of 
 3. `screenshot-3-search-through-a-name.png`: `yt lo-fi beats` typed, and the argument row showing the filled YouTube search URL.
 4. `screenshot-4-your-document.png`: the settings page's Text view, showing the document with comment headings, notes, and aligned columns.
 5. `screenshot-5-list-view-dark.png`: the settings page's List view in the dark theme, rows under their heading with line numbers and a note.
-6. `screenshot-6-address-bar.png`: Chrome's address bar in keyword mode after `j ma`, listing the same three matches.
+6. `screenshot-6-address-bar.png`: Chrome's address bar in keyword mode after `uj ma`, listing the same three matches.
 
 The store takes five screenshots at most. Upload 1, 2, 3, 4, and 6: each shows a different way in or a different face of the document, and the address bar is the one Chrome draws itself. Screenshot 5 is the spare, for when the dark theme should be seen.
 
@@ -96,7 +96,7 @@ The store takes five screenshots at most. Upload 1, 2, 3, 4, and 6: each shows a
 - `clipboardWrite`: *Copy link* and *Copy tab URL* put a URL on the clipboard, and the copy button at the right of each field of the Name form and the row editors puts that field's text there.
 - `contextMenus`: the two right-click items, *Name this page in URLJumper* and *Name this link in URLJumper*.
 - `search`: searches nonblank address-bar text that matches no mapping through Chrome's configured default search engine, only after the user presses Enter.
-- No host permissions. The keyboard commands and the address-bar keyword `j` are manifest declarations, not permissions.
+- No host permissions. The keyboard commands and the address-bar keyword `uj` are manifest declarations, not permissions.
 
 **Remote code:** none. Every script is in the package; the content security policy allows the package's own origin only.
 

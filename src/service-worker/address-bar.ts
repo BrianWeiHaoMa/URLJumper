@@ -1,4 +1,4 @@
-// The address-bar keyword `j` (F6, G28): each input lists the popup's mappings for the text as Chrome's
+// The address-bar keyword `uj` (F6, G28): each input lists the popup's mappings for the text as Chrome's
 // suggestions, and Enter opens the chosen one through the one *jump*, which records the use (G26), or searches
 // unmatched text through Chrome's default engine without recording a mapping use. Both run
 // on the worker's queue, so an input's record is stored before the next input's and before the Enter that

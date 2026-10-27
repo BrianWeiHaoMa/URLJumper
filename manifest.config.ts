@@ -39,6 +39,7 @@ export default defineManifest({
       description: 'Name this page in URLJumper',
     },
   },
-  omnibox: { keyword: 'j' },
+  // Not a single letter: Chrome lets an extension's keyword override a site search the user made with the same one (F6).
+  omnibox: { keyword: 'uj' },
   content_security_policy: { extension_pages: "default-src 'self'" },
 });
