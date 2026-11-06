@@ -54,6 +54,13 @@ test("while the notice shows, a footer that says Enter does nothing says Enter c
   expect(footerWithNotice('Enter opens the Name form', { shown: true, focused: 'close' })).toBe('Enter closes the notice');
 });
 
+test("while the view's own request awaits its reply, the control that opens what's new waits, and Enter on it does nothing, as the view's footer says", () => {
+  const opening = 'Opening · Enter does nothing until it opens';
+  expect(footerWithNotice(opening, { shown: true, focused: 'open' }, true)).toBe(opening);
+  expect(footerWithNotice(opening, { shown: true, focused: 'close' }, true)).toBe('Enter closes the notice');
+  expect(footerWithNotice(opening, { shown: true, focused: null }, true)).toBe('Opening · Enter only closes the notice until it opens');
+});
+
 test("without the notice, the footer is the view's own, whatever focus was last reported on it", () => {
   expect(footerWithNotice('Enter does nothing · Down selects a row', { shown: false, focused: null })).toBe('Enter does nothing · Down selects a row');
   expect(footerWithNotice('Enter does nothing · Down selects a row', { shown: false, focused: 'close' })).toBe('Enter does nothing · Down selects a row');

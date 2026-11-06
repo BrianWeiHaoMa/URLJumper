@@ -1,16 +1,20 @@
 // Import in the Text view (G20, G19, F10, G31, G32; In use, "Edit the text"; Composition, "Chrome"):
 // any chosen file is read as UTF-8, its byte-order mark dropped and an invalid byte read as U+FFFD (S14), and
 // its text becomes the Text view's draft, as the text area holds it, against the stored document as its base;
-// nothing is stored until Save. Over a kept draft with unsaved changes the Text view asks first, also over one
-// still on its way to the worker, and keeping the draft imports nothing; a file read that ends after the Text
-// view is shown still arrives. Both hosts offer Import only in the Text view.
+// nothing is stored until Save. Over its own unsaved text the Text view asks first, in place, whatever another
+// view kept or saved since, keeping leaving the text editable where it is and replacing taking the file at
+// once; with nothing unsaved it asks, shown afresh, over another view's kept draft with unsaved changes; keeping
+// imports nothing; a file read that ends after the Text view is shown still arrives. Both hosts offer Import
+// only in the Text view.
 import type { Page } from '@playwright/test';
 import type { Draft } from '../src/draft.ts';
 import {
   checkAccessibilityInBothSchemes,
+  draftLanded,
   expect,
   holdFileReads,
   holdPageReads,
+  holdPageRequests,
   importFile,
   slowWorkerReads,
   storedDraft,
@@ -109,18 +113,134 @@ test('Import asks over text just typed in this Text view whose draft has not yet
   await slowWorkerReads(extension.worker, 'draft', 2_000);
   const sets = await watchRequests(extension.worker, 'draft-set');
   await typeAtEnd(view, 'mine  https://mine/\n');
-  // Import remounts the editor, flushing the draft still waiting on its debounce.
+  // Import first sends the draft still waiting on its debounce, then asks.
   await importFile(view.page, 'mappings.txt', FILE);
   await expect.poll(sets).toHaveLength(1);
   await expect(question(view.page)).toBeVisible({ timeout: 10_000 });
+  await expect(view.area).toHaveValue(`${DOC}mine  https://mine/\n`);
   expect(await storedDraft(extension.worker)).toMatchObject({ text: `${DOC}mine  https://mine/\n`, base: DOC });
   await checkAccessibilityInBothSchemes(view.page);
   await keepDraft(view.page).click();
-  await checkAccessibilityInBothSchemes(view.page);
-  await view.resume.click();
+  await expect(question(view.page)).toHaveCount(0);
+  await expect(view.keptOffer).toHaveCount(0);
   await expect(view.area).toHaveValue(`${DOC}mine  https://mine/\n`);
+  await expect(view.area).toBeEditable();
+  await expect(view.area).toBeFocused();
+  expect(await sets()).toHaveLength(1);
+  expect(await storedDraft(extension.worker)).toMatchObject({ text: `${DOC}mine  https://mine/\n`, base: DOC });
   await checkAccessibilityInBothSchemes(view.page);
 });
+
+test("Import while this view's Save awaits its reply waits for it: the Save stores the text, then the file goes in afresh as the draft, kept and offered back", async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const view = await textViewOnOptionsPage(extension);
+  const typed = `${DOC}mine  https://mine/\n`;
+  await typeAtEnd(view, 'mine  https://mine/\n');
+  await draftLanded(extension, typed);
+  const replaces = await holdPageRequests(view.page, 'replace');
+  const finishRead = await holdFileReads(view.page);
+  await view.save.click();
+  await expect.poll(replaces.held).toBe(1);
+  // The file is read, and handed to the view, while the Save still awaits its reply.
+  await importFile(view.page, 'mappings.txt', FILE);
+  await finishRead();
+  await replaces.release();
+  await expect(view.area).toHaveValue(SHOWN);
+  await expect(question(view.page)).toHaveCount(0);
+  await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: SHOWN, base: typed });
+  expect((await extension.readStorage()).mappings).toBe(typed);
+  await nav(view.page, 'Preferences').click();
+  await nav(view.page, 'Text').click();
+  await expect(view.keptOffer).toBeVisible();
+  await checkAccessibilityInBothSchemes(view.page);
+  await view.resume.click();
+  await expect(view.area).toHaveValue(SHOWN);
+});
+
+/** Two Text views on the options page over `BASE`, `a` holding `A` and `b` holding `B`, each kept as the draft in turn, `b`'s last. */
+async function twoViewsTyped(extension: LoadedExtension) {
+  await extension.seedStorage({ mappings: BASE });
+  const a = await textViewOnOptionsPage(extension);
+  const b = await textViewOnOptionsPage(extension);
+  await typeAtEnd(a, 'from-a  https://a.example/\n');
+  await draftLanded(extension, A);
+  await typeAtEnd(b, 'from-b  https://b.example/\n');
+  await draftLanded(extension, B);
+  return { a, b };
+}
+
+const BASE = 'mail  https://mail.example/\n';
+const A = `${BASE}from-a  https://a.example/\n`;
+const B = `${BASE}from-b  https://b.example/\n`;
+const REPLACEMENT = 'imported  https://imported.example/\n';
+
+for (const answer of ['keep', 'replace'] as const) {
+  test(`Import in a Text view after another view saved over its kept draft asks about this view's own text, in this view; ${answer === 'keep' ? 'kept, the text stays editable and nothing is imported' : 'replaced, the file is the text, against the document the other view stored'}`, async ({ extension }) => {
+    const { a, b } = await twoViewsTyped(extension);
+    await b.save.click();
+    await expect(b.status).toHaveText('Saved');
+    await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
+    await expect(a.area).toHaveValue(A);
+
+    await importFile(a.page, 'replacement.txt', Buffer.from(REPLACEMENT));
+    await expect(question(a.page)).toContainText('Importing replacement.txt replaces it.');
+    await expect(replaceWithFile(a.page)).toBeFocused();
+    await expect(a.area).toHaveValue(A);
+    await expect(a.area).not.toBeEditable();
+    await expect(a.save).toHaveAttribute('aria-disabled', 'true');
+    await checkAccessibilityInBothSchemes(a.page);
+    if (answer === 'keep') {
+      await keepDraft(a.page).click();
+      await expect(question(a.page)).toHaveCount(0);
+      await expect(a.keptOffer).toHaveCount(0);
+      await expect(a.area).toHaveValue(A);
+      await expect(a.area).toBeEditable();
+      await expect(a.area).toBeFocused();
+      await checkAccessibilityInBothSchemes(a.page);
+      expect((await extension.readStorage()).mappings).toBe(B);
+      // Keep sends nothing: the record the other view's Save removed stays absent.
+      expect(await storedDraft(extension.worker)).toBeUndefined();
+      return;
+    }
+    await replaceWithFile(a.page).click();
+    await expect(a.area).toHaveValue(REPLACEMENT);
+    await expect(a.area).toBeEditable();
+    await expect(a.area).toBeFocused();
+    expect(await a.area.evaluate((area: HTMLTextAreaElement) => [area.selectionStart, area.selectionEnd])).toEqual([0, 0]);
+    await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: REPLACEMENT, base: B });
+    expect((await extension.readStorage()).mappings).toBe(B);
+    await checkAccessibilityInBothSchemes(a.page);
+    await a.save.click();
+    await expect(a.status).toHaveText('Saved');
+    await expect(a.offer).toHaveCount(0);
+    expect((await extension.readStorage()).mappings).toBe(REPLACEMENT);
+  });
+
+  test(`Import in a Text view while another view's newer draft is unsaved asks about this view's own text; ${answer === 'keep' ? "kept, this view's text stays and the other's draft is still kept" : 'replaced, the file goes in at once, with no second question'}`, async ({ extension }) => {
+    const { a, b } = await twoViewsTyped(extension);
+    await importFile(a.page, 'replacement.txt', Buffer.from(REPLACEMENT));
+    await expect(question(a.page)).toContainText('Importing replacement.txt replaces it.');
+    await expect(a.area).toHaveValue(A);
+    if (answer === 'keep') {
+      await keepDraft(a.page).click();
+      await expect(question(a.page)).toHaveCount(0);
+      await expect(a.area).toHaveValue(A);
+      await expect(a.area).toBeEditable();
+      await expect(b.area).toHaveValue(B);
+      expect(await storedDraft(extension.worker)).toMatchObject({ text: B, base: BASE });
+      expect((await extension.readStorage()).mappings).toBe(BASE);
+      return;
+    }
+    await replaceWithFile(a.page).click();
+    await expect(a.area).toHaveValue(REPLACEMENT);
+    await expect(a.area).toBeEditable();
+    await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: REPLACEMENT, base: BASE });
+    // No second question about this view's own draft, now the stored one.
+    await expect(a.keptOffer).toHaveCount(0);
+    expect((await extension.readStorage()).mappings).toBe(BASE);
+    await checkAccessibilityInBothSchemes(a.page);
+  });
+}
 
 test("Import asks over a draft another view stored while the Text view's first read was answered late", async ({ extension }) => {
   await extension.seedStorage({ mappings: DOC });
@@ -166,9 +286,8 @@ test('a file read late in Text still becomes the draft, asked about over the edi
   await expect(question(page)).toContainText('Importing second.txt replaces it.');
   await checkAccessibilityInBothSchemes(page);
   await keepDraft(page).click();
-  await checkAccessibilityInBothSchemes(page);
-  await view.resume.click();
   await expect(view.area).toHaveValue(`${DOC}meanwhile  https://meanwhile/\n`);
+  await expect(view.area).toBeEditable();
   await checkAccessibilityInBothSchemes(page);
 });
 

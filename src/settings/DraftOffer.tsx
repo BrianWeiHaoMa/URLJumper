@@ -6,7 +6,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { typedAt, type Draft } from '../draft';
 
 interface DraftOfferProps {
-  draft: Draft;
+  /** The unsaved text asked about, by when it was typed: a kept draft, or the view's own text Import would replace. */
+  draft: Pick<Draft, 'time'>;
   /** The name of the file Import read, when it waits on the answer; null for the offer to resume or discard. */
   importing: string | null;
   /** Whether the stored document has changed since the draft was typed against it. */

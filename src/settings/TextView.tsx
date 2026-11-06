@@ -13,9 +13,11 @@
 // The draft is kept by the worker as it is typed, with its base (G19; State `draft`; `draft-keeping.ts`), and
 // goes once the stored document holds its text. As the view opens it offers a draft another view kept, to
 // resume, text and base restored, or to discard (`DraftOffer`); one the stored document holds is dropped
-// without asking. Import shows the view afresh, and the file's text arrives as the draft against the base it
-// loads, after asking whether to replace a kept draft with unsaved changes (G19, G20). A switch to the List view
-// over unsaved changes asks first: save and switch, keep the draft and switch, or stay (`SwitchQuestion`; G19).
+// without asking. Import over the view's own unsaved text asks there, before anything is replaced, since a
+// record another view's edit or Save has replaced since no longer holds that text; with nothing unsaved, Import
+// shows the view afresh, and the file's text arrives as the draft against the base it loads, after asking
+// whether to replace another view's kept draft with unsaved changes (G19, G20). A switch to the List view over
+// unsaved changes asks first: save and switch, keep the draft and switch, or stay (`SwitchQuestion`; G19).
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { documentErrors, type DocumentError } from '../document/grammar';
 import { textAreaLineStart } from '../document/lines';
@@ -25,7 +27,7 @@ import { chromeMessage, send } from '../requests';
 import { readMappings } from '../stored-document';
 import { COPY_TAB_URL_SAYS } from './copy-tab-url';
 import { CopyTabUrl } from './CopyTabUrl';
-import { discardDraft, draftRequestsAnswered, keepDraft, type DraftKeeping } from './draft-keeping';
+import { discardDraft, draftRequestsAnswered, keepDraft, type DraftKeeping, type Edit } from './draft-keeping';
 import { DraftOffer } from './DraftOffer';
 import { Export, EXPORT_FILE_NAME } from './Export';
 import { Import, type ImportedText } from './Import';
@@ -48,20 +50,24 @@ type Outcome =
 /** Where the focus is among the view's controls, which says what Enter does: an error by its line. */
 type Focused = 'text' | 'save' | 'copy' | { line: number } | null;
 
+/** What Import's file meets in the view: nothing unsaved; unsaved text Chrome did not keep, with what Chrome said; or unsaved text the view asks about. */
+type ImportMeets = { kind: 'nothing-unsaved' } | { kind: 'not-kept'; message: string } | { kind: 'asked' };
+
 /**
  * The Text view as a host shows it: *Import…* and *Export…* in the host's header, and below, the text area with
- * Save, shown afresh for each Import with the file as its draft, so a draft typed here, which its leaving keeps,
- * is asked about as any kept draft is (G19, G20). The host's caret line is for the view as it opens.
+ * Save, shown afresh for each Import over nothing unsaved with the file as its draft, which asks about another
+ * view's kept draft as it opens (G19, G20). The host's caret line is for the view as it opens.
  */
 export function TextView({ headerControls, sayWhatEnterDoes, caretLine, ...props }: SettingsViewProps) {
   const [imported, setImported] = useState<{ file: ImportedText; count: number }>();
-  // Asked before Import shows the view afresh, which would take with it, unasked, unsaved text Chrome did not keep (G19).
-  const unkept = useRef(async (): Promise<string | null> => null);
+  // Set by the view as it opens. Import over unsaved text is refused when Chrome did not keep it, and else asked
+  // about in the view that holds it, never taken by a view shown afresh (G19).
+  const meetImport = useRef(async (_file: ImportedText): Promise<ImportMeets> => ({ kind: 'nothing-unsaved' }));
   // A file read once the view has gone goes nowhere: the user left the view they imported it into.
   const take = async (file: ImportedText): Promise<string | null> => {
-    const because = await unkept.current();
-    if (because !== null) return `Not imported: Chrome is not keeping your unsaved text, which ${file.fileName} would replace. Save it, then import again. Chrome said: ${because}`;
-    setImported((last) => ({ file, count: (last?.count ?? 0) + 1 }));
+    const meets = await meetImport.current(file);
+    if (meets.kind === 'not-kept') return `Not imported: Chrome is not keeping your unsaved text, which ${file.fileName} would replace. Save it, then import again. Chrome said: ${meets.message}`;
+    if (meets.kind === 'nothing-unsaved') setImported((last) => ({ file, count: (last?.count ?? 0) + 1 }));
     return null;
   };
   const [focused, setFocused] = useState<'import' | 'export' | null>(null);
@@ -78,7 +84,7 @@ export function TextView({ headerControls, sayWhatEnterDoes, caretLine, ...props
         {...props}
         caretLine={imported === undefined ? caretLine : undefined}
         imported={imported?.file}
-        unkept={unkept}
+        meetImport={meetImport}
         sayWhatEnterDoes={setEditorSays}
       />
     </>
@@ -92,13 +98,13 @@ interface TextEditorProps extends SettingsViewProps {
    */
   imported?: ImportedText;
   /**
-   * Set by the view as it opens: resolves, once its draft requests have their replies, with what Chrome said when
-   * it did not keep the unsaved text the view holds, or null when the view holds none it did not keep.
+   * Set by the view as it opens: resolves, once its draft requests have their replies, with what Import's file
+   * meets, the view asking first about unsaved text Chrome kept.
    */
-  unkept: RefObject<() => Promise<string | null>>;
+  meetImport: RefObject<(file: ImportedText) => Promise<ImportMeets>>;
 }
 
-function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, guardSwitch }: TextEditorProps) {
+function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, meetImport, guardSwitch }: TextEditorProps) {
   const root = useRef<HTMLDivElement>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
@@ -115,6 +121,8 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
+  // Resolves once no Save is in flight: Import's file waits for it, so the Save's reply never settles a text that replaced the one it stored.
+  const saveEnded = useRef<Promise<void>>(Promise.resolve());
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [focused, setFocused] = useState<Focused>(null);
   // After a Save refused as `changed`, until the change is brought in: the merge of the text submitted with the
@@ -129,6 +137,9 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
   // Import's file, taken once, until its text is in the text area: the name it is asked about by.
   const importing = useRef(imported ?? null);
   const [importingName, setImportingName] = useState(imported?.fileName ?? null);
+  // Import's file over the view's own unsaved text, asked about here until the user answers.
+  const [ownAsked, setOwnAsked] = useState<{ file: ImportedText; edit: Edit } | null>(null);
+  const ownAskedNow = useRef<{ file: ImportedText; edit: Edit } | null>(null);
   const mounted = useRef(false);
   const [discardFailure, setDiscardFailure] = useState<string | null>(null);
   // What Chrome said when the worker did not keep this view's draft, shown apart from what Save came to.
@@ -139,6 +150,8 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
   const readStored = useRef(() => {});
   // While a switch to the List view is asked about: the host's way to show it, once the user answers to switch.
   const switching = useRef<(() => void) | null>(null);
+  // While *Keep the draft and switch* awaits the worker's reply.
+  const keepingToSwitch = useRef(false);
   // A switch to the List view made while Import's file waits to go into the text area: it waits with the file.
   const switchWithFile = useRef<(() => void) | null>(null);
   // Whether Chrome refused the first read, which leaves Import's file no base to go in against.
@@ -163,9 +176,15 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
       () => void read(),
     );
     keeping.current = keeper;
-    unkept.current = async () => {
+    meetImport.current = async (file) => {
       await keeper.flush();
-      return keeper.unsaved(stored.current) ? notKeptNow.current : null;
+      await saveEnded.current;
+      const edit = keeper.unsavedEdit(stored.current);
+      if (edit === undefined) return { kind: 'nothing-unsaved' };
+      if (notKeptNow.current !== null) return { kind: 'not-kept', message: notKeptNow.current };
+      ownAskedNow.current = { file, edit };
+      if (open) setOwnAsked(ownAskedNow.current);
+      return { kind: 'asked' };
     };
     const landed = (storedText: string, draft: Draft | undefined) => {
       const area = textArea.current;
@@ -384,6 +403,30 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
     setImportingName(null);
   };
 
+  // Asked over the view's own unsaved text, Import's file replaces it, the view shown afresh with the file as the
+  // draft against the stored document as last read, the edit made now; nothing is stored (G20). Kept, the text
+  // stays where it is, and the file goes nowhere.
+  const replaceOwnWithImport = () => {
+    const area = textArea.current;
+    const asked = ownAskedNow.current;
+    if (area === null || asked === null) return;
+    ownAskedNow.current = null;
+    setOwnAsked(null);
+    area.value = asked.file.text;
+    base.current = stored.current;
+    loadedText.current = null;
+    setOffer(null);
+    setOutcome(null);
+    keeping.current?.edited(area.value, base.current, stored.current);
+    void keeping.current?.flush();
+    placeCaret(area, 0, true);
+  };
+  const keepOwnInsteadOfImport = () => {
+    ownAskedNow.current = null;
+    setOwnAsked(null);
+    textArea.current?.focus();
+  };
+
   // What the text area holds is kept as the draft, with the base it is typed against; once the stored document
   // holds it, the draft goes instead (G19).
   const keepText = () => {
@@ -394,7 +437,7 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
   // Whether the Save stored the text.
   const save = async (): Promise<boolean> => {
     const area = textArea.current;
-    if (area === null || !everLoaded.current || inFlight.current || offer !== null || keptNow.current !== null || importing.current !== null || switching.current !== null) return false;
+    if (area === null || !everLoaded.current || inFlight.current || offer !== null || keptNow.current !== null || importing.current !== null || ownAskedNow.current !== null || switching.current !== null) return false;
     const text = area.value;
     const errors = documentErrors(text);
     if (errors.length > 0) {
@@ -403,6 +446,8 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
       return false;
     }
     inFlight.current = true;
+    let ended = () => {};
+    saveEnded.current = new Promise((resolve) => (ended = resolve));
     setSaving(true);
     setOutcome(null);
     // The text submitted is the draft first, so a Save refused, or cut short by the popup closing, leaves it kept.
@@ -425,6 +470,7 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
     // were, so the next Save applies if nothing landed and is refused if it did, never overwriting it (G21).
     else setOutcome({ kind: 'failed', message: reply.message });
     readStored.current();
+    ended();
     return reply.kind === 'applied';
   };
 
@@ -439,7 +485,21 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
     saveButton.current?.focus();
     if ((await save()) && mounted.current) proceed();
   };
-  const keepAndSwitch = () => switching.current?.();
+  // *Keep the draft and switch* keeps the view's text as the newest draft, timed at the act, whatever another
+  // view kept or saved since, and switches once the worker stored it; refused, the view stays, the question gone,
+  // the alert saying the text is not kept, the text there to save (G19, G21; State `draft`).
+  const keepAndSwitch = async () => {
+    const proceed = switching.current;
+    if (proceed === null || keepingToSwitch.current) return;
+    keepingToSwitch.current = true;
+    const kept = (await keeping.current?.keepNow()) ?? true;
+    keepingToSwitch.current = false;
+    if (!mounted.current || switching.current !== proceed) return;
+    switching.current = null;
+    if (kept) return proceed();
+    setAsking(false);
+    textArea.current?.focus();
+  };
   const stay = () => {
     switching.current = null;
     setAsking(false);
@@ -476,7 +536,14 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
     if (area !== null) placeCaret(area, textAreaLineStart(area.value, line), true);
   };
 
-  const waiting = kept === null ? (importingName === null ? null : 'import') : importingName === null ? 'offer' : 'question';
+  const waiting = ownAsked !== null ? 'question' : kept === null ? (importingName === null ? null : 'import') : importingName === null ? 'offer' : 'question';
+  // The unsaved text offered or asked about: the view's own, which Import's file would replace, or another view's kept draft.
+  const offered =
+    ownAsked !== null
+      ? { key: 'own', draft: ownAsked.edit, importing: ownAsked.file.fileName, onReplace: replaceOwnWithImport, onKeep: keepOwnInsteadOfImport }
+      : kept !== null
+        ? { key: importingName === null ? 'offer' : 'import', draft: kept, importing: importingName, onReplace: replaceWithImport, onKeep: keepInsteadOfImport }
+        : null;
   const saveWaits = !loaded || saving || offer !== null || waiting !== null;
   const enter = questionSays ?? offerSays ?? whatEnterDoes(focused, { loaded, saving, offered: offer !== null, waiting, asking });
   useEffect(() => sayWhatEnterDoes?.(enter), [enter, sayWhatEnterDoes]);
@@ -487,7 +554,7 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
         <SwitchQuestion
           saveWaits={saveWaits ? whatEnterDoes('save', { loaded, saving, offered: offer !== null, waiting, asking: false }) : null}
           onSave={() => void saveAndSwitch()}
-          onKeep={keepAndSwitch}
+          onKeep={() => void keepAndSwitch()}
           onStay={stay}
           onSayEnter={setQuestionSays}
         />
@@ -496,18 +563,18 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, unkept, 
         One mapping per line: a name, spaces, and a URL that starts with a scheme, as https: does. A backslash (\) starts a comment, and a line
         of only a comment is a section heading. %s in a URL takes the text typed after the name.
       </p>
-      {kept !== null && (
+      {offered !== null && (
         <DraftOffer
           // Asked about Import's file, then offered: shown afresh, so the focus is on its first answer again.
-          key={importingName === null ? 'offer' : 'import'}
-          draft={kept}
-          importing={importingName}
-          changedSince={kept.base !== stored.current}
+          key={offered.key}
+          draft={offered.draft}
+          importing={offered.importing}
+          changedSince={offered.draft.base !== stored.current}
           failure={discardFailure}
           onResume={resume}
           onDiscard={() => void discardKept()}
-          onReplace={replaceWithImport}
-          onKeep={keepInsteadOfImport}
+          onReplace={offered.onReplace}
+          onKeep={offered.onKeep}
           onSayEnter={setOfferSays}
         />
       )}

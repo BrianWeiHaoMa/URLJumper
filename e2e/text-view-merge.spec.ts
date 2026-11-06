@@ -127,6 +127,32 @@ for (const [first, second] of [
   });
 }
 
+for (const side of ['stored', 'yours'] as const) {
+  test(`a mapping moved in the text that another page deleted is offered against no line, nothing chosen; ${side === 'stored' ? "the stored version keeps the deletion" : 'your text brings the line back'}`, async ({ extension }) => {
+    const line = (name: string) => `${name}  https://${name}.example/`;
+    const [mail, obsolete, calendar, news] = [line('mail'), line('obsolete'), line('calendar'), line('news')];
+    const original = `${mail}\n${obsolete}\n${calendar}\n${news}\n`;
+    const moved = `${mail}\n${calendar}\n${news}\n${obsolete}\n`;
+    const deleted = `${mail}\n${calendar}\n${news}\n`;
+    await extension.seedStorage({ mappings: original });
+    const view = await textViewOnOptionsPage(extension);
+    await view.area.evaluate((area: HTMLTextAreaElement) => area.select());
+    await view.page.keyboard.insertText(moved);
+    expect(await extension.sendRequest({ kind: 'replace', text: deleted, base: original })).toMatchObject({ kind: 'applied' });
+
+    await refused(extension, view, deleted);
+    await expect(view.conflicts).toHaveCount(1);
+    const conflict = view.conflicts.first();
+    await expect(version(conflict, 'stored')).toHaveAccessibleName('Stored document, after line 3 No lines: this part removed');
+    await expect(version(conflict, 'yours')).toHaveAccessibleName(`Your text, line 4 ${obsolete.replace(/\s+/g, ' ')}`);
+    expect(await linesShown(version(conflict, 'yours'))).toEqual([obsolete]);
+    for (const shown of ['stored', 'yours'] as const) await expect(version(conflict, shown)).toHaveAttribute('aria-pressed', 'false');
+    await checkAccessibilityInBothSchemes(view.page);
+    await version(conflict, side).click();
+    await broughtInAndSaved(extension, view, side === 'stored' ? deleted : moved);
+  });
+}
+
 test('a document changed again after the change was brought in is refused again, nothing overwritten; brought in again, Save stores all three changes', async ({ extension }) => {
   const original = 'a  https://a/\n';
   await extension.seedStorage({ mappings: original });

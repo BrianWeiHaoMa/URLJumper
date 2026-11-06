@@ -60,6 +60,8 @@ export interface DraftKeeping {
    * text is one, since the text area holds it with LF endings (S14).
    */
   unsaved(stored: string): boolean;
+  /** The unsaved change `unsaved` speaks of, with its base and when it was made; undefined when there is none. */
+  unsavedEdit(stored: string): Edit | undefined;
   /**
    * The text area holds the stored document, which the view's Save just stored or a read just loaded over a text
    * with no change since the last load: nothing is unsaved, and each draft the view holds goes.
@@ -67,9 +69,18 @@ export interface DraftKeeping {
   settled(): void;
   /** Sends the change not yet sent, if any, and resolves once the page's draft requests have their replies. */
   flush(): Promise<void>;
+  /**
+   * Keeps the text the view holds, with its base, as an edit made now, in the page's turn: the newest draft,
+   * whatever another view kept since (Composition, *draft set*), as *Keep the draft and switch* asks. Resolves
+   * false when the worker did not store it, whose message `notKept` is told, the text staying unsaved to go
+   * again with the next change or before Save (State `draft`); true once it did, or when the view holds nothing
+   * to keep.
+   */
+  keepNow(): Promise<boolean>;
 }
 
-type Edit = { text: string; base: string; time: number };
+/** A text the view holds, the base it is typed against, and when it was made. */
+export type Edit = { text: string; base: string; time: number };
 
 /**
  * The keeping of one Text view opened, under an identifier of its own (Composition, *draft set*). `notKept` is
@@ -83,7 +94,7 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
   let unsent: Edit | null = null;
   // The text the view holds, as its last edit made it or the draft it took over, and how many edits came so far:
   // a read the view made when as many had come shows the stored document after this text was made.
-  let current: string | undefined;
+  let current: Edit | undefined;
   let edits = 0;
   // Every draft of this view's that `draft` may hold: the last one stored, and any sent since whose reply has
   // not said it was, which a set Chrome refused or one that got no reply leaves in doubt.
@@ -93,6 +104,25 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
   let waiting = false;
   // Raised by each letting go, which a reply to a set sent before it must not undo.
   let lettings = 0;
+
+  // Sends `change` under the view's next number, in the page's turn: true once the worker stored it, false when
+  // it did not, undefined when the view let go meanwhile.
+  const sendSet = async (change: Edit): Promise<boolean | undefined> => {
+    const name = { view, number: ++number };
+    held.push(name);
+    const since = lettings;
+    const reply = await send({ kind: 'draft-set', ...change, ...name });
+    if (since !== lettings) return undefined;
+    if (reply.kind === 'done') {
+      held = [name];
+      notKept(null);
+      return true;
+    }
+    // Sent again with the next change or before Save, never in a loop while Chrome refuses it.
+    unsent ??= change;
+    notKept(reply.message);
+    return false;
+  };
 
   const sendUnsent = () => {
     clearTimeout(timer);
@@ -104,24 +134,17 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
       if (unsent === null) return;
       const change = unsent;
       unsent = null;
-      const name = { view, number: ++number };
-      held.push(name);
-      const since = lettings;
-      const reply = await send({ kind: 'draft-set', ...change, ...name });
-      if (since !== lettings) return;
-      if (reply.kind === 'done') {
-        held = [name];
-        notKept(null);
-      } else {
-        // Sent again with the next change or before Save, never in a loop while Chrome refuses it.
-        unsent ??= change;
-        notKept(reply.message);
-      }
+      await sendSet(change);
     });
   };
 
-  // The text of the view's last edit, or of the draft it took over, while it is kept or about to be.
+  // The view's last edit, or the draft it took over, while it is kept or about to be.
   const kept = () => (unsent === null && held.length === 0 ? undefined : current);
+
+  const unsavedEdit = (stored: string) => {
+    const edit = kept();
+    return edit === undefined || documentHolds(stored, edit.text) ? undefined : edit;
+  };
 
   const keep = (edit: Edit) => {
     unsent = edit;
@@ -144,7 +167,7 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
 
   return {
     edited(text, base, stored, madeAt = Date.now()) {
-      current = text;
+      current = { text, base, time: madeAt };
       edits++;
       keep({ text, base, time: madeAt });
       if (documentHolds(stored, text)) readAgain();
@@ -152,26 +175,38 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
     reading: () => edits,
     storedRead(stored, read, latest) {
       // Nothing kept: the text was let go, or none was typed.
-      const text = kept();
+      const text = kept()?.text;
       if (text === undefined || !documentHolds(stored, text)) return;
       if (read === edits) letGo();
       else if (latest) readAgain();
     },
     holds(draft) {
       held = [{ view: draft.view, number: draft.number }];
-      current = draft.text;
+      current = { text: draft.text, base: draft.base, time: draft.time };
       edits++;
     },
-    unsaved(stored) {
-      const text = kept();
-      return text !== undefined && !documentHolds(stored, text);
-    },
+    unsaved: (stored) => unsavedEdit(stored) !== undefined,
+    unsavedEdit,
     settled() {
       letGo();
     },
     flush() {
       if (unsent !== null) sendUnsent();
       return draftRequestsAnswered();
+    },
+    keepNow() {
+      // Timed at the act, not when its turn comes: an edit another view makes meanwhile is the newer one.
+      const act = Date.now();
+      return inTurn(async () => {
+        const edit = kept();
+        if (edit === undefined) return true;
+        // The change not yet sent, if any, is this text: it goes as the keep.
+        clearTimeout(timer);
+        timer = undefined;
+        unsent = null;
+        current = { ...edit, time: Math.max(act, edit.time) };
+        return (await sendSet(current)) !== false;
+      });
     },
   };
 }

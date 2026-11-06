@@ -170,6 +170,178 @@ describe('a change both sides made alike is brought in once', () => {
   });
 });
 
+describe('a mapping line both sides removed, which one side moved or re-added, is offered against no line', () => {
+  const row = (name: string, url = name) => `${name}  https://example.com/${url}`;
+  const BASE = [row('mail'), row('obsolete'), row('calendar'), row('news'), ''];
+  const DELETED = [row('mail'), row('calendar'), row('news'), ''];
+  const MOVED_DOWN = [row('mail'), row('calendar'), row('news'), row('obsolete'), ''];
+  /** The merge of LF submitted lines with CRLF stored lines over a CRLF base, as a Text view meets them. */
+  const merge = (submitted: readonly string[], stored: readonly string[], base: readonly string[] = BASE) => mergeTexts(base.join('\r\n'), submitted.join('\n'), stored.join('\r\n'));
+  const settledLines = (parts: readonly MergePart[]) => parts.flatMap((part) => (part.kind === 'settled' ? part.lines : []));
+  const named = (name: string) => (line: string) => line.toLowerCase().startsWith(`${name} `);
+  const splitText = (text: string) => text.split('\n');
+
+  test('the draft moved it down, the stored side deleted it: one conflict, the stored version no lines; either choice reads', () => {
+    const parts = merge(MOVED_DOWN, DELETED);
+    expect(versionsOf(parts)).toEqual([[[], [row('obsolete')]]]);
+    // With no lines, the stored version is where the line after them is: the empty last line.
+    expect(conflictsOf(parts)[0]).toMatchObject({ stored: { line: 4 }, submitted: { line: 4 } });
+    expect(settledLines(parts).some(named('obsolete'))).toBe(false);
+    expect(mergedText(parts, ['stored'])).toBe(DELETED.join('\n'));
+    expect(mergedText(parts, ['submitted'])).toBe(MOVED_DOWN.join('\n'));
+    expect(documentErrors(mergedText(parts, ['stored']))).toEqual([]);
+    expect(documentErrors(mergedText(parts, ['submitted']))).toEqual([]);
+  });
+
+  test('the same below 300 other mappings', () => {
+    const items = Array.from({ length: 300 }, (_, i) => row(`item-${i}`));
+    const parts = merge([...items, ...MOVED_DOWN], [...items, ...DELETED], [...items, ...BASE]);
+    expect(versionsOf(parts)).toEqual([[[], [row('obsolete')]]]);
+    expect(mergedText(parts, ['stored'])).toBe([...items, ...DELETED].join('\n'));
+  });
+
+  test('the stored side moved it, the draft deleted it: the stored version holds it, the draft\'s none, each at line 4 of its text', () => {
+    const parts = merge(DELETED, MOVED_DOWN);
+    expect(versionsOf(parts)).toEqual([[[row('obsolete')], []]]);
+    expect(conflictsOf(parts)[0]).toMatchObject({ stored: { line: 4 }, submitted: { line: 4 } });
+    expect(mergedText(parts, ['submitted'])).toBe(DELETED.join('\n'));
+  });
+
+  test('re-added with another URL, or with its name in another case: names compare as F4 compares them', () => {
+    expect(versionsOf(merge([row('mail'), row('calendar'), row('news'), row('obsolete', 'new'), ''], DELETED))).toEqual([[[], [row('obsolete', 'new')]]]);
+    expect(versionsOf(merge([row('mail'), row('calendar'), row('news'), row('Obsolete', 'obsolete'), ''], DELETED))).toEqual([[[], [row('Obsolete', 'obsolete')]]]);
+  });
+
+  test('moved to a gap where the other side inserted another line: that line settled, the stored side\'s first', () => {
+    const fresh = [row('mail'), row('calendar'), row('news'), row('fresh'), ''];
+    const parts = merge(MOVED_DOWN, fresh);
+    expect(versionsOf(parts)).toEqual([[[], [row('obsolete')]]]);
+    // With no lines, the stored version is where the line after the stored side's insertion is.
+    expect(conflictsOf(parts)[0]).toMatchObject({ stored: { line: 5 }, submitted: { line: 4 } });
+    expect(mergedText(parts, ['stored'])).toBe(fresh.join('\n'));
+    expect(mergedText(parts, ['submitted'])).toBe([row('mail'), row('calendar'), row('news'), row('fresh'), row('obsolete'), ''].join('\n'));
+    // And symmetrically, the stored side's line offered before the draft's line at that gap.
+    const symmetric = merge(fresh, MOVED_DOWN);
+    expect(versionsOf(symmetric)).toEqual([[[row('obsolete')], []]]);
+    expect(conflictsOf(symmetric)[0]).toMatchObject({ stored: { line: 4 }, submitted: { line: 4 } });
+    expect(mergedText(symmetric, ['stored'])).toBe([row('mail'), row('calendar'), row('news'), row('obsolete'), row('fresh'), ''].join('\n'));
+  });
+
+  test('removed inside a part both changed differently, re-added elsewhere: the re-add is offered too', () => {
+    const parts = merge([row('mail'), row('calendar', 'calendar2'), row('news'), row('obsolete'), ''], [row('mail'), row('news'), '']);
+    expect(versionsOf(parts)).toEqual([
+      [[], [row('calendar', 'calendar2')]],
+      [[], [row('obsolete')]],
+    ]);
+    expect(mergedText(parts, ['stored', 'stored'])).toBe([row('mail'), row('news'), ''].join('\n'));
+  });
+
+  test('rewritten in place by one side, moved and rewritten by the other: both offered, a choice of one side throughout giving one line of that name', () => {
+    const parts = merge([row('a'), row('x', 'draft')], [row('x', 'stored'), row('a')], [row('x', 'old'), row('a')]);
+    expect(versionsOf(parts)).toEqual([
+      [[row('x', 'stored')], []],
+      [[], [row('x', 'draft')]],
+    ]);
+    expect(mergedText(parts, ['stored', 'stored'])).toBe([row('x', 'stored'), row('a')].join('\n'));
+    expect(mergedText(parts, ['submitted', 'submitted'])).toBe([row('a'), row('x', 'draft')].join('\n'));
+  });
+
+  test('re-added by one side among lines both inserted at one gap: offered after the line both inserted, in each text', () => {
+    const parts = merge([row('a'), '\\ heading', row('n')], [row('a'), '\\ heading', row('x', 'new')], [row('x', 'old'), row('a')]);
+    expect(parts).toEqual([
+      { kind: 'settled', lines: [row('a'), '\\ heading'] },
+      // The draft's version has no lines: it is after the heading, where its own line `n` is.
+      { kind: 'conflict', stored: { lines: [row('x', 'new')], line: 3 }, submitted: { lines: [], line: 3 } },
+      { kind: 'settled', lines: [row('n')] },
+    ]);
+  });
+
+  test('a rename both made alike, the old name re-added by one: the re-add offered, the rename brought in once', () => {
+    const base = [row('a'), row('b'), row('c')];
+    const renamed = [row('a'), row('b2'), row('c')];
+    const parts = merge([...renamed, row('b', 'again')], renamed, base);
+    expect(versionsOf(parts)).toEqual([[[], [row('b', 'again')]]]);
+    expect(mergedText(parts, ['stored'])).toBe(renamed.join('\n'));
+  });
+
+  test('moved up by the draft: the line diff pairs it and moves its neighbour, so the deletion stands with nothing offered', () => {
+    const parts = merge([row('obsolete'), row('mail'), row('calendar'), row('news'), ''], DELETED);
+    expect(settledLines(parts).some(named('obsolete'))).toBe(false);
+    for (const conflict of conflictsOf(parts)) expect(conflict.stored.lines.some(named('obsolete'))).toBe(false);
+    expect(mergedText(parts, conflictsOf(parts).map(() => 'stored'))).toBe(DELETED.join('\n'));
+  });
+
+  test('moved to different places by the two sides: each insertion offered, a choice of one side throughout giving one copy', () => {
+    const up = [row('mail'), row('calendar'), row('obsolete'), row('news'), ''];
+    const parts = merge(MOVED_DOWN, up);
+    expect(versionsOf(parts)).toEqual([
+      [[row('obsolete')], []],
+      [[], [row('obsolete')]],
+    ]);
+    expect(mergedText(parts, ['stored', 'stored'])).toBe(up.join('\n'));
+    expect(mergedText(parts, ['submitted', 'submitted'])).toBe(MOVED_DOWN.join('\n'));
+  });
+
+  test('moved alike by both, alone or among other lines at the gap: a change both made, brought in once', () => {
+    expect(settled(BASE.join('\r\n'), MOVED_DOWN.join('\n'), MOVED_DOWN.join('\r\n'))).toBe(MOVED_DOWN.join('\n'));
+    const withFresh = [row('mail'), row('calendar'), row('news'), row('fresh'), row('obsolete'), ''];
+    expect(settled(BASE.join('\r\n'), MOVED_DOWN.join('\n'), withFresh.join('\r\n'))).toBe(withFresh.join('\n'));
+  });
+
+  test('on many random triples where one side deletes a mapping line and the other moves or re-adds it: never settled, offers well formed', () => {
+    let seed = 11;
+    const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const pick = <T,>(items: readonly T[]): T => items[Math.floor(random() * items.length)]!;
+    const placeAt = (lines: readonly string[], line: string) => {
+      const at = Math.floor(random() * (lines.length + 1));
+      return [...lines.slice(0, at), line, ...lines.slice(at)];
+    };
+    let offered = 0;
+    for (let trial = 0; trial < 1_500; trial++) {
+      const names = ['a', 'b', 'c', 'd', 'e', 'f'].filter(() => random() < 0.6);
+      if (names.length === 0) continue;
+      let base: string[] = [];
+      for (const name of names) {
+        if (random() < 0.3) base.push(pick(['', '\\ heading', '\\ other']));
+        base.push(row(name));
+      }
+      const x = pick(names);
+      const without = base.filter((line) => line !== row(x));
+      let deleter = without;
+      if (random() < 0.5) deleter = placeAt(deleter, row('p'));
+      if (random() < 0.3 && deleter.length > 1) deleter = deleter.filter((_, at) => at !== Math.floor(random() * deleter.length));
+      const readded = pick([row(x), row(x, 'new'), row(x.toUpperCase(), x)]);
+      let mover = placeAt(without, readded);
+      if (random() < 0.5) mover = placeAt(mover, row('q'));
+      if (random() < 0.3) mover = placeAt(mover, '\\ mine');
+      for (const [submitted, stored, deleterSide] of [
+        [mover, deleter, 'stored'],
+        [deleter, mover, 'submitted'],
+      ] as const) {
+        const parts = merge(submitted, stored, base);
+        // As the merge reads them: no lines at all are one empty line.
+        const [storedRead, submittedRead] = [stored, submitted].map((lines) => (lines.length === 0 ? [''] : lines)) as [string[], string[]];
+        for (const conflict of conflictsOf(parts)) {
+          expect(conflict.stored.lines).not.toEqual(conflict.submitted.lines);
+          expect(storedRead.slice(conflict.stored.line - 1, conflict.stored.line - 1 + conflict.stored.lines.length)).toEqual(conflict.stored.lines);
+          expect(submittedRead.slice(conflict.submitted.line - 1, conflict.submitted.line - 1 + conflict.submitted.lines.length)).toEqual(conflict.submitted.lines);
+          const moverSide = deleterSide === 'stored' ? 'submitted' : 'stored';
+          if (conflict[deleterSide].lines.length === 0 && conflict[moverSide].lines.length === 1 && conflict[moverSide].lines[0] === readded) offered++;
+        }
+        expect(settledLines(parts).some(named(x))).toBe(false);
+        expect(splitText(mergedText(parts, conflictsOf(parts).map(() => deleterSide))).some(named(x))).toBe(false);
+      }
+    }
+    // The family reaches the conflict between the re-added line and no line.
+    expect(offered).toBeGreaterThan(100);
+  });
+
+  test('moved or deleted by one side alone: as before, nothing offered', () => {
+    expect(settled(BASE.join('\r\n'), MOVED_DOWN.join('\n'), BASE.join('\r\n'))).toBe(MOVED_DOWN.join('\n'));
+    expect(settled(BASE.join('\r\n'), DELETED.join('\n'), BASE.join('\r\n'))).toBe(DELETED.join('\n'));
+  });
+});
+
 describe('mergedText', () => {
   test('needs a version for every conflict', () => {
     const parts = mergeTexts('a  https://a/\n', 'a  https://d/\n', 'a  https://s/\n');

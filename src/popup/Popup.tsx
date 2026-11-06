@@ -58,8 +58,9 @@ export function Popup() {
   const { undo, undoing } = useUndo(state.confirmed, (outcome) => dispatch({ kind: 'undone', outcome }));
 
   const ready = state.stored !== undefined && state.opener !== undefined;
-  // Shown only once the popup knows whether it opened for the Name form, so keys typed until then go to the search box.
-  const firstRun = ready && state.view.kind === 'search' && isEmptyDocument(state.stored!.document);
+  // Shown only once the popup knows whether it opened for the Name form, so keys typed until then go to the search
+  // box; and not while a jump awaits its reply, whose refusal search says (G6).
+  const firstRun = ready && state.view.kind === 'search' && !state.jumping && isEmptyDocument(state.stored!.document);
   // Shown once the popup is ready, as the first run is: until then Enter does nothing, as the footer says.
   const notice = useUpgradeNotice(ready && state.stored!.upgradeNotice);
 
@@ -88,33 +89,39 @@ export function Popup() {
 
   const other = otherMode(state.mode);
 
+  // One jump at a time: while one awaits the worker's reply, a second Enter, a held Enter's repeats, or a click
+  // sends nothing, and nothing else leaves search, so a refusal is said where the user is (G4, G6, G26). A ref,
+  // since a held Enter's repeats can arrive before the popup draws the pending state.
+  const jumpPending = useRef(false);
   const jump = async (row: MappingRow, mode: OpenMode) => {
-    if (!ready) return;
+    if (!ready || jumpPending.current) return;
     const request = jumpRequest(row, mode, state.opener);
     if (request === undefined) {
       dispatch({ kind: 'message', message: 'Not opened: Chrome did not say which tab this popup was opened on.' });
       return;
     }
-    dispatch({ kind: 'message', message: null });
+    jumpPending.current = true;
+    dispatch({ kind: 'jump-sent' });
     const reply = await send(request);
-    if (reply.kind === 'opened') window.close();
-    else dispatch({ kind: 'message', message: notOpened(reply) });
+    if (reply.kind === 'opened') return window.close();
+    jumpPending.current = false;
+    dispatch({ kind: 'jump-refused', message: notOpened(reply) });
   };
 
   // The Name form opens only once the popup knows the document and the page it names.
   const openForm = (name: string) => {
-    if (ready) dispatch({ kind: 'name', name });
+    if (ready && !jumpPending.current) dispatch({ kind: 'name', name });
   };
   // Settings open, like the form, only once the popup knows whether its opening asked for the form instead.
   const openSettings = () => {
-    if (ready) dispatch({ kind: 'settings' });
+    if (ready && !jumpPending.current) dispatch({ kind: 'settings' });
   };
   // The Name row opens the form with its text, whatever the mode (G4); every other row opens its mapping.
   const act = (row: SearchRow, mode: OpenMode) => (row.group === 'name' ? openForm(row.name) : void jump(row, mode));
   // The one way a line's editor opens: on `line` as the read this popup shows holds it, its number and exact
   // text from that one read, which no later read moves (G13); with the argument row's argument, else none.
   const openEditor = (line: number, argument: string | null) => {
-    const anchor = ready ? anchorAt(state.stored!.document, line) : undefined;
+    const anchor = ready && !jumpPending.current ? anchorAt(state.stored!.document, line) : undefined;
     if (anchor !== undefined) dispatch({ kind: 'edit', anchor, argument });
   };
 
@@ -234,7 +241,9 @@ export function Popup() {
       confirmed={state.confirmed}
       own={confirmation}
       undoing={undoing}
-      onUndo={() => void undo()}
+      onUndo={() => {
+        if (!jumpPending.current) void undo();
+      }}
       onUndoFocus={(focused) => dispatch({ kind: 'focused', focused: focused ? 'undo' : null })}
       onTyping={() => searchBox.current?.focus()}
     />
@@ -311,7 +320,7 @@ export function Popup() {
         </button>
         <SettingsGear onClick={openSettings} onFocusChange={(focused) => dispatch({ kind: 'focused', focused: focused ? 'settings' : null })} />
       </header>
-      <UpgradeNotice notice={notice} start={searchBox} />
+      <UpgradeNotice notice={notice} start={searchBox} openWaits={state.jumping} />
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
           {shownConfirmation}
@@ -343,7 +352,7 @@ export function Popup() {
           {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} onEdit={(line) => openEditor(line, null)} onFocusChange={(focused) => onEditFocus(focused ? thisPage.key : null)} />}
         </div>
       </div>
-      <footer className="footer">{footerWithNotice(footer(state, selection.shown, ready, undoing, editLine), notice)}</footer>
+      <footer className="footer">{footerWithNotice(footer(state, selection.shown, ready, undoing, editLine), notice, state.jumping)}</footer>
     </main>
   );
 }

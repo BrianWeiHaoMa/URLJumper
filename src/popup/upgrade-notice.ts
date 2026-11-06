@@ -31,11 +31,14 @@ const ENTER_ON: Record<NoticeControl, string> = {
 
 /**
  * The footer of a view that shows the notice (L2). With the focus on one of its controls, what Enter does
- * there; otherwise the view's own footer, except that while the notice shows, Enter that would do nothing
- * dismisses it, as every keystroke does, so the footer says so.
+ * there, unless it is the control that opens what's new while that waits for the view's own request
+ * (`openWaits`), where Enter does nothing, as the view's footer says; otherwise the view's own footer, except
+ * that while the notice shows, Enter that would do nothing dismisses it, as every keystroke does, so the footer
+ * says so.
  */
-export function footerWithNotice(viewFooter: string, notice: { shown: boolean; focused: NoticeControl | null }): string {
+export function footerWithNotice(viewFooter: string, notice: { shown: boolean; focused: NoticeControl | null }, openWaits = false): string {
   if (!notice.shown) return viewFooter;
+  if (notice.focused === 'open' && openWaits) return viewFooter;
   if (notice.focused !== null) return ENTER_ON[notice.focused];
   return viewFooter.replace('Enter does nothing', 'Enter only closes the notice');
 }

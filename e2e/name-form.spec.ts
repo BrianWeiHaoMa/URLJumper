@@ -3,9 +3,25 @@
 // what the page is already called (G10), the Section choice (G9, P2), a preview of the exact line, and why
 // Save is blocked (G8, L2), and it fits the popup (G7) and passes the accessibility pass (G32), keeping a
 // visible focus as it opens below a long title and when another view's write takes away the Section choice
-// that had it.
+// that had it; while Save awaits its reply its fields and Section take no change, so the line stored is the
+// line previewed (G9, G32), and a refused Save gives them back as typed (G21).
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, focusDrawn, popupOnNewPage, selectedRow, selectedRowName, test, textViewOnOptionsPage, type LoadedExtension, type LocalSite } from './extension.ts';
+import {
+  checkFitAndAccessibility,
+  closingPopup,
+  expect,
+  focusDrawn,
+  holdPageRequests,
+  nameForm,
+  popupOnNewPage,
+  refuseWorkerStorage,
+  selectedRow,
+  selectedRowName,
+  test,
+  textViewOnOptionsPage,
+  type LoadedExtension,
+  type LocalSite,
+} from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const nameField = (popup: Page) => popup.getByRole('textbox', { name: 'Name' });
@@ -387,4 +403,74 @@ test("a Text view Save in another tab that removes the only heading leaves the f
   // The chosen heading is gone, so the line went to the end, and the confirmation says so (G9).
   await expect(popup.getByRole('status')).toHaveText('Saved "new" as line 2, at the end of the document: the heading you chose was not found');
   expect((await extension.readStorage()).mappings).toBe(`w  https://w.example/\nnew ${page.url()}\n`);
+});
+
+const SECTIONED = '\\ Work\nwork                 https://work.example/\n\n\\ Home\nhome                 https://home.example/\n';
+
+test('while Save awaits its reply the fields take no typing, keep their names, and the name field keeps the focus; the line stored is the line previewed', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: SECTIONED });
+  const { popup } = await formOnNewPage(extension, site);
+  const form = nameForm(popup);
+  await form.name.fill('manual');
+  await form.url.fill('https://docs.example/old');
+  const preview = (await form.previewLine.textContent())!;
+  const inserts = await holdPageRequests(popup, 'insert');
+  await form.name.press('Enter');
+  await expect.poll(inserts.held).toBe(1);
+  await expect(footer(popup)).toHaveText('Saving · Enter does nothing until it is stored');
+  await expect(form.name).toBeFocused();
+  for (const field of [form.name, form.url, form.note]) await expect(field).not.toBeEditable();
+  await checkFitAndAccessibility(popup);
+  await form.url.focus();
+  await popup.keyboard.press('ControlOrMeta+a');
+  await popup.keyboard.type('https://docs.example/current');
+  await expect(form.url).toHaveValue('https://docs.example/old');
+  await expect(form.previewLine).toHaveText(preview);
+  await inserts.release();
+  await expect(popup.locator('.confirmation-text')).toHaveText('Saved "manual" as line 6');
+  expect((await extension.readStorage()).mappings).toBe(`${SECTIONED}${preview}\n`);
+});
+
+for (const activation of ['key', 'click'] as const) {
+  test(`while Save awaits its reply the Section takes no ${activation}: the line goes under the section shown when Save was pressed`, async ({ extension, site }) => {
+    await extension.seedStorage({ mappings: SECTIONED });
+    const { popup } = await formOnNewPage(extension, site);
+    const form = nameForm(popup);
+    await form.name.fill('manual');
+    await form.section('Work').click();
+    await expect(form.where).toHaveText('Line 3, at the end of the section "Work"');
+    const preview = (await form.previewLine.textContent())!;
+    const inserts = await holdPageRequests(popup, 'insert');
+    await form.name.press('Enter');
+    await expect.poll(inserts.held).toBe(1);
+    await expect(form.sections).toHaveAttribute('aria-readonly', 'true');
+    if (activation === 'key') {
+      await form.sections.focus();
+      await popup.keyboard.press('End');
+    } else await form.section('Home').click();
+    await expect(form.where).toHaveText('Line 3, at the end of the section "Work"');
+    await expect(form.section('Home')).toHaveAttribute('aria-selected', 'false');
+    await inserts.release();
+    await expect(popup.locator('.confirmation-text')).toHaveText('Saved "manual" as line 3');
+    expect((await extension.readStorage()).mappings).toBe(`\\ Work\nwork                 https://work.example/\n${preview}\n\n\\ Home\nhome                 https://home.example/\n`);
+  });
+}
+
+test('a Save Chrome refuses gives the fields and the Section back, the values as typed', async ({ extension, site }) => {
+  await extension.seedStorage({ mappings: SECTIONED });
+  const { popup } = await formOnNewPage(extension, site);
+  const form = nameForm(popup);
+  await form.name.fill('manual');
+  await form.note.fill('kept');
+  await refuseWorkerStorage(extension.worker, 'set', 'Quota exceeded');
+  await form.name.press('Enter');
+  await expect(form.problem).toHaveText('Not saved. Chrome said: Quota exceeded');
+  for (const field of [form.name, form.url, form.note]) await expect(field).toBeEditable();
+  await expect(form.name).toHaveValue('manual');
+  await expect(form.note).toHaveValue('kept');
+  await expect(form.sections).toHaveAttribute('aria-readonly', 'false');
+  await form.section('Home').click();
+  await expect(form.where).toHaveText('Line 6, at the end of the section "Home"');
+  await checkFitAndAccessibility(popup);
+  expect((await extension.readStorage()).mappings).toBe(SECTIONED);
 });

@@ -206,18 +206,22 @@ export function NameForm({ document: stored, name: startName, subject, start, on
         value={name}
         invalid={result.kind === 'name-taken' || (result.kind === 'invalid' && result.field === 'name')}
         describedBy="name-form-problem"
+        // Read-only, not disabled, while Save awaits its reply: the line stored is the line previewed, and the field
+        // keeps its name and the focus (G9, G32).
+        readOnly={saving}
         waiting={saving}
         input={start}
         onChange={change(setName)}
         onCopy={copy}
         onCopyFocus={setCopyFocused}
       />
-      <MappingField field="url" value={url} invalid={result.kind === 'invalid' && result.field === 'url'} describedBy="name-form-problem" waiting={saving} onChange={change(setUrl)} onCopy={copy} onCopyFocus={setCopyFocused} />
-      <MappingField field="note" value={note} invalid={result.kind === 'invalid' && result.field === 'note'} describedBy="name-form-problem" waiting={saving} onChange={change(setNote)} onCopy={copy} onCopyFocus={setCopyFocused} />
+      <MappingField field="url" value={url} invalid={result.kind === 'invalid' && result.field === 'url'} describedBy="name-form-problem" readOnly={saving} waiting={saving} onChange={change(setUrl)} onCopy={copy} onCopyFocus={setCopyFocused} />
+      <MappingField field="note" value={note} invalid={result.kind === 'invalid' && result.field === 'note'} describedBy="name-form-problem" readOnly={saving} waiting={saving} onChange={change(setNote)} onCopy={copy} onCopyFocus={setCopyFocused} />
       {sections.length > 0 && (
         <SectionChoice
           options={options}
           chosen={chosenIndex}
+          waiting={saving}
           onChoose={(index) => {
             setRefusal(null);
             setSaid(null);

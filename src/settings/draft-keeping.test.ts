@@ -344,3 +344,80 @@ test('the view holds an unsaved change while a text it kept, or is about to keep
   keeper.holds({ text: 'b  https://b/\n', base: crlf, time: 1_700_000_000_000, view: 'another-view', number: 2 });
   expect(keeper.unsaved(crlf)).toBe(true);
 });
+
+test('keepNow keeps the text the view holds, with its base, as an edit made now under the next number; a later discard names that draft alone', async () => {
+  const sent = chromeAnsweringOnRequest();
+  const said: (string | null)[] = [];
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft((message) => said.push(message), () => {});
+  keeper.edited('typed', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  let kept: boolean | undefined;
+  void keeper.keepNow().then((answer) => (kept = answer));
+  await vi.advanceTimersByTimeAsync(0);
+  const { view } = sent[0]!.request as { view: string };
+  expect(sent[1]!.request).toEqual({ kind: 'draft-set', text: 'typed', base: 'base', time: 1_700_000_060_300, view, number: 2 });
+  expect(kept).toBeUndefined();
+  sent[1]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(kept).toBe(true);
+  expect(said.at(-1)).toBeNull();
+  keeper.settled();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sent.slice(2).map(({ request }) => request)).toEqual([{ kind: 'draft-discard', view, number: 2 }]);
+});
+
+test('keepNow that Chrome refuses resolves false, says why, and leaves the text unsaved, to go again before Save', async () => {
+  const sent = chromeAnsweringOnRequest();
+  const said: (string | null)[] = [];
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft((message) => said.push(message), () => {});
+  keeper.edited('typed', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  let kept: boolean | undefined;
+  void keeper.keepNow().then((answer) => (kept = answer));
+  await vi.advanceTimersByTimeAsync(0);
+  sent[1]!.answer({ kind: 'storage-failed', message: 'Quota exceeded' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(kept).toBe(false);
+  expect(said.at(-1)).toBe('Quota exceeded');
+  expect(keeper.unsaved(STORED)).toBe(true);
+  void keeper.flush();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sent[2]!.request).toMatchObject({ kind: 'draft-set', text: 'typed', base: 'base', number: 3 });
+});
+
+test('keepNow with nothing unsaved, never edited or settled, sends nothing and resolves true', async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  expect(await keeper.keepNow()).toBe(true);
+  keeper.edited('typed', 'base', STORED);
+  keeper.settled();
+  expect(await keeper.keepNow()).toBe(true);
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toEqual([]);
+});
+
+test('keepNow folds the change not yet sent into the keep, and waits its turn behind a set awaiting its reply, timed at the act', async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  keeper.edited('a', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  keeper.edited('ab', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(100);
+  void keeper.keepNow();
+  await vi.advanceTimersByTimeAsync(500);
+  // The set of 'a' still awaits its reply: nothing more goes yet.
+  expect(sent).toHaveLength(1);
+  sent[0]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sent.map(({ request }) => request)).toEqual([expect.objectContaining({ text: 'a', number: 1 }), expect.objectContaining({ text: 'ab', time: 1_700_000_000_400, number: 2 })]);
+  sent[1]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(2);
+});

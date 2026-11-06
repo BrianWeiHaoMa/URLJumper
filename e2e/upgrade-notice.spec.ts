@@ -380,6 +380,10 @@ test("the what's-new page names URLJumper and the five changes, follows the stor
 
   await expect(page).toHaveTitle("What's new in URLJumper 2.0");
   await expect(page.getByRole('heading', { level: 1 })).toHaveText("What's new in URLJumper 2.0");
+  // The theme and the shortcuts are promised from 1.1.0 on only: 1.0.x kept them under names 2.0 does not read (G23).
+  await expect(page.locator('.whats-new-intro')).toHaveText(
+    'Your mappings are as you left them, and so are your theme and your shortcuts if you updated from version 1.1.0 or later. The popup lists your mappings in the order it always has. Here is what is new.',
+  );
   const items = page.getByRole('listitem');
   await expect(items).toHaveCount(5);
   await expect(page.getByRole('heading', { level: 2 })).toHaveText([

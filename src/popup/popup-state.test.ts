@@ -248,6 +248,35 @@ describe('the footer says what Enter does (L2)', () => {
   });
 });
 
+describe('a jump awaiting its reply (G4, G6, L2)', () => {
+  const say = (state: State, editLine?: number) => footer(state, state.list.selected, true, false, editLine);
+
+  test('sent, it is pending and the last refusal goes; refused, it is no longer pending and says why', () => {
+    const refusedOnce = run(ready(), typed('st'), { kind: 'jump-refused', message: 'Not opened. Chrome said: Cannot navigate.' });
+    const pending = run(refusedOnce, { kind: 'jump-sent' });
+    expect(pending).toMatchObject({ jumping: true, message: null });
+    expect(run(pending, { kind: 'jump-refused', message: 'Not opened. Chrome said: Cannot navigate.' })).toMatchObject({ jumping: false, message: 'Not opened. Chrome said: Cannot navigate.' });
+  });
+
+  test('typing, Up and Down, and a storage change leave it pending', () => {
+    const pending = run(ready(), typed('st'), { kind: 'jump-sent' });
+    expect(run(pending, typed('sto')).jumping).toBe(true);
+    expect(run(pending, { kind: 'move', step: 1 }).jumping).toBe(true);
+    expect(run(pending, { kind: 'stored', stored: stored(DOCUMENT), now: NOW }).jumping).toBe(true);
+  });
+
+  test('the footer says the popup is opening, whatever is selected or focused but the chip, which still flips', () => {
+    const pending = run(ready(), typed('st'), { kind: 'jump-sent' });
+    const opening = 'Opening · Enter does nothing until it opens';
+    expect(say(pending)).toBe(opening);
+    expect(say(run(pending, { kind: 'move', step: 1 }))).toBe(opening);
+    expect(say(run(pending, typed('nothing')))).toBe(opening);
+    for (const focused of ['name-page', 'settings', 'undo'] as const) expect(say({ ...pending, focused })).toBe(opening);
+    expect(say({ ...pending, focused: { edit: 'st\nhttps://st.example/' } }, 1)).toBe(opening);
+    expect(say({ ...pending, focused: 'chip' })).toBe('Enter or Space switches to This tab');
+  });
+});
+
 describe('the jump a row asks for (G6), sent by the component alone (R4)', () => {
   const st = mappingRow(run(ready(), typed('st')), 0);
 

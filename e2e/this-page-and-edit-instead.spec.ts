@@ -4,10 +4,25 @@
 // line that has it, whatever else the form refuses, and offers *Edit "‹name›" instead*, which opens the editor
 // on that line and stores nothing; the editor so opened holds the line as the popup last read it, so a line
 // changed since is refused, never overwritten; neither leaves the form while its Save awaits the worker, whose
-// reply would close the editor opened meanwhile; and one that goes while it has the focus gives it to a
-// control that stays. Every state fits and passes the accessibility pass (G7, G32).
+// reply would close the editor opened meanwhile, also when another page's line takes the name meanwhile; and
+// one that goes while it has the focus gives it to a control that stays. Every state fits and passes the
+// accessibility pass (G7, G32).
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, expect, popupOnNewPage, rowEditor, SELECTED_ROW, selectedRow, selectedRowName, slowWorkerReads, test, thisPagePencil, type LoadedExtension, type LocalSite } from './extension.ts';
+import {
+  checkFitAndAccessibility,
+  expect,
+  holdPageRequests,
+  popupOnNewPage,
+  rowEditor,
+  SELECTED_ROW,
+  selectedRow,
+  selectedRowName,
+  slowWorkerReads,
+  test,
+  thisPagePencil,
+  type LoadedExtension,
+  type LocalSite,
+} from './extension.ts';
 
 const footer = (popup: Page) => popup.locator('footer');
 const searchBox = (popup: Page) => popup.getByRole('combobox');
@@ -240,11 +255,36 @@ test("while the Name form's Save awaits the worker, This page is's pencil and Ed
   // Forced: Playwright waits for a control that says it is disabled to say otherwise before it clicks it.
   await thisPagePencil(popup).click({ force: true });
   await thisPagePencil(popup).press('Enter');
-  // A name typed meanwhile that another line has: its offer waits too.
-  await nameField(popup).fill('here');
-  await expect(editInstead(popup)).toHaveAttribute('aria-disabled', 'true');
-  await editInstead(popup).click({ force: true });
+  // The name takes no typing meanwhile, so the line stored is the one previewed (G9).
+  await nameField(popup).focus();
+  await popup.keyboard.type('x');
+  await expect(nameField(popup)).toHaveValue('fresh');
   await expect(popup.getByRole('status')).toHaveText('Saved "fresh" as line 10');
   expect(await popup.evaluate(() => (window as unknown as { editors: string[] }).editors)).toEqual([]);
   expect(await storedDocument(extension)).toBe(`${twice(page.url())}${'fresh'.padEnd(21)}${page.url()}\n`);
+});
+
+test("while the Name form's Save awaits the worker, Edit instead offered for a name another page took meanwhile waits too; the refusal is said in the form, and no editor opens", async ({ extension, site }) => {
+  // Another page's changes, each one write of the worker's, as another window makes them (E1).
+  const other = await extension.openRequestPage();
+  const { page, popup } = await popupWith(extension, site, twice);
+  await namePage(popup).click();
+  await nameField(popup).fill('fresh');
+  const inserts = await holdPageRequests(popup, 'insert');
+  await popup.keyboard.press('Enter');
+  await expect.poll(inserts.held).toBe(1);
+  await expect(footer(popup)).toHaveText('Saving · Enter does nothing until it is stored');
+  expect(await other.send({ kind: 'insert', name: 'fresh', url: 'https://fresh.example/', note: '', heading: null })).toMatchObject({ kind: 'applied' });
+  await expect(editInstead(popup)).toHaveAttribute('aria-disabled', 'true');
+  // Forced: Playwright waits for a control that says it is disabled to say otherwise before it clicks it.
+  await editInstead(popup).click({ force: true });
+  await expect(rowEditor(popup).name).toHaveCount(0);
+  await inserts.release();
+  await expect(problem(popup)).toHaveText('Not saved: line 10 already has this name.');
+  await expect(nameField(popup)).toBeEditable();
+  await expect(nameField(popup)).toHaveValue('fresh');
+  await expect(editInstead(popup)).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(rowEditor(popup).name).toHaveCount(0);
+  await checkFitAndAccessibility(popup);
+  expect(await storedDocument(extension)).toBe(`${twice(page.url())}${'fresh'.padEnd(21)}https://fresh.example/\n`);
 });

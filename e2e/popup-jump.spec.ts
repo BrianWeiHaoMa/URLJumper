@@ -1,8 +1,24 @@
-// Opening a mapping from the popup (G4, G5, G6, G26, R4): Enter and a click open in the chip's mode and
-// Shift in the other, the chip starts as the popup's opening asked, and when nothing opens the popup stays
-// and says why.
+// Opening a mapping from the popup (G4, G5, G6, G26, R4, L2): Enter and a click open in the chip's mode and
+// Shift in the other, the chip starts as the popup's opening asked, one jump at a time while one awaits its
+// reply, the footer saying the popup is opening, and when nothing opens the popup stays, says why, and Enter
+// tries again.
 import type { Page } from '@playwright/test';
-import { checkFitAndAccessibility, closingPopup, expect, popupOnNewPage, SELECTED_ROW, selectedRow, selectedRowName, shownTheme, slowWorkerReads, test, type LoadedExtension } from './extension.ts';
+import {
+  checkFitAndAccessibility,
+  closingPopup,
+  expect,
+  holdPageRequests,
+  popupOnNewPage,
+  SELECTED_ROW,
+  selectedRow,
+  selectedRowName,
+  shownTheme,
+  slowWorkerReads,
+  test,
+  upgradeNotice,
+  watchRequests,
+  type LoadedExtension,
+} from './extension.ts';
 
 const chip = (popup: Page) => popup.locator('.chip');
 const footer = (popup: Page) => popup.locator('footer');
@@ -266,21 +282,121 @@ test('a long refusal never hides the selected row, and Enter opens the selected 
   await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([urls[1]]);
 });
 
-test('a jump whose use Chrome refuses to store keeps the popup open, says why, and opens nothing', async ({ extension, site }) => {
+test('a jump whose use Chrome refuses to store keeps the popup open, says why, and opens nothing; Enter tries again', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: `full  ${site.pageUrl('Never opened')}\n` });
   await extension.fillStorage(16);
   const { popup } = await popupOnNewPage(extension, site);
+  const jumps = await watchRequests(extension.worker, 'jump');
   await popup.keyboard.type('full');
   await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
   const tabs = await extension.tabUrls();
   await popup.keyboard.press('Enter');
-  await expect(popup.getByRole('alert')).toHaveText(
-    'Not opened, because URLJumper could not save this use of it. Chrome said: Resource::kQuotaBytes quota exceeded',
-  );
+  const refused = 'Not opened, because URLJumper could not save this use of it. Chrome said: Resource::kQuotaBytes quota exceeded';
+  await expect(popup.getByRole('alert')).toHaveText(refused);
   await expect(popup.getByRole('combobox')).toHaveValue('full');
   expect(await extension.tabUrls()).toEqual(tabs);
   expect('usage' in (await extension.readStorage())).toBe(false);
   await checkFitAndAccessibility(popup);
+  await expect(footer(popup)).toHaveText('Enter opens it in a new tab · Shift+Enter in this tab');
+  await popup.keyboard.press('Enter');
+  await expect.poll(jumps).toHaveLength(2);
+  await expect(popup.getByRole('alert')).toHaveText(refused);
+  expect(await extension.tabUrls()).toEqual(tabs);
+});
+
+for (const gesture of ['two quick Enter presses', 'a held Enter'] as const) {
+  test(`${gesture} while the jump awaits the worker open one tab and record one use`, async ({ extension, site }) => {
+    const destination = site.pageUrl('Destination');
+    await extension.seedStorage({ mappings: `go  ${destination}\n` });
+    const { popup } = await popupOnNewPage(extension, site);
+    await popup.keyboard.type('go');
+    await expect(selectedRowName(popup)).toHaveText('go');
+    await slowWorkerReads(extension.worker, 'mappings', 400);
+    await closingPopup(popup, async () => {
+      if (gesture === 'a held Enter') {
+        await popup.keyboard.down('Enter');
+        await popup.keyboard.down('Enter');
+        await popup.keyboard.up('Enter');
+      } else {
+        await popup.keyboard.press('Enter');
+        await popup.keyboard.press('Enter');
+      }
+    });
+    // The worker performs requests in turn: once a later one has its reply, every jump sent has had its own.
+    expect(await extension.sendRequest({ kind: 'remove-intent', windowId: -1, time: 0 })).toMatchObject({ kind: 'done' });
+    expect((await extension.tabUrls()).filter((url) => url === destination)).toHaveLength(1);
+    expect(((await extension.readStorage()).usage as Record<string, number[]>)[`go\n${destination}`]).toHaveLength(1);
+  });
+}
+
+test('while the jump awaits its reply the footer says the popup is opening; Enter, a click on another row, Ctrl+E, the gear, and Name this page do nothing, Down still moves; the reply opens the row Enter chose', async ({ extension, site }) => {
+  const [go, gone] = [site.pageUrl('Go'), site.pageUrl('Gone')];
+  await extension.seedStorage({ mappings: `go  ${go}\ngone  ${gone}\n` });
+  const { popup } = await popupOnNewPage(extension, site);
+  await popup.keyboard.type('go');
+  await expect.poll(() => names(popup)).toEqual(['go', 'gone']);
+  const jumps = await holdPageRequests(popup, 'jump');
+  await popup.keyboard.press('Enter');
+  await expect.poll(jumps.held).toBe(1);
+  const opening = 'Opening · Enter does nothing until it opens';
+  await expect(footer(popup)).toHaveText(opening);
+  await checkFitAndAccessibility(popup);
+  await popup.keyboard.press('Enter');
+  await popup.getByRole('option').nth(1).click();
+  await popup.keyboard.press('Control+e');
+  await popup.getByRole('button', { name: 'Settings' }).click();
+  await popup.getByRole('button', { name: 'Name this page' }).click();
+  expect(await jumps.held()).toBe(1);
+  await expect(popup.getByRole('listbox', { name: 'Mappings' })).toBeVisible();
+  await expect(popup.getByRole('textbox', { name: 'Name' })).toHaveCount(0);
+  await popup.keyboard.press('ArrowDown');
+  await expect(selectedRowName(popup)).toHaveText('gone');
+  await expect(footer(popup)).toHaveText(opening);
+  const before = new Set(extension.context.pages());
+  await closingPopup(popup, () => jumps.release());
+  await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([go]);
+});
+
+test('a document emptied while the jump awaits its reply leaves the popup in search, saying it is opening, until the reply opens the row', async ({ extension, site }) => {
+  const go = site.pageUrl('Go');
+  await extension.seedStorage({ mappings: `go  ${go}\n` });
+  const { popup } = await popupOnNewPage(extension, site);
+  await popup.keyboard.type('go');
+  await expect(selectedRowName(popup)).toHaveText('go');
+  const jumps = await holdPageRequests(popup, 'jump');
+  await popup.keyboard.press('Enter');
+  await expect.poll(jumps.held).toBe(1);
+  // Another window's Text view Save empties the document meanwhile.
+  await extension.seedStorage({ mappings: '' });
+  await expect(popup.getByRole('option', { name: /^Name "go"/ })).toBeVisible();
+  await expect(popup.getByRole('combobox')).toHaveValue('go');
+  await expect(popup.getByRole('button', { name: 'Load example mappings' })).toHaveCount(0);
+  await expect(footer(popup)).toHaveText('Opening · Enter does nothing until it opens');
+  const before = new Set(extension.context.pages());
+  await closingPopup(popup, () => jumps.release());
+  await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([go]);
+});
+
+test("while the jump awaits its reply, the upgrade notice's what's new waits too, Enter on it doing nothing as the footer says; the reply opens the row", async ({ extension, site }) => {
+  const go = site.pageUrl('Go');
+  await extension.seedStorage({ mappings: `go  ${go}\n`, upgradeNotice: 'pending' });
+  const { popup } = await popupOnNewPage(extension, site);
+  const { open } = upgradeNotice(popup);
+  await expect(open).toBeVisible();
+  const jumps = await holdPageRequests(popup, 'jump');
+  await popup.getByRole('option').first().click();
+  await expect.poll(jumps.held).toBe(1);
+  // Forced: Playwright waits for a control that says it is disabled to say otherwise before it clicks it.
+  await open.click({ force: true });
+  await open.focus();
+  await expect(footer(popup)).toHaveText('Opening · Enter does nothing until it opens');
+  await popup.keyboard.press('Enter');
+  await expect(open).toBeVisible();
+  expect(extension.context.pages().some((page) => page.url() === extension.url('whats-new.html'))).toBe(false);
+  await checkFitAndAccessibility(popup);
+  const before = new Set(extension.context.pages());
+  await closingPopup(popup, () => jumps.release());
+  await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([go]);
 });
 
 test('yt with text opens the filled address, and yt alone the address with %s removed', async ({ extension, site }) => {

@@ -100,10 +100,10 @@ for (const host of SETTINGS_HOSTS) {
     await expect(page.getByRole('button', { name: 'Replace it with the file', exact: true })).toBeFocused();
     await check();
     await page.getByRole('button', { name: 'Keep the unsaved text', exact: true }).click();
-    await expect(view.resume).toBeFocused();
-    await check();
-    await view.resume.click();
+    await expect(view.keptOffer).toHaveCount(0);
     await expect(view.area).toHaveValue(typed);
+    await expect(view.area).toBeEditable();
+    await expect(view.area).toBeFocused();
     await check();
     await importFile(page, 'second.txt', Buffer.from(DOC));
     await expect(view.keptOffer).toContainText('Importing second.txt replaces it.');

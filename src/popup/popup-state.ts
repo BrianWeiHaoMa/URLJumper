@@ -66,6 +66,8 @@ export interface State {
   focused: 'chip' | 'settings' | 'name-page' | 'undo' | { edit: string } | null;
   /** Why the last jump did not open, or the example mappings were not loaded; kept until the user types or tries again. */
   message: string | null;
+  /** Whether a jump awaits the worker's reply: until a reply other than opened, nothing else opens or leaves search (G4, G6). */
+  jumping: boolean;
   /** The last change's confirmation, a save's or an Undo's, until its lifetime ends (G15). */
   confirmed: Confirmed | null;
   /** How many confirmations and form openings there have been. */
@@ -81,6 +83,8 @@ export type Action =
   | { kind: 'flip' }
   | { kind: 'focused'; focused: State['focused'] }
   | { kind: 'message'; message: string | null }
+  | { kind: 'jump-sent' }
+  | { kind: 'jump-refused'; message: string }
   | { kind: 'name'; name: string }
   | { kind: 'cancel' }
   | { kind: 'settings' }
@@ -103,6 +107,7 @@ export function initialState(): State {
     mode: 'new-tab',
     focused: null,
     message: null,
+    jumping: false,
     confirmed: null,
     count: 0,
   };
@@ -141,6 +146,10 @@ function reduceAction(state: State, action: Action): State {
       return { ...state, focused: action.focused };
     case 'message':
       return { ...state, message: action.message };
+    case 'jump-sent':
+      return { ...state, jumping: true, message: null };
+    case 'jump-refused':
+      return { ...state, jumping: false, message: action.message };
     case 'name':
       return withForm(state, action.name, { kind: 'page', url: state.opener?.url, title: state.opener?.title });
     case 'cancel':
@@ -240,6 +249,7 @@ export function otherMode(mode: OpenMode): OpenMode {
 export function footer(state: State, shown: number | null, ready: boolean, undoing: boolean, editLine: number | undefined): string {
   const { list, mode } = state;
   if (state.focused === 'chip') return `Enter or Space switches to ${MODE_LABEL[otherMode(mode)]}`;
+  if (state.jumping) return 'Opening · Enter does nothing until it opens';
   if (state.focused === 'undo' && state.confirmed !== null) return undoFooter(state.confirmed.outcome, undoing);
   if (!ready) return 'Enter does nothing until the popup is ready';
   if (state.focused === 'name-page') return 'Enter opens the Name form';

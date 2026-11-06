@@ -3,12 +3,14 @@
 // *Stay*, at the top of the view with its first answer focused, the text area taking no typing and the view's
 // Save waiting meanwhile; only a Save that stores the text switches, and one that stores nothing stays with its
 // errors, its offer, or what Chrome said, the text as typed; *Save and switch* waits whenever Save would; the
-// kept draft is offered back in the Text view; *Stay* gives the text area back; with nothing unsaved, and for
+// kept draft is offered back in the Text view, kept at the act also after another view's Save removed the draft
+// record, and a keep Chrome refuses stays and says so; *Stay* gives the text area back; with nothing unsaved, and for
 // Preferences or a return to search, the switch asks nothing; a switch made while Import's file waits to go into
 // the text area waits with it, then asks (G20); and every state of the question fits the popup and passes the
 // accessibility pass.
 import type { Locator, Page } from '@playwright/test';
 import {
+  checkAccessibilityInBothSchemes,
   draftLanded,
   expect,
   holdPageReads,
@@ -22,6 +24,7 @@ import {
   test,
   textView,
   textViewIn,
+  textViewOnOptionsPage,
   typeAtEnd,
   type LoadedExtension,
 } from './extension.ts';
@@ -155,6 +158,24 @@ for (const host of SETTINGS_HOSTS) {
     // Kept against the document it was typed on, so a resumed Save is refused and reaches the merge again.
     expect(await storedDraft(extension.worker)).toMatchObject({ text: `${DOC}${typed}`, base: DOC });
     expect(await storedDocument(extension)).toBe(changed);
+  });
+
+  test(`in the ${host}, Keep the draft and switch that Chrome refuses to store stays and says the text is not kept, the question gone, the text there to save`, async ({ extension, site }) => {
+    const { page, view, check } = await textViewIn(host, extension, site, { mappings: DOC });
+    await typeAtEnd(view, NEW_LINE);
+    await draftLanded(extension, `${DOC}${NEW_LINE}`);
+    await refuseWorkerStorage(extension.worker, 'set', 'Quota exceeded');
+    await nav(page, 'List').click();
+    await view.keepAndSwitch.click();
+    await expect(view.notKept).toContainText('Chrome said: Quota exceeded');
+    await expect(view.switchQuestion).toHaveCount(0);
+    await expect(nav(page, 'Text')).toHaveAttribute('aria-current', 'page');
+    await expect(listView(page).list).toHaveCount(0);
+    await expect(view.area).toHaveValue(`${DOC}${NEW_LINE}`);
+    await expect(view.area).toBeEditable();
+    await expect(view.area).toBeFocused();
+    await check();
+    expect(await storedDocument(extension)).toBe(DOC);
   });
 
   test(`in the ${host}, Save and switch that Chrome refuses to store stays and says so, the text as typed, the question gone`, async ({ extension, site }) => {
@@ -308,6 +329,38 @@ for (const host of SETTINGS_HOSTS) {
     expect(await storedDocument(extension)).toBe(`${DOC}${NEW_LINE}`);
   });
 }
+
+test("on the options page, Keep the draft and switch after another Text view saved over the draft record keeps this view's text, timed at the act, and offers it back", async ({ extension }) => {
+  const base = 'mail  https://mail.example/\n';
+  const [a, b] = [`${base}from-a  https://a.example/\n`, `${base}from-b  https://b.example/\n`];
+  await extension.seedStorage({ mappings: base });
+  const first = await textViewOnOptionsPage(extension);
+  const second = await textViewOnOptionsPage(extension);
+  await typeAtEnd(first, 'from-a  https://a.example/\n');
+  await draftLanded(extension, a);
+  await typeAtEnd(second, 'from-b  https://b.example/\n');
+  await draftLanded(extension, b);
+  await second.save.click();
+  await expect(second.status).toHaveText('Saved');
+  await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
+
+  await first.page.bringToFront();
+  await nav(first.page, 'List').click();
+  await expect(first.switchQuestion).toBeVisible();
+  await checkAccessibilityInBothSchemes(first.page);
+  const clicked = await extension.worker.evaluate(() => Date.now());
+  await first.keepAndSwitch.click();
+  await expect(listView(first.page).list).toBeVisible();
+  const kept = await storedDraft(extension.worker);
+  expect(kept).toMatchObject({ text: a, base });
+  expect(kept!.time).toBeGreaterThanOrEqual(clicked);
+  await nav(first.page, 'Text').click();
+  await expect(first.keptOffer).toBeVisible();
+  await checkAccessibilityInBothSchemes(first.page);
+  await first.resume.click();
+  await expect(first.area).toHaveValue(a);
+  expect(await storedDocument(extension)).toBe(b);
+});
 
 test("on the options page, a switch to List made while Import's file waits for the Text view's first read waits with it, then asks; Keep the draft and switch keeps the file, offered back", async ({ extension, site }) => {
   const imported = `${DOC}${NEW_LINE}`;

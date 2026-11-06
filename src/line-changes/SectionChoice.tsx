@@ -13,12 +13,14 @@ interface SectionChoiceProps {
   options: readonly SectionOption[];
   /** The chosen option's index; null when the chosen heading is no longer in the document. */
   chosen: number | null;
+  /** The choice takes no change while Save awaits its reply, keeping its name and the focus (G9, G32). */
+  waiting: boolean;
   onChoose(index: number): void;
 }
 
 const optionId = (index: number) => `section-${index}`;
 
-export function SectionChoice({ options, chosen, onChoose }: SectionChoiceProps) {
+export function SectionChoice({ options, chosen, waiting, onChoose }: SectionChoiceProps) {
   // The option chosen with a key is scrolled into view; nothing scrolls when the form appears.
   const moved = useRef(false);
   useLayoutEffect(() => {
@@ -33,6 +35,7 @@ export function SectionChoice({ options, chosen, onChoose }: SectionChoiceProps)
     const to = { ArrowDown: Math.min(from + 1, last), ArrowUp: Math.max(from - 1, 0), Home: 0, End: last }[event.key];
     if (to === undefined) return;
     event.preventDefault();
+    if (waiting) return;
     moved.current = true;
     onChoose(to);
   };
@@ -47,11 +50,12 @@ export function SectionChoice({ options, chosen, onChoose }: SectionChoiceProps)
         role="listbox"
         tabIndex={0}
         aria-labelledby="section-label"
+        aria-readonly={waiting}
         aria-activedescendant={chosen === null ? undefined : optionId(chosen)}
         onKeyDown={onKeyDown}
       >
         {options.map((option, index) => (
-          <li key={option.key} id={optionId(index)} className="section" role="option" aria-selected={index === chosen} onClick={() => onChoose(index)}>
+          <li key={option.key} id={optionId(index)} className="section" role="option" aria-selected={index === chosen} onClick={() => !waiting && onChoose(index)}>
             {option.label}
           </li>
         ))}
