@@ -2,6 +2,17 @@
 
 Every release of URLJumper, newest first. The version is `version` in `manifest.config.ts`. From 2.0.0 on, each release is tagged `v<version>`; the 1.x releases are tagged `v<version>-release`, and their entries are drawn from those tags and the commit messages of the time.
 
+## 2.3.1 — 2026-11-06
+
+### Fixed
+
+- **One tab per Enter**: while the popup is opening a mapping, a second Enter, a held Enter, or a click opens nothing more. The update notice's link still opens the what's-new page meanwhile.
+- **Name form**: its fields and Section choice cannot change while Save is under way, so the line stored is the line previewed.
+- **Merging in the Text view**: a mapping line that one view moved or added again while another deleted it no longer comes back silently: the merge offers it as a conflict to settle, or keeps the deletion.
+- **Import** in a Text view with unsaved text asks in that view before anything is replaced. *Keep the draft and switch* keeps that view's text as the draft offered back, and stays in the view with a message when Chrome does not keep it.
+- **Drafts across two Text views**: when one view's newer edit replaced the other's unsaved text as the draft, the replaced text becomes the draft again once the newer edit is saved, while its own view is still open.
+- **Upgrade from 1.x**: the what's-new page promises your theme and shortcuts only after an update from 1.1.0 or later; 1.0.x kept them under other names.
+
 ## 2.3.0 — 2026-10-27
 
 ### Changed
