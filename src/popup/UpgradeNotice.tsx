@@ -62,11 +62,9 @@ interface UpgradeNoticeProps {
   notice: Notice;
   /** The control the view starts on, which takes the focus when the notice goes with the focus in it (G32). */
   start: RefObject<HTMLElement | null>;
-  /** The view's own request awaits its reply: opening what's new, whose tab closes the popup, waits for it (G6). */
-  openWaits?: boolean;
 }
 
-export function UpgradeNotice({ notice, start, openWaits = false }: UpgradeNoticeProps) {
+export function UpgradeNotice({ notice, start }: UpgradeNoticeProps) {
   const own = useRef<HTMLDivElement>(null);
   const openButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -80,14 +78,15 @@ export function UpgradeNotice({ notice, start, openWaits = false }: UpgradeNotic
     dismiss();
   }, [dismiss, start]);
 
+  // Also while the view's own request awaits its reply, which the worker answers whether or not the popup is
+  // still open: activating the notice opens what's new (G25), and the popup closing is the user's own (E4).
   const open = useCallback(() => {
-    if (openWaits) return;
     leave();
     // After the removal: the new tab takes the focus, and Chrome closes the popup.
     chrome.tabs
       .create({ url: chrome.runtime.getURL(WHATS_NEW_PAGE) })
       .catch((error: unknown) => setFailure(`What's new did not open in a tab. Chrome said: ${chromeMessage(error)}`));
-  }, [leave, openWaits]);
+  }, [leave]);
 
   useLayoutEffect(() => {
     if (!shown) return;
@@ -126,7 +125,6 @@ export function UpgradeNotice({ notice, start, openWaits = false }: UpgradeNotic
         ref={openButton}
         type="button"
         className="upgrade-notice-open"
-        aria-disabled={openWaits}
         onClick={open}
         onFocus={() => onFocusChange('open')}
         onBlur={() => onFocusChange(null)}

@@ -377,27 +377,28 @@ test('a document emptied while the jump awaits its reply leaves the popup in sea
   await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([go]);
 });
 
-test("while the jump awaits its reply, the upgrade notice's what's new waits too, Enter on it doing nothing as the footer says; the reply opens the row", async ({ extension, site }) => {
-  const go = site.pageUrl('Go');
-  await extension.seedStorage({ mappings: `go  ${go}\n`, upgradeNotice: 'pending' });
-  const { popup } = await popupOnNewPage(extension, site);
-  const { open } = upgradeNotice(popup);
-  await expect(open).toBeVisible();
-  const jumps = await holdPageRequests(popup, 'jump');
-  await popup.getByRole('option').first().click();
-  await expect.poll(jumps.held).toBe(1);
-  // Forced: Playwright waits for a control that says it is disabled to say otherwise before it clicks it.
-  await open.click({ force: true });
-  await open.focus();
-  await expect(footer(popup)).toHaveText('Opening · Enter does nothing until it opens');
-  await popup.keyboard.press('Enter');
-  await expect(open).toBeVisible();
-  expect(extension.context.pages().some((page) => page.url() === extension.url('whats-new.html'))).toBe(false);
-  await checkFitAndAccessibility(popup);
-  const before = new Set(extension.context.pages());
-  await closingPopup(popup, () => jumps.release());
-  await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([go]);
-});
+for (const gesture of ['click', 'Enter'] as const) {
+  test(`while the jump awaits its reply, the upgrade notice's what's new still opens by ${gesture === 'click' ? 'a click' : 'Enter'} and dismisses the notice (G25); the jump still opens its row, once`, async ({ extension, site }) => {
+    const go = site.pageUrl('Go');
+    await extension.seedStorage({ mappings: `go  ${go}\n`, upgradeNotice: 'pending' });
+    const { popup } = await popupOnNewPage(extension, site);
+    const { open } = upgradeNotice(popup);
+    await expect(open).toBeVisible();
+    // The jump reaches the worker, whose reply then waits on its read of the document.
+    await slowWorkerReads(extension.worker, 'mappings', 2_000);
+    const before = new Set(extension.context.pages());
+    await popup.getByRole('option').first().click();
+    await expect(footer(popup)).toHaveText('Opening · Enter only closes the notice until it opens');
+    await open.focus();
+    await expect(footer(popup)).toHaveText("Enter opens what's new in a new tab");
+    await checkFitAndAccessibility(popup);
+    await closingPopup(popup, () => (gesture === 'click' ? open.click() : popup.keyboard.press('Enter')));
+    await expect.poll(() => extension.tabUrls()).toContain(extension.url('whats-new.html'));
+    expect('upgradeNotice' in (await extension.readStorage())).toBe(false);
+    await expect.poll(() => tabsSince(extension, before).map((tab) => tab.url())).toEqual([go]);
+    expect(((await extension.readStorage()).usage as Record<string, number[]>)[`go\n${go}`]).toHaveLength(1);
+  });
+}
 
 test('yt with text opens the filled address, and yt alone the address with %s removed', async ({ extension, site }) => {
   await extension.seedStorage({ mappings: 'yt                   https://www.youtube.com/results?search_query=%s\n' });

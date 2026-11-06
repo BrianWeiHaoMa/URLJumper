@@ -6,7 +6,8 @@
 // kept draft is offered back in the Text view, kept at the act also after another view's Save removed the draft
 // record, and a keep Chrome refuses stays and says so; *Stay* gives the text area back; with nothing unsaved, and for
 // Preferences or a return to search, the switch asks nothing; a switch made while Import's file waits to go into
-// the text area waits with it, then asks (G20); and every state of the question fits the popup and passes the
+// the text area waits with it, then asks (G20); one asked while Import's question over the view's own text
+// shows is answered beside it by keyboard; and every state of the question fits the popup and passes the
 // accessibility pass.
 import type { Locator, Page } from '@playwright/test';
 import {
@@ -210,6 +211,53 @@ for (const host of SETTINGS_HOSTS) {
     await nav(page, 'List').click();
     await expect(view.switchQuestion).toBeVisible();
     await expect(view.saveAndSwitch).toBeFocused();
+  });
+
+  test(`in the ${host}, a switch to List asked by keyboard while Import's question over this view's text shows: both questions answered by keyboard, Save and switch waiting as the footer says; Stay leaves Import's question, and Keep the draft and switch keeps this view's text, the file going nowhere`, async ({ extension, site }) => {
+    const { page, view, check } = await textViewIn(host, extension, site, { mappings: DOC });
+    const typed = `${DOC}${NEW_LINE}`;
+    await typeAtEnd(view, NEW_LINE);
+    await draftLanded(extension, typed);
+    await importFile(page, 'other.txt', Buffer.from('other  https://other.example/\n'));
+    await expect(view.keptOffer).toContainText('Importing other.txt replaces it.');
+    const keepText = page.getByRole('button', { name: 'Keep the unsaved text', exact: true });
+    await nav(page, 'List').focus();
+    await page.keyboard.press('Enter');
+    await expect(view.switchQuestion).toBeVisible();
+    await expect(view.keptOffer).toBeVisible();
+    await expect(view.saveAndSwitch).toBeFocused();
+    await expect(view.saveAndSwitch).toHaveAttribute('aria-disabled', 'true');
+    await says(page, 'Enter does nothing until the unsaved text is kept or replaced');
+    await check();
+    await page.keyboard.press('Enter');
+    await expect(view.switchQuestion).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(view.keepAndSwitch).toBeFocused();
+    await says(page, 'Enter keeps the unsaved text for later and shows the List view');
+    await page.keyboard.press('Tab');
+    await expect(view.stay).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(view.switchQuestion).toHaveCount(0);
+    await expect(view.keptOffer).toContainText('Importing other.txt replaces it.');
+    await expect(view.area).toBeFocused();
+    await expect(view.area).not.toBeEditable();
+    await says(page, 'Enter does nothing until the unsaved text is kept or replaced');
+    await page.keyboard.press('Shift+Tab');
+    await expect(keepText).toBeFocused();
+    await says(page, 'Enter keeps the unsaved text and imports nothing');
+
+    await nav(page, 'List').focus();
+    await page.keyboard.press('Enter');
+    await expect(view.saveAndSwitch).toBeFocused();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await expect(listView(page).list).toBeVisible();
+    expect(await storedDraft(extension.worker)).toMatchObject({ text: typed, base: DOC });
+    expect(await storedDocument(extension)).toBe(DOC);
+    await nav(page, 'Text').click();
+    await expect(view.keptOffer).toBeVisible();
+    await view.resume.click();
+    await expect(view.area).toHaveValue(typed);
   });
 
   test(`in the ${host}, a switch to List asks nothing without unsaved changes: untouched, typed back, a CRLF document untouched, after an applied Save, and while a kept draft is offered`, async ({ extension, site }) => {

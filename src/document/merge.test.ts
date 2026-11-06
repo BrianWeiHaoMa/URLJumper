@@ -256,6 +256,25 @@ describe('a mapping line both sides removed, which one side moved or re-added, i
     ]);
   });
 
+  test('re-added inside a change only one side made that also replaced other lines: offered alone, the rest settled around it, the empty version where the replaced lines begin in the other text', () => {
+    const base = [row('x', 'old'), row('a'), row('b'), row('c'), row('d'), row('e')];
+    const deleted = [row('a'), row('b'), row('c'), row('d'), row('e')];
+    const replaced = [row('a'), row('y'), row('x', 'new'), row('e')];
+    const parts = merge(replaced, deleted, base);
+    // The stored version has no lines: it is after `a`, line 1 of the stored text, where `b` to `d` begin.
+    expect(parts).toEqual([
+      { kind: 'settled', lines: [row('a'), row('y')] },
+      { kind: 'conflict', stored: { lines: [], line: 2 }, submitted: { lines: [row('x', 'new')], line: 3 } },
+      { kind: 'settled', lines: [row('e')] },
+    ]);
+    expect(mergedText(parts, ['stored'])).toBe([row('a'), row('y'), row('e')].join('\n'));
+    expect(merge(deleted, replaced, base)).toEqual([
+      { kind: 'settled', lines: [row('a'), row('y')] },
+      { kind: 'conflict', stored: { lines: [row('x', 'new')], line: 3 }, submitted: { lines: [], line: 2 } },
+      { kind: 'settled', lines: [row('e')] },
+    ]);
+  });
+
   test('a rename both made alike, the old name re-added by one: the re-add offered, the rename brought in once', () => {
     const base = [row('a'), row('b'), row('c')];
     const renamed = [row('a'), row('b2'), row('c')];

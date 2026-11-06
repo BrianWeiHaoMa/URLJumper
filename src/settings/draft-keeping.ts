@@ -2,11 +2,13 @@
 // of `draft` (R1), to keep what the text area holds as the user types, coalescing the changes of 300 ms and
 // those made while its previous request awaits a reply, and to discard the draft once the stored document holds
 // the text, as a read made since the text was made shows: a read made before can show a document another page
-// has changed since, so the text stays kept and the view reads again. Every draft request of a page waits for the reply to the one before, since the order in which one
+// has changed since, so the text stays kept and the view reads again. A view whose text another view's newer
+// draft replaced keeps it again once that draft goes as saved, since the view's text is then the most recent
+// unsaved edit. Every draft request of a page waits for the reply to the one before, since the order in which one
 // page's messages reach the worker is not relied on: the worker gets them in the order the page made them, and a
 // Text view opened again in the same page reads `draft` only once the requests the closed one made have their
 // replies.
-import { documentHolds, type Draft, type DraftName } from '../draft';
+import { documentHolds, isNamed, type Draft, type DraftName } from '../draft';
 import { send, type DraftDiscardReply } from '../requests';
 
 /** How long changes are gathered into one *draft set*: what G19 admits losing when the popup or Chrome closes. */
@@ -77,6 +79,16 @@ export interface DraftKeeping {
    * to keep.
    */
   keepNow(): Promise<boolean>;
+  /**
+   * `draft` was removed while it held `removed`, just after the stored document was written as `written` (the
+   * worker removes a draft whose text it has just stored in the same operation), or undefined when this view
+   * saw no such write. Removed because the document holds its text, as after another view's Save, the draft
+   * leaves this view's text, sent and still unsaved, kept nowhere: it is kept again with its own base and time,
+   * and the worker keeps it only if no newer edit is kept by then, so the draft is the most recent unsaved edit
+   * whichever view holds it (G19; Composition, *draft set*). A draft a discard removed stays gone, and so does
+   * this view's own once removed, until the view keeps another (G19, "or the user discards it").
+   */
+  draftRemoved(removed: Draft, written: string | undefined): void;
 }
 
 /** A text the view holds, the base it is typed against, and when it was made. */
@@ -104,12 +116,19 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
   let waiting = false;
   // Raised by each letting go, which a reply to a set sent before it must not undo.
   let lettings = 0;
+  // The name of the view's text as last sent, or of the draft it took over.
+  let currentName: DraftName | undefined;
+  // The view's text was removed as a draft, by a discard or as the document came to hold it, since its last set:
+  // it is not kept again for another view's draft going.
+  let ownRemoved = false;
 
   // Sends `change` under the view's next number, in the page's turn: true once the worker stored it, false when
   // it did not, undefined when the view let go meanwhile.
   const sendSet = async (change: Edit): Promise<boolean | undefined> => {
     const name = { view, number: ++number };
     held.push(name);
+    currentName = name;
+    ownRemoved = false;
     const since = lettings;
     const reply = await send({ kind: 'draft-set', ...change, ...name });
     if (since !== lettings) return undefined;
@@ -182,6 +201,7 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
     },
     holds(draft) {
       held = [{ view: draft.view, number: draft.number }];
+      currentName = held[0];
       current = { text: draft.text, base: draft.base, time: draft.time };
       edits++;
     },
@@ -207,6 +227,18 @@ export function keepDraft(notKept: (message: string | null) => void, readAgain: 
         current = { ...edit, time: Math.max(act, edit.time) };
         return (await sendSet(current)) !== false;
       });
+    },
+    draftRemoved(removed, written) {
+      // The view's text itself went: by its last name, or by another view's name for the same text, as a draft
+      // two views resumed has. An older name of the view's, for a text it has changed since, is not its text.
+      if ((currentName !== undefined && isNamed(removed, currentName)) || removed.text === current?.text) {
+        ownRemoved = true;
+        return;
+      }
+      // Removed by a discard; or this view's own text was let go, or has a change still to go, which keeps it.
+      if (written === undefined || !documentHolds(written, removed.text) || ownRemoved || unsent !== null) return;
+      const edit = unsavedEdit(written);
+      if (edit !== undefined) keep({ ...edit });
     },
   };
 }

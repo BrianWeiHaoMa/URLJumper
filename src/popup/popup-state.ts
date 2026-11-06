@@ -66,7 +66,7 @@ export interface State {
   focused: 'chip' | 'settings' | 'name-page' | 'undo' | { edit: string } | null;
   /** Why the last jump did not open, or the example mappings were not loaded; kept until the user types or tries again. */
   message: string | null;
-  /** Whether a jump awaits the worker's reply: until a reply other than opened, nothing else opens or leaves search (G4, G6). */
+  /** Whether a jump awaits the worker's reply: until a reply other than opened, no other row opens and search shows no other view (G4, G6). */
   jumping: boolean;
   /** The last change's confirmation, a save's or an Undo's, until its lifetime ends (G15). */
   confirmed: Confirmed | null;

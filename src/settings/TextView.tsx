@@ -233,9 +233,15 @@ function TextEditor({ sayWhatEnterDoes, caretLine, openerTab, imported, meetImpo
       if (made === reads) landed(storedText, isDraft(items.draft) ? items.draft : undefined);
     };
     readStored.current = () => void read();
-    const changed = (changes: Record<string, unknown>, area: string) => {
+    // The document as its last change wrote it: a draft the worker then removes, as it does once another view's
+    // Save stores the draft's text, can leave the text this view holds kept nowhere, which the keeper keeps again (G19).
+    let written: string | undefined;
+    const changed = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== 'local') return;
+      if ('mappings' in changes) written = readMappings(changes.mappings!.newValue);
       if ('mappings' in changes || ('draft' in changes && (!everLoaded.current || keptNow.current !== null))) void read();
+      const draft = changes.draft;
+      if (draft !== undefined && draft.newValue === undefined && isDraft(draft.oldValue)) keeper.draftRemoved(draft.oldValue, written);
     };
     // Leaving the page sends what is not yet sent, where Chrome lets the page finish it.
     const leaving = () => void keeper.flush();

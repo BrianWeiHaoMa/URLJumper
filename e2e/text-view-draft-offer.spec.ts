@@ -1,7 +1,8 @@
 // The offer of a kept draft as a Text view opens (G19, G18, G7, G32, L2; In use, "Edit the text"): a draft
 // another Text view kept is offered, to resume, its text and its base restored, or to discard, and a draft the
 // stored document holds is dropped without asking; a discard, of the offer or once the text is the stored
-// document again, names the draft it removes; the offer follows the draft in storage while it stands; a
+// document again, names the draft it removes; of two views' unsaved texts, the newer saved, the other is kept
+// again, though not one the user discarded; the offer follows the draft in storage while it stands; a
 // resumed draft over a document changed since reaches the merge and overwrites nothing; and the offer's states
 // fit the popup and pass the accessibility pass, with the keyboard alone answering it.
 import type { Page } from '@playwright/test';
@@ -169,6 +170,63 @@ test("of two Text views the newer edit is kept, and one view's discard removes o
   await a.area.fill(DOC);
   await expect.poll(discards).toEqual([{ kind: 'draft-discard', view: ofA.view, number: ofA.number }]);
   expect(await storedDraft(extension.worker)).toEqual(ofB);
+});
+
+test("of two Text views with unsaved text, once the newer is saved the other's text is the unsaved edit kept: its page closed, a Text view opened again offers it", async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const a = await textViewOnOptionsPage(extension);
+  const b = await textViewOnOptionsPage(extension);
+  const [fromA, fromB] = [`${DOC}from-a  https://a.example/\n`, `${DOC}from-b  https://b.example/\n`];
+  await typeAtEnd(a, 'from-a  https://a.example/\n');
+  await draftLanded(extension, fromA);
+  await typeAtEnd(b, 'from-b  https://b.example/\n');
+  await draftLanded(extension, fromB);
+  await b.save.click();
+  await expect(b.status).toHaveText('Saved');
+  // The newer edit is saved, so the most recent unsaved one is the first view's, kept with its own base and time (G19).
+  await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: fromA, base: DOC });
+  await a.page.close();
+  const again = await textViewOnOptionsPage(extension, '#view=text', 'offering');
+  await expect(again.keptOffer).toBeVisible();
+  await again.resume.click();
+  await expect(again.area).toHaveValue(fromA);
+});
+
+test("a draft the user discarded in another view stays discarded when another text is saved: the view that typed it, shown again, offers nothing", async ({ extension }) => {
+  await extension.seedStorage({ mappings: DOC });
+  const a = await textViewOnOptionsPage(extension);
+  const fromA = `${DOC}from-a  https://a.example/\n`;
+  await typeAtEnd(a, 'from-a  https://a.example/\n');
+  await draftLanded(extension, fromA);
+  const b = await textViewOnOptionsPage(extension, '#view=text', 'offering');
+  await b.discard.click();
+  await expect(b.area).toHaveValue(DOC);
+  await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
+  const fromB = `${DOC}from-b  https://b.example/\n`;
+  await typeAtEnd(b, 'from-b  https://b.example/\n');
+  await draftLanded(extension, fromB);
+  // Seen in the first view's page once its Text view, listening since it opened, has seen it too.
+  const goneAsSaved = a.page.evaluate(
+    (text) =>
+      new Promise<void>((seen) =>
+        chrome.storage.onChanged.addListener((changes) => {
+          if (changes.draft !== undefined && changes.draft.newValue === undefined && (changes.draft.oldValue as { text?: string } | undefined)?.text === text) seen();
+        }),
+      ),
+    fromB,
+  );
+  await b.save.click();
+  await expect(b.status).toHaveText('Saved');
+  await goneAsSaved;
+  // Leaving sends any draft set the view had made of it; shown again in the same page, the view reads the draft
+  // once that has its reply.
+  const nav = a.page.getByRole('navigation', { name: 'Settings views' });
+  await nav.getByRole('button', { name: 'Preferences', exact: true }).click();
+  await nav.getByRole('button', { name: 'Text', exact: true }).click();
+  await expect(a.area).toHaveValue(fromB);
+  await expect(a.area).toBeEditable();
+  await expect(a.keptOffer).toHaveCount(0);
+  expect(await storedDraft(extension.worker)).toBeUndefined();
 });
 
 test('the offer follows the draft in storage: of a newer draft once one is kept, and withdrawn, the stored document shown, once another page saves its text', async ({ extension }) => {

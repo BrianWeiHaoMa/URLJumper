@@ -90,7 +90,7 @@ export function Popup() {
   const other = otherMode(state.mode);
 
   // One jump at a time: while one awaits the worker's reply, a second Enter, a held Enter's repeats, or a click
-  // sends nothing, and nothing else leaves search, so a refusal is said where the user is (G4, G6, G26). A ref,
+  // sends nothing, and search shows no other view, so a refusal is said where the user is (G4, G6, G26). A ref,
   // since a held Enter's repeats can arrive before the popup draws the pending state.
   const jumpPending = useRef(false);
   const jump = async (row: MappingRow, mode: OpenMode) => {
@@ -320,7 +320,7 @@ export function Popup() {
         </button>
         <SettingsGear onClick={openSettings} onFocusChange={(focused) => dispatch({ kind: 'focused', focused: focused ? 'settings' : null })} />
       </header>
-      <UpgradeNotice notice={notice} start={searchBox} openWaits={state.jumping} />
+      <UpgradeNotice notice={notice} start={searchBox} />
       <div className="view" ref={layout.view} role="region" aria-label="Search results">
         <div className="view-content" ref={layout.content}>
           {shownConfirmation}
@@ -352,7 +352,7 @@ export function Popup() {
           {thisPage && <ThisPage key={thisPage.key} mapping={thisPage} onEdit={(line) => openEditor(line, null)} onFocusChange={(focused) => onEditFocus(focused ? thisPage.key : null)} />}
         </div>
       </div>
-      <footer className="footer">{footerWithNotice(footer(state, selection.shown, ready, undoing, editLine), notice, state.jumping)}</footer>
+      <footer className="footer">{footerWithNotice(footer(state, selection.shown, ready, undoing, editLine), notice)}</footer>
     </main>
   );
 }

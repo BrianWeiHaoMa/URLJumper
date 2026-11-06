@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import type { Draft } from '../draft';
 import type { Request } from '../requests';
 
 // Chrome's transport, replaced, each message answered when the check says; the keeping and `send` are the product's.
@@ -420,4 +421,90 @@ test('keepNow folds the change not yet sent into the keep, and waits its turn be
   sent[1]!.answer({ kind: 'done' });
   await vi.advanceTimersByTimeAsync(1_000);
   expect(sent).toHaveLength(2);
+});
+
+/** A draft another view kept, as the worker held it. */
+const othersDraft = (text: string, time = 1_800_000_000_000): Draft => ({ text, base: 'base', time, view: 'other-view', number: 3 });
+
+test("a draft removed because the stored document came to hold its text, as after another view's Save, leaves this view's unsaved text kept again, with its own base and time, under the next number", async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  keeper.edited('typed here', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(60_000);
+  // Another view's text, newer, was kept, then stored by its Save, and the worker removed it.
+  keeper.draftRemoved(othersDraft('saved there'), 'saved there');
+  await vi.advanceTimersByTimeAsync(300);
+  const { view } = sent[0]!.request as { view: string };
+  expect(sent.slice(1).map(({ request }) => request)).toEqual([{ kind: 'draft-set', text: 'typed here', base: 'base', time: 1_700_000_000_000, view, number: 2 }]);
+});
+
+test("a draft removed by a discard, with no write seen, with nothing unsaved here, or with a change here still to go, makes no second draft set; once this view's own draft was removed, nothing is kept again until it keeps another", async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  keeper.edited('typed here', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(1_000);
+  // Discarded: the document last written does not hold the text removed; or no write was seen.
+  keeper.draftRemoved(othersDraft('discarded'), STORED);
+  keeper.draftRemoved(othersDraft('saved there'), undefined);
+  // The document holds this view's text: nothing unsaved.
+  keeper.draftRemoved(othersDraft('typed here'), 'typed here');
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(1);
+  // A change not yet sent goes once, as the edit it is.
+  keeper.edited('typed here again', 'base', STORED);
+  keeper.draftRemoved(othersDraft('saved there'), 'saved there');
+  await vi.advanceTimersByTimeAsync(300);
+  expect(sent.slice(1).map(({ request }) => request)).toEqual([expect.objectContaining({ text: 'typed here again', time: 1_700_000_002_300, number: 2 })]);
+  sent[1]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  // This view's own draft removed by name, as another view's Discard of its offer does: another view's Save
+  // since keeps nothing of it again.
+  const { view } = sent[0]!.request as { view: string };
+  keeper.draftRemoved({ text: 'typed here again', base: 'base', time: 1_700_000_002_300, view, number: 2 }, STORED);
+  keeper.draftRemoved(othersDraft('saved there'), 'saved there');
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(2);
+  // Its next edit is kept, and is kept again when another view's draft goes as saved.
+  keeper.edited('typed after', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[2]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  keeper.draftRemoved(othersDraft('saved there'), 'saved there');
+  await vi.advanceTimersByTimeAsync(300);
+  expect(sent.slice(2).map(({ request }) => request)).toEqual([
+    expect.objectContaining({ text: 'typed after', number: 3 }),
+    expect.objectContaining({ text: 'typed after', time: 1_700_000_003_600, number: 4 }),
+  ]);
+});
+
+test("an older draft of this view's removed after it sent a newer one leaves the newer kept again when another view's draft goes as saved; the same text discarded under another view's name stays discarded", async () => {
+  const sent = chromeAnsweringOnRequest();
+  const { keepDraft } = await keeping();
+  const keeper = keepDraft(() => {}, () => {});
+  keeper.edited('one', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  sent[0]!.answer({ kind: 'done' });
+  keeper.edited('two', 'base', STORED);
+  await vi.advanceTimersByTimeAsync(300);
+  const { view } = sent[0]!.request as { view: string };
+  // Another view's Discard of the first reaches this view after the second was sent.
+  keeper.draftRemoved({ text: 'one', base: 'base', time: 1_700_000_000_000, view, number: 1 }, STORED);
+  sent[1]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  keeper.draftRemoved(othersDraft('saved there'), 'saved there');
+  await vi.advanceTimersByTimeAsync(300);
+  expect(sent.slice(2).map(({ request }) => request)).toEqual([expect.objectContaining({ text: 'two', time: 1_700_000_000_300, number: 3 })]);
+  sent[2]!.answer({ kind: 'done' });
+  await vi.advanceTimersByTimeAsync(0);
+  // This view's text, kept again by another view that resumed it too, discarded there under that view's name.
+  keeper.draftRemoved({ ...othersDraft('two'), time: 1_700_000_000_300 }, STORED);
+  keeper.draftRemoved(othersDraft('saved there'), 'saved there');
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(sent).toHaveLength(3);
 });

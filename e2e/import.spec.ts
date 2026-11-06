@@ -179,7 +179,8 @@ for (const answer of ['keep', 'replace'] as const) {
     const { a, b } = await twoViewsTyped(extension);
     await b.save.click();
     await expect(b.status).toHaveText('Saved');
-    await expect.poll(() => storedDraft(extension.worker)).toBeUndefined();
+    // The newer edit saved, this view's text is the most recent unsaved one, kept again (G19).
+    await expect.poll(() => storedDraft(extension.worker)).toMatchObject({ text: A, base: BASE });
     await expect(a.area).toHaveValue(A);
 
     await importFile(a.page, 'replacement.txt', Buffer.from(REPLACEMENT));
@@ -198,8 +199,8 @@ for (const answer of ['keep', 'replace'] as const) {
       await expect(a.area).toBeFocused();
       await checkAccessibilityInBothSchemes(a.page);
       expect((await extension.readStorage()).mappings).toBe(B);
-      // Keep sends nothing: the record the other view's Save removed stays absent.
-      expect(await storedDraft(extension.worker)).toBeUndefined();
+      // Keep sends nothing: the draft is still this view's text, kept since the other view's Save.
+      expect(await storedDraft(extension.worker)).toMatchObject({ text: A, base: BASE });
       return;
     }
     await replaceWithFile(a.page).click();
